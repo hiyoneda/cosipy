@@ -1,4 +1,5 @@
 from .data_loader_DC2 import DataLoaderDC2
+from .data_loader_DC2_gpu import DataLoaderDC2GPU
 from .allskyimage import AllSkyImageModel
 from .image_deconvolution import ImageDeconvolution
 from .exposure_table import SpacecraftAttitudeExposureTable
