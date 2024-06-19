@@ -29,6 +29,16 @@ class DataLoaderDC2GPU(DataLoaderBase):
 
         # optional
         self.is_miniDC2_format = False #should be removed in the future
+        
+        # for memory management
+        self.mempool = cp.get_default_memory_pool()
+        self.pinned_mempool = cp.get_default_pinned_memory_pool()
+
+        # dtype of cp.array
+        self.dtype_cp = np.float32
+
+        # return cp.ndarray or not in some functions
+        self.return_cp_array = True
 
     @classmethod
     def load(cls, name, event_binned_data, dict_bkg_binned_data, rsp, coordsys_conv_matrix = None, is_miniDC2_format = False):
@@ -66,11 +76,16 @@ class DataLoaderDC2GPU(DataLoaderBase):
             if new._bkg_models[key].is_sparse:
                 new._bkg_models[key] = new._bkg_models[key].to_dense()
 
-        new._bkg_models_cp = {key: cp.asarray(new.bkg_model(key).contents) for key in new.keys_bkg_models()}
+        new._bkg_models_cp = {key: cp.asarray(new.bkg_model(key).contents, dtype = new.dtype_cp) for key in new.keys_bkg_models()}
         
         if coordsys_conv_matrix is not None:
             new._coordsys_conv_matrix = coordsys_conv_matrix
-            new._coordsys_conv_matrix_cp = cp.asarray(coordsys_conv_matrix.contents.todense())
+            _coordsys_conv_matrix_dense = new._coordsys_conv_matrix.contents.todense()
+            new._coordsys_conv_matrix_cp = cp.asarray(_coordsys_conv_matrix_dense, dtype = new.dtype_cp)
+            del _coordsys_conv_matrix_dense 
+
+#            new.mempool.free_all_blocks()
+#            new.pinned_mempool.free_all_blocks()
 
         new.is_miniDC2_format = is_miniDC2_format
         
@@ -96,6 +111,9 @@ class DataLoaderDC2GPU(DataLoaderBase):
             new._model_axes = Axes([new._coordsys_conv_matrix.axes['lb'], new._image_response_axes['Ei']])
 
         new._calc_exposure_map()
+
+        if new.return_cp_array == True:
+            new._event = cp.asarray(new._event.contents, dtype = new.dtype_cp)
 
         return new
 
@@ -193,7 +211,7 @@ class DataLoaderDC2GPU(DataLoaderBase):
         self._image_response_axes = full_detector_response.axes
 
         if isinstance(full_detector_response, Histogram):
-            self._image_response_cp = cp.asarray(full_detector_response.contents.value)
+            self._image_response_cp = cp.asarray(full_detector_response.contents.value, dtype = self.dtype_cp)
             self._image_response_unit = full_detector_response.contents.unit
             return
 
@@ -206,12 +224,12 @@ class DataLoaderDC2GPU(DataLoaderBase):
         npix = full_detector_response.axes["NuLambda"].npix 
     
         if is_miniDC2_format:
-            self._image_response_cp = cp.zeros(axes_image_response.nbins)
+            self._image_response_cp = cp.zeros(axes_image_response.nbins, dtype = np.float32)
             for ipix in tqdm(range(npix)):
-                self._image_response_cp[ipix] = cp.asarray(np.sum(full_detector_response[ipix].to_dense(), axis = (4,5))) #Ei, Em, Phi, ChiPsi
+                self._image_response_cp[ipix] = cp.asarray(np.sum(full_detector_response[ipix].to_dense(), axis = (4,5)), dtype = self.dtype_cp) #Ei, Em, Phi, ChiPsi
         else:
             contents = full_detector_response._file['DRM']['CONTENTS'][:]
-            self._image_response_cp = cp.asarray(contents)
+            self._image_response_cp = cp.asarray(contents, dtype = self.dtype_cp)
             del contents
 
         gc.collect()
@@ -265,34 +283,41 @@ class DataLoaderDC2GPU(DataLoaderBase):
         # However it is likely that it will have such an axis in the future in order to consider background variability depending on time and pointign direction etc.
         # Then, the implementation here will not work. Thus, keep in mind that we need to modify it once the response format is fixed.
 
-        model_map_cp = cp.asarray(model_map.contents.value)
+        model_map_cp = cp.asarray(model_map.contents.value, dtype = self.dtype_cp)
         
         if self._coordsys_conv_matrix is None:
             expectation_cp = cp.tensordot( model_map_cp, self._image_response_cp, axes = ([0,1],[0,1])) * model_map.axes['lb'].pixarea().value
             # ['lb', 'Ei'] x [NuLambda(lb), Ei, Em, Phi, PsiChi] -> [Em, Phi, PsiChi]
         else:
-#            map_rotated = cp.tensordot(self._coordsys_conv_matrix_cp, model_map_cp, axes = ([1], [0])) 
-#            map_rotated *= model_map.axes['lb'].pixarea().value
-#            expectation_cp = cp.tensordot(map_rotated, self._image_response_cp, axes = ([1,2], [0,1]))
-#            del map_rotated
-
-            map_rotated = np.tensordot(self._coordsys_conv_matrix.contents, model_map.contents, axes = ([1], [0])) 
+            map_rotated = cp.tensordot(self._coordsys_conv_matrix_cp, model_map_cp, axes = ([1], [0])) 
             map_rotated *= model_map.axes['lb'].pixarea().value
-            map_rotated_cp = cp.asarray(map_rotated)
             # ['Time/ScAtt', 'lb', 'NuLambda'] x ['lb', 'Ei'] -> [Time/ScAtt, NuLambda, Ei]
             # the unit of map_rotated is 1/cm2 ( = s * 1/cm2/s/sr * sr)
-            expectation_cp = cp.tensordot(map_rotated_cp, self._image_response_cp, axes = ([1,2], [0,1]))
+            expectation_cp = cp.tensordot(map_rotated, self._image_response_cp, axes = ([1,2], [0,1]))
             # [Time/ScAtt, NuLambda, Ei] x [NuLambda, Ei, Em, Phi, PsiChi] -> [Time/ScAtt, Em, Phi, PsiChi]
-            del map_rotated_cp 
+            del map_rotated
+
+#            map_rotated = np.tensordot(self._coordsys_conv_matrix.contents, model_map.contents, axes = ([1], [0])) 
+#            map_rotated *= model_map.axes['lb'].pixarea().value
+#            map_rotated_cp = cp.asarray(map_rotated, dtype = self.dtype_cp)
+#            # ['Time/ScAtt', 'lb', 'NuLambda'] x ['lb', 'Ei'] -> [Time/ScAtt, NuLambda, Ei]
+#            # the unit of map_rotated is 1/cm2 ( = s * 1/cm2/s/sr * sr)
+#            expectation_cp = cp.tensordot(map_rotated_cp, self._image_response_cp, axes = ([1,2], [0,1]))
+#            # [Time/ScAtt, NuLambda, Ei] x [NuLambda, Ei, Em, Phi, PsiChi] -> [Time/ScAtt, Em, Phi, PsiChi]
+#            del map_rotated_cp 
+
+        del model_map_cp
 
         if dict_bkg_norm is not None: 
             for key in self.keys_bkg_models():
                 expectation_cp += self._bkg_models_cp[key] * dict_bkg_norm[key]
         expectation_cp += almost_zero
 
+        if self.return_cp_array == True:
+            return expectation_cp
+
         expectation = Histogram(self.data_axes, contents = cp.asnumpy(expectation_cp))
 
-        del model_map_cp
         del expectation_cp
         
         return expectation
@@ -317,11 +342,14 @@ class DataLoaderDC2GPU(DataLoaderBase):
         # TODO: currently, dataspace_histogram is assumed to be a dense.
 
         hist_unit = self.exposure_map.unit
-        if dataspace_histogram.unit is not None:
+
+        if isinstance(dataspace_histogram, cp.ndarray):
+            dataspace_histogram_cp = dataspace_histogram
+        elif dataspace_histogram.unit is not None:
             hist_unit *= dataspace_histogram.unit
-            dataspace_histogram_cp = cp.asarray(dataspace_histogram.contents.value)
+            dataspace_histogram_cp = cp.asarray(dataspace_histogram.contents.value, dtype = self.dtype_cp)
         else:
-            dataspace_histogram_cp = cp.asarray(dataspace_histogram.contents)
+            dataspace_histogram_cp = cp.asarray(dataspace_histogram.contents, dtype = self.dtype_cp)
 
         if self._coordsys_conv_matrix is None:
             hist_cp = cp.tensordot(dataspace_histogram_cp, self._image_response_cp, axes = ([0,1,2], [2,3,4])) 
@@ -330,25 +358,28 @@ class DataLoaderDC2GPU(DataLoaderBase):
             del hist_cp
         else:
 
-#            NOTE: The memory leak happened with the following lines
-#            _ = cp.tensordot(dataspace_histogram_cp, self._image_response_cp, axes = ([1,2,3], [2,3,4])) 
-#            _ = cp.tensordot(self._coordsys_conv_matrix_cp, _, axes = ([0,2], [0,1]))
-#            hist = Histogram(self.model_axes,\
-#                             contents = cp.asnumpy(_),\
-#                             unit = hist_unit)
-#            del _
-
+            # NOTE: The memory leak happened with the following lines if using dtype = np.float64
             _ = cp.tensordot(dataspace_histogram_cp, self._image_response_cp, axes = ([1,2,3], [2,3,4])) 
-            _ = cp.asnumpy(_)
             # [Time/ScAtt, Em, Phi, PsiChi] x [NuLambda, Ei, Em, Phi, PsiChi] -> [Time/ScAtt, NuLambda, Ei]
-            hist = Histogram(self.model_axes,\
-                             contents = np.tensordot(self._coordsys_conv_matrix.contents, _, axes = ([0,2], [0,1])),\
-                             unit = hist_unit)
+            _ = cp.tensordot(self._coordsys_conv_matrix_cp, _, axes = ([0,2], [0,1]))
             # [Time/ScAtt, lb, NuLambda] x [Time/ScAtt, NuLambda, Ei] -> [lb, Ei]
-            # note that coordsys_conv_matrix is the sparse, so the unit should be recovered.
+            contents = cp.asnumpy(_)
+            hist = Histogram(self.model_axes, contents = contents, unit = hist_unit)
+
             del _
 
-        del dataspace_histogram_cp
+#            _ = cp.tensordot(dataspace_histogram_cp, self._image_response_cp, axes = ([1,2,3], [2,3,4])) 
+#            _ = cp.asnumpy(_)
+#            # [Time/ScAtt, Em, Phi, PsiChi] x [NuLambda, Ei, Em, Phi, PsiChi] -> [Time/ScAtt, NuLambda, Ei]
+#            hist = Histogram(self.model_axes,\
+#                             contents = np.tensordot(self._coordsys_conv_matrix.contents, _, axes = ([0,2], [0,1])),\
+#                             unit = hist_unit)
+#            # [Time/ScAtt, lb, NuLambda] x [Time/ScAtt, NuLambda, Ei] -> [lb, Ei]
+#            # note that coordsys_conv_matrix is the sparse, so the unit should be recovered.
+#            del _
+        
+        if not isinstance(dataspace_histogram, cp.ndarray):
+            del dataspace_histogram_cp
 
         return hist
 
@@ -371,7 +402,10 @@ class DataLoaderDC2GPU(DataLoaderBase):
         """
         # TODO: currently, dataspace_histogram is assumed to be a dense.
 
-        dataspace_histogram_cp = cp.asarray(dataspace_histogram.contents)
+        if isinstance(dataspace_histogram, cp.ndarray):
+            dataspace_histogram_cp = dataspace_histogram
+        else:
+            dataspace_histogram_cp = cp.asarray(dataspace_histogram.contents, dtype = self.dtype_cp)
 
         if self._coordsys_conv_matrix is None:
 
@@ -393,6 +427,11 @@ class DataLoaderDC2GPU(DataLoaderBase):
         float
             Log-likelood
         """
-        loglikelood = np.sum( self.event * np.log(expectation) ) - np.sum(expectation)
+
+        if self.return_cp_array == True:
+            loglikelood = cp.sum( self.event * cp.log(expectation) , dtype = np.float64) - cp.sum(expectation, dtype = np.float64)
+            loglikelood = cp.asnumpy(loglikelood)
+        else:
+            loglikelood = np.sum( self.event * np.log(expectation) ) - np.sum(expectation)
 
         return loglikelood
