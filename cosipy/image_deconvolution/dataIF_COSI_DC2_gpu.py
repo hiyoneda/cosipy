@@ -11,18 +11,16 @@ from histpy import Histogram, Axes
 
 from cosipy.response import FullDetectorResponse
 from cosipy.data_io import BinnedData
-from .coordsys_conversion_matrix import CoordsysConversionMatrix
+from cosipy.image_deconvolution import CoordsysConversionMatrix, ImageDeconvolutionDataInterfaceBase
 
-from .data_loader_base import DataLoaderBase
-
-class DataLoaderDC2GPU(DataLoaderBase):
+class DataIF_COSI_DC2_GPU(ImageDeconvolutionDataInterfaceBase):
     """
-    A subclass of DataLoaderBase for the COSI data challenge 2.
+    A class for the interface for the COSI DC2 dataset using cupy.
     """
 
     def __init__(self, name = None):
 
-        DataLoaderBase.__init__(self, name)
+        ImageDeconvolutionDataInterfaceBase.__init__(self, name)
 
         # None if using Galactic CDS, mandotary if using local CDS
         self._coordsys_conv_matrix = None 
@@ -41,7 +39,7 @@ class DataLoaderDC2GPU(DataLoaderBase):
         self.return_cp_array = True
 
     @classmethod
-    def load(cls, name, event_binned_data, dict_bkg_binned_data, rsp, coordsys_conv_matrix = None, is_miniDC2_format = False):
+    def load(cls, name, event_binned_data, dict_bkg_binned_data, rsp, coordsys_conv_matrix = None, is_miniDC2_format = False, dtype_cp = np.float32, return_cp_array = True):
         """
         Load data
 
@@ -68,6 +66,10 @@ class DataLoaderDC2GPU(DataLoaderBase):
 
         new = cls(name)
 
+        new.dtype_cp = dtype_cp
+
+        new.return_cp_array = return_cp_array
+
         new._event = event_binned_data.to_dense()
 
         new._bkg_models = dict_bkg_binned_data
@@ -75,6 +77,8 @@ class DataLoaderDC2GPU(DataLoaderBase):
         for key in new._bkg_models:
             if new._bkg_models[key].is_sparse:
                 new._bkg_models[key] = new._bkg_models[key].to_dense()
+
+            new._summed_bkg_models[key] = np.sum(new._bkg_models[key])
 
         new._bkg_models_cp = {key: cp.asarray(new.bkg_model(key).contents, dtype = new.dtype_cp) for key in new.keys_bkg_models()}
         
@@ -242,13 +246,13 @@ class DataLoaderDC2GPU(DataLoaderBase):
         logger.info("Calculating an exposure map...")
         
         if self._coordsys_conv_matrix is None:
-            self._exposure_map = Histogram(self._model_axes, unit = self._image_response_unit)
-            self._exposure_map[:] = cp.asnumpy(cp.sum(self._image_response_cp, axis = (2,3,4))) * self._image_response_unit
+            self._exposure_map = Histogram(self._model_axes, unit = self._image_response_unit * u.sr)
+            self._exposure_map[:] = cp.asnumpy(cp.sum(self._image_response_cp, axis = (2,3,4))) * self._image_response_unit * self.model_axes['lb'].pixarea()
         else:
-            self._exposure_map = Histogram(self._model_axes, unit = self._image_response_unit * self._coordsys_conv_matrix.unit)
+            self._exposure_map = Histogram(self._model_axes, unit = self._image_response_unit * self._coordsys_conv_matrix.unit * u.sr)
             self._exposure_map[:] = np.tensordot(np.sum(self._coordsys_conv_matrix, axis = (0)), 
                                                  cp.asnumpy(cp.sum(self._image_response_cp, axis = (2,3,4))),
-                                                 axes = ([1], [0])) * self._image_response_unit * self._coordsys_conv_matrix.unit
+                                                 axes = ([1], [0])) * self._image_response_unit * self._coordsys_conv_matrix.unit * self.model_axes['lb'].pixarea()
             # [Time/ScAtt, lb, NuLambda] -> [lb, NuLambda]
             # [NuLambda, Ei, Em, Phi, PsiChi] -> [NuLambda, Ei]
             # [lb, NuLambda] x [NuLambda, Ei] -> [lb, Ei]
@@ -354,7 +358,7 @@ class DataLoaderDC2GPU(DataLoaderBase):
         if self._coordsys_conv_matrix is None:
             hist_cp = cp.tensordot(dataspace_histogram_cp, self._image_response_cp, axes = ([0,1,2], [2,3,4])) 
             # [Em, Phi, PsiChi] x [NuLambda (lb), Ei, Em, Phi, PsiChi] -> [NuLambda (lb), Ei]
-            hist = Histogram(self.model_axes, contents = cp.asnumpy(hist_cp), unit = hist_unit)
+            hist = Histogram(self.model_axes, contents = cp.asnumpy(hist_cp) * self.model_axes['lb'].pixarea().value, unit = hist_unit)
             del hist_cp
         else:
 
@@ -363,7 +367,7 @@ class DataLoaderDC2GPU(DataLoaderBase):
             # [Time/ScAtt, Em, Phi, PsiChi] x [NuLambda, Ei, Em, Phi, PsiChi] -> [Time/ScAtt, NuLambda, Ei]
             _ = cp.tensordot(self._coordsys_conv_matrix_cp, _, axes = ([0,2], [0,1]))
             # [Time/ScAtt, lb, NuLambda] x [Time/ScAtt, NuLambda, Ei] -> [lb, Ei]
-            contents = cp.asnumpy(_)
+            contents = cp.asnumpy(_) * self.model_axes['lb'].pixarea().value
             hist = Histogram(self.model_axes, contents = contents, unit = hist_unit)
 
             del _
