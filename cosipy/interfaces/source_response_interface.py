@@ -1,5 +1,5 @@
 from typing import Protocol, runtime_checkable
-import threeML
+from astromodels import Model
 
 from .expectation_interface import BinnedExpectationInterface, UnbinnedExpectationInterface
 
@@ -13,7 +13,7 @@ class SourceResponseInterface(Protocol):
     ...
 
 class ThreeMLSourceResponseInterface(SourceResponseInterface):
-    def set_model(self, model: threeML.Model): ...
+    def set_model(self, model: Model): ...
 
 
 class ThreeMLUnbinnedSourceResponseInterface(UnbinnedExpectationInterface, ThreeMLSourceResponseInterface):

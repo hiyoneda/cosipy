@@ -3,8 +3,8 @@ from threeML import PluginPrototype, Parameter
 from cosipy.statistics import UnbinnedLikelihood, PoissonLikelihood
 from cosipy.interfaces import (DataInterface,
                                ThreeMLSourceResponseInterface,
-                               BackgroundInterface,
-                               LikelihoodInterface)
+                               ThreeMLBackgroundInterface,
+                               LikelihoodInterface, ThreeMLBinnedBackgroundInterface)
 
 class COSILike(PluginPrototype):
 
@@ -12,7 +12,7 @@ class COSILike(PluginPrototype):
                  name,
                  data: DataInterface,
                  response: ThreeMLSourceResponseInterface,
-                 bkg: BackgroundInterface,
+                 bkg: ThreeMLBackgroundInterface,
                  likelihood = 'poisson'):
         """
 
@@ -25,26 +25,14 @@ class COSILike(PluginPrototype):
         likefun: str or LikelihoodInterface (Use at your own risk. make sure uses data, response and bkg)
         """
 
-        self._name = name
+        # PluginPrototype.__init__ does the following:
+        # Sets _name = name
+        # Sets _tag = None
+        # Set self._nuisance_parameters, which we do not use because
+        # we're overriding nuisance_parameters() and update_nuisance_parameters()
+        super().__init__(name, {})
 
-        class ThreeMLBackgroundWrapper:
-            """
-            Translate background porameters to 3ml Parameter dict
-            """
-
-            def __init__(self, bkg: BackgroundInterface):
-                self.bkg = bkg
-
-            def set_parameters(self, parameters: Dict[str, Parameter]):
-                # Translate self.bkg.set_parameters
-                ...
-
-            @property
-            def parameters(self) -> Dict[str, Parameter]:
-                ## Translate self.bkg.parameters
-                ...
-
-        self._bkg = ThreeMLBackgroundWrapper(bkg)
+        self._bkg = bkg
         self._response = response
 
         if isinstance(likelihood, LikelihoodInterface):
@@ -59,10 +47,15 @@ class COSILike(PluginPrototype):
 
     @property
     def nuisance_parameters(self) -> Dict[str, Parameter]:
-        return self._bkg.parameters
+        # Add plugin name, required by 3ML code
+        # See https://github.com/threeML/threeML/blob/7a16580d9d5ed57166e3b1eec3d4fccd3eeef1eb/threeML/classicMLE/joint_likelihood.py#L131
+        return {self._name + "_" + l:p for l,p in self._bkg.threeml_parameters.items()}
 
     def update_nuisance_parameters(self, new_nuisance_parameters: Dict[str, Parameter]):
-        self._bkg.set_parameters(new_nuisance_parameters)
+        # Remove plugin name. Opposite of the nuisance_parameters property
+        new_nuisance_parameters = {l[len(self._name)+1:]:p for l,p in new_nuisance_parameters.items()}
+
+        self._bkg.set_threeml_parameters(**new_nuisance_parameters)
 
     def get_number_of_data_points(self) -> int:
         return self._like.nobservations
