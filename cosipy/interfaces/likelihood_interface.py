@@ -30,7 +30,7 @@ class BinnedLikelihoodInterface(LikelihoodInterface, Protocol):
 class UnbinnedLikelihoodInterface(LikelihoodInterface, Protocol):
     """
         Needs to check that data, response and bkg are compatible
-        """
+    """
     def __init__(self,
                  data: UnbinnedDataInterface,
                  response: UnbinnedExpectationInterface,
