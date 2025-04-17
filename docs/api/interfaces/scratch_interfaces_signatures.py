@@ -3,7 +3,7 @@ from typing import Dict, Any
 from astromodels import Model, Parameter
 
 from cosipy.threeml import COSILike
-from cosipy.interfaces import NullBackground, BinnedDataInterface, ThreeMLBinnedBackgroundInterface, ThreeMLBinnedSourceResponseInterface
+from cosipy.interfaces import BinnedDataInterface, ThreeMLBinnedBackgroundInterface, ThreeMLBinnedSourceResponseInterface
 from histpy import Axis,Axes,Histogram
 import numpy as np
 from scipy.stats import norm, uniform
@@ -81,14 +81,20 @@ class ToySourceResponse(ThreeMLBinnedSourceResponseInterface):
         if self._model is None:
             raise RuntimeError("Set model first")
 
-        flux = self._model.sources['source'].spectrum.main.shape.k.value
+        sources = self._model.sources
+
+        if len(sources) == 0:
+            flux = 0.
+        else:
+            flux = self._model.sources['source'].spectrum.main.shape.k.value
+
         return self._unit_expectation*flux
 
 data = ToyData()
 bkg = ToyBkg()
 bkg.set_threeml_parameters(norm = Parameter('norm', 1))
 
-bkg = NullBackground
+#bkg = None # Uncomment for not bkg fit
 
 response = ToySourceResponse()
 
@@ -103,6 +109,8 @@ source = PointSource("source", # arbitrary, but needs to be unique
 
 model = Model(source)
 
+model = Model() # Uncomment for bkg-only hypothesis
+
 cosi = COSILike('cosi', data, response, bkg)
 
 plugins = DataList(cosi)
@@ -114,7 +122,7 @@ like.fit()
 fig,ax = plt.subplots()
 data.data.plot(ax)
 expectation = response.expectation(data.data.axes)
-if bkg is not NullBackground:
-    expectation + expectation + bkg.expectation(data.data.axes)
+if bkg is not None:
+    expectation = expectation + bkg.expectation(data.data.axes)
 expectation.plot(ax)
 plt.show()

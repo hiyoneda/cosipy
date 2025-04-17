@@ -3,7 +3,7 @@ from cosipy.interfaces import (BinnedLikelihoodInterface,
                                BinnedDataInterface,
                                BinnedExpectationInterface,
                                BinnedBackgroundInterface,
-                               NullBackground)
+                               )
 
 import numpy as np
 
@@ -29,7 +29,7 @@ class PoissonLikelihood(BinnedLikelihoodInterface):
         # Compute expectation including background
         expectation = self._response.expectation(self._data.data.axes)
 
-        if self._bkg is not NullBackground:
+        if self._bkg is not None:
             expectation = expectation + self._bkg.expectation(self._data.data.axes)
 
         # Get the arrays

@@ -49,13 +49,16 @@ class COSILike(PluginPrototype):
     def nuisance_parameters(self) -> Dict[str, Parameter]:
         # Add plugin name, required by 3ML code
         # See https://github.com/threeML/threeML/blob/7a16580d9d5ed57166e3b1eec3d4fccd3eeef1eb/threeML/classicMLE/joint_likelihood.py#L131
-        return {self._name + "_" + l:p for l,p in self._bkg.threeml_parameters.items()}
+        if self._bkg is None:
+            return {}
+        else:
+            return {self._name + "_" + l:p for l,p in self._bkg.threeml_parameters.items()}
 
     def update_nuisance_parameters(self, new_nuisance_parameters: Dict[str, Parameter]):
         # Remove plugin name. Opposite of the nuisance_parameters property
-        new_nuisance_parameters = {l[len(self._name)+1:]:p for l,p in new_nuisance_parameters.items()}
-
-        self._bkg.set_threeml_parameters(**new_nuisance_parameters)
+        if self._bkg is not None:
+            new_nuisance_parameters = {l[len(self._name)+1:]:p for l,p in new_nuisance_parameters.items()}
+            self._bkg.set_threeml_parameters(**new_nuisance_parameters)
 
     def get_number_of_data_points(self) -> int:
         return self._like.nobservations
