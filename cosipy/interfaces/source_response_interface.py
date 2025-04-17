@@ -13,7 +13,12 @@ class SourceResponseInterface(Protocol):
     ...
 
 class ThreeMLSourceResponseInterface(SourceResponseInterface):
-    def set_model(self, model: Model): ...
+    def set_model(self, model: Model):
+        """
+        The model is passed as a reference and it's parameters
+        can change. Remember to check if it changed since the
+        last time the user called expectation.
+        """
 
 
 class ThreeMLUnbinnedSourceResponseInterface(UnbinnedExpectationInterface, ThreeMLSourceResponseInterface):

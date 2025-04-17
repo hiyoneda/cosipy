@@ -12,8 +12,7 @@ __all__ = [
 
 @runtime_checkable
 class BinnedExpectationInterface(Protocol):
-    @property
-    def expectation(self)->histpy.Histogram:...
+    def expectation(self, axes:histpy.Axes)->histpy.Histogram:...
 
 @runtime_checkable
 class UnbinnedExpectationInterface(Protocol):

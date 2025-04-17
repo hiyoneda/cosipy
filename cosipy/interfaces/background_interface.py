@@ -31,10 +31,12 @@ class ThreeMLBackgroundInterface(BackgroundInterface):
     """
     This must translate to/from regular parameters
     with arbitrary type from/to 3ML parameters
+
     """
     def set_threeml_parameters(self, **parameters: Dict[str, Parameter]):
         """
-        Must call set_parameters(), and keep track of all the Parameter property (e.g. bounds)
+        The Parameter objects are passed "as reference", and can change.
+        Remember to call set_parameters() before computing the expetation
         """
     @property
     def threeml_parameters(self)->Dict[str, Parameter]:
@@ -72,7 +74,7 @@ class ThreeMLUnbinnedBackgroundInterface(BinnedBackgroundInterface, ThreeMLBackg
 #     expectation += bkg.get_expectation()
 # Which should work even without the if, but the if
 # allows to avoid a potentially (is it?) lenghty operation.
-class _NullBackground(BinnedBackgroundInterface, UnbinnedBackgroundInterface):
+class _NullBackground(ThreeMLBinnedBackgroundInterface, ThreeMLUnbinnedBackgroundInterface):
     # All ways to instantiate this class should return the same object
     # The singleton instant will be define later, following the class
     # definition
@@ -90,9 +92,14 @@ class _NullBackground(BinnedBackgroundInterface, UnbinnedBackgroundInterface):
     # The results are all )'s
     @property
     def parameters(self): return {}
+    @property
+    def threeml_parameters(self) ->Dict[str, Parameter]: return {}
     def set_parameters(self, **params:Dict[str, Any]) -> None: pass
-    def expectation(self)->histpy.Histogram: pass
+    def set_threeml_parameters(self, **parameters: Dict[str, Parameter]): pass
+    def expectation(self, axes:histpy.Axes)->histpy.Histogram: return histpy.Histogram(axes)
+    @property
     def ncounts(self): return 0.
+    @property
     def probability(self, measurements:Measurements): return np.broadcast_to(0., measurements.size)
 
 # Instantiate *the* NullBackground singleton

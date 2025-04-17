@@ -27,10 +27,10 @@ class PoissonLikelihood(BinnedLikelihoodInterface):
     def get_log_like(self) -> float:
 
         # Compute expectation including background
-        expectation = self._response.expectation
+        expectation = self._response.expectation(self._data.data.axes)
 
         if self._bkg is not NullBackground:
-            expectation = expectation + self._bkg.expectation
+            expectation = expectation + self._bkg.expectation(self._data.data.axes)
 
         # Get the arrays
         expectation = expectation.contents
@@ -40,5 +40,9 @@ class PoissonLikelihood(BinnedLikelihoodInterface):
         log_like = np.nansum(data * np.log(expectation) - expectation)
 
         return log_like
+
+    @property
+    def nobservations(self) -> int:
+        return self._data.data.contents.size
 
 
