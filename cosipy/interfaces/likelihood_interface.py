@@ -15,7 +15,8 @@ class LikelihoodInterface(Protocol):
     def nobservations(self) -> int:
         """For BIC and other statistics"""
 
-class BinnedLikelihoodInterface(LikelihoodInterface):
+@runtime_checkable
+class BinnedLikelihoodInterface(LikelihoodInterface, Protocol):
     """
     Needs to check that data, response and bkg are compatible
     """
@@ -25,7 +26,8 @@ class BinnedLikelihoodInterface(LikelihoodInterface):
                  bkg: BinnedBackgroundInterface,
                  *args, **kwargs):...
 
-class UnbinnedLikelihoodInterface(LikelihoodInterface):
+@runtime_checkable
+class UnbinnedLikelihoodInterface(LikelihoodInterface, Protocol):
     """
         Needs to check that data, response and bkg are compatible
         """

@@ -29,7 +29,7 @@ class ToyData(BinnedDataInterface):
         return self._data
 
 
-class ToyBkg(ThreeMLBinnedBackgroundInterface):
+class ToyBkg:#(ThreeMLBinnedBackgroundInterface):
     def __init__(self):
         self._unit_expectation = Histogram(toy_axis)
         self._unit_expectation[:] = 1/self._unit_expectation.nbins
@@ -64,7 +64,7 @@ class ToyBkg(ThreeMLBinnedBackgroundInterface):
         self._threeml_parameters['norm'] = norm
         self.set_parameters(norm.value)
 
-class ToySourceResponse(ThreeMLBinnedSourceResponseInterface):
+class ToySourceResponse:#(ThreeMLBinnedSourceResponseInterface):
 
     def __init__(self):
         self._model = None
@@ -94,8 +94,6 @@ data = ToyData()
 bkg = ToyBkg()
 bkg.set_threeml_parameters(norm = Parameter('norm', 1))
 
-#bkg = None # Uncomment for not bkg fit
-
 response = ToySourceResponse()
 
 ## 3Ml model
@@ -109,7 +107,8 @@ source = PointSource("source", # arbitrary, but needs to be unique
 
 model = Model(source)
 
-model = Model() # Uncomment for bkg-only hypothesis
+#bkg = None # Uncomment for not bkg fit
+#model = Model() # Uncomment for bkg-only hypothesis
 
 cosi = COSILike('cosi', data, response, bkg)
 

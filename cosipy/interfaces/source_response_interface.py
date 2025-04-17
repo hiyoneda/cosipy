@@ -12,7 +12,8 @@ __all__ = ["SourceResponseInterface",
 class SourceResponseInterface(Protocol):
     ...
 
-class ThreeMLSourceResponseInterface(SourceResponseInterface):
+@runtime_checkable
+class ThreeMLSourceResponseInterface(SourceResponseInterface, Protocol):
     def set_model(self, model: Model):
         """
         The model is passed as a reference and it's parameters
@@ -20,13 +21,14 @@ class ThreeMLSourceResponseInterface(SourceResponseInterface):
         last time the user called expectation.
         """
 
-
-class ThreeMLUnbinnedSourceResponseInterface(UnbinnedExpectationInterface, ThreeMLSourceResponseInterface):
+@runtime_checkable
+class ThreeMLUnbinnedSourceResponseInterface(UnbinnedExpectationInterface, ThreeMLSourceResponseInterface, Protocol):
     """
     No new methods. Just the inherited ones.
     """
 
-class ThreeMLBinnedSourceResponseInterface(ThreeMLSourceResponseInterface, BinnedExpectationInterface):
+@runtime_checkable
+class ThreeMLBinnedSourceResponseInterface(ThreeMLSourceResponseInterface, BinnedExpectationInterface, Protocol):
     """
     No new methods. Just the inherited ones.
     """

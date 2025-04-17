@@ -25,7 +25,8 @@ class BackgroundInterface(Protocol):
     @property
     def parameters(self) -> Dict[str, Any]:...
 
-class ThreeMLBackgroundInterface(BackgroundInterface):
+@runtime_checkable
+class ThreeMLBackgroundInterface(BackgroundInterface, Protocol):
     """
     This must translate to/from regular parameters
     with arbitrary type from/to 3ML parameters
@@ -44,22 +45,26 @@ class ThreeMLBackgroundInterface(BackgroundInterface):
         """
         return {} # Silence warning
 
-class BinnedBackgroundInterface(BackgroundInterface, BinnedExpectationInterface):
+@runtime_checkable
+class BinnedBackgroundInterface(BackgroundInterface, BinnedExpectationInterface, Protocol):
     """
     No new methods, just the inherited one
     """
 
-class ThreeMLBinnedBackgroundInterface(BinnedBackgroundInterface, ThreeMLBackgroundInterface):
+@runtime_checkable
+class ThreeMLBinnedBackgroundInterface(BinnedBackgroundInterface, ThreeMLBackgroundInterface, Protocol):
     """
     No new methods, just the inherited one
     """
 
-class UnbinnedBackgroundInterface(BackgroundInterface, UnbinnedExpectationInterface):
+@runtime_checkable
+class UnbinnedBackgroundInterface(BackgroundInterface, UnbinnedExpectationInterface, Protocol):
     """
     No new methods, just the inherited one
     """
 
-class ThreeMLUnbinnedBackgroundInterface(BinnedBackgroundInterface, ThreeMLBackgroundInterface):
+@runtime_checkable
+class ThreeMLUnbinnedBackgroundInterface(BinnedBackgroundInterface, ThreeMLBackgroundInterface, Protocol):
     """
     No new methods, just the inherited one
     """

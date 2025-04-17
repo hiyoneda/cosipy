@@ -14,11 +14,13 @@ class DataInterface(Protocol):
     Not much...
     """
 
-class UnbinnedDataInterface(DataInterface):
+@runtime_checkable
+class UnbinnedDataInterface(DataInterface, Protocol):
     @property
     def measurements(self) -> Measurements:...
 
-class BinnedDataInterface(DataInterface):
+@runtime_checkable
+class BinnedDataInterface(DataInterface, Protocol):
     @property
     def data(self) -> histpy.Histogram:...
 
