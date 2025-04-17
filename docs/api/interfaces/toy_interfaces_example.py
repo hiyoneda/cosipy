@@ -64,8 +64,8 @@ class ToyBkg(BinnedBackgroundInterface):
         self._unit_expectation[:] = 1 / self._unit_expectation.nbins
         self._norm = 1
 
-    def set_parameters(self, **params: Dict[str, Any]) -> None:
-        self._norm = params['norm']
+    def set_parameters(self, **parameters:Any) -> None:
+        self._norm = parameters['norm']
 
     @property
     def parameters(self) -> Dict[str, Any]:
@@ -104,9 +104,9 @@ class ToyThreeMLBkg(ToyBkg, ThreeMLBinnedBackgroundInterface):
     def threeml_parameters(self) -> Dict[str, Parameter]:
         return self._threeml_parameters
 
-    def set_threeml_parameters(self, norm: Parameter, **kwargs):
-        self._threeml_parameters['norm'] = norm
-        self.set_parameters(norm = norm.value)
+    def set_threeml_parameters(self, **parameters: Parameter):
+        self._threeml_parameters = parameters
+        self.set_parameters(norm = parameters['norm'].value)
 
 
 class ToySourceResponse(ThreeMLBinnedSourceResponseInterface):

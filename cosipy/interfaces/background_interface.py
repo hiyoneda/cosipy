@@ -21,7 +21,7 @@ __all__ = [
 
 @runtime_checkable
 class BackgroundInterface(Protocol):
-    def set_parameters(self, **params:Dict[str, Any]) -> None:...
+    def set_parameters(self, **parameters:Any) -> None:...
     @property
     def parameters(self) -> Dict[str, Any]:...
 
@@ -32,7 +32,7 @@ class ThreeMLBackgroundInterface(BackgroundInterface, Protocol):
     with arbitrary type from/to 3ML parameters
 
     """
-    def set_threeml_parameters(self, **parameters: Dict[str, Parameter]):
+    def set_threeml_parameters(self, **parameters: Parameter):
         """
         The Parameter objects are passed "as reference", and can change.
         Remember to call set_parameters() before computing the expetation
