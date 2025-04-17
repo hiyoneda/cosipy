@@ -1,19 +1,15 @@
 from typing import Dict, Any
 
-from astromodels import Model, Parameter
-
 from cosipy.threeml import COSILike
 from cosipy.interfaces import (BinnedDataInterface,
                                BinnedBackgroundInterface,
                                ThreeMLBinnedBackgroundInterface,
-                               ThreeMLBackgroundInterface,
                                ThreeMLBinnedSourceResponseInterface)
 from histpy import Axis, Axes, Histogram
 import numpy as np
 from scipy.stats import norm, uniform
 
-from threeML import Constant, PointSource, Model, JointLikelihood, DataList
-
+from threeML import Constant, PointSource, Model, JointLikelihood, DataList, Parameter
 
 from matplotlib import pyplot as plt
 
@@ -100,7 +96,7 @@ class ToyThreeMLBkg(ToyBkg, ThreeMLBinnedBackgroundInterface):
     def expectation(self, axes: Axes) -> Histogram:
         # Overrides ToyBkg expectation
         # Update, inn case it changed externally
-        self.set_parameters(norm=self._threeml_parameters['norm'].value)
+        self.set_parameters(norm = self._threeml_parameters['norm'].value)
 
         return super().expectation(axes)
 
