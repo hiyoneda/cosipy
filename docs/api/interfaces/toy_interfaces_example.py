@@ -1,10 +1,14 @@
 from typing import Dict, Any
 
+from astromodels.sources import Source
+
 from cosipy.threeml import COSILike
 from cosipy.interfaces import (BinnedDataInterface,
                                BinnedBackgroundInterface,
                                ThreeMLBinnedBackgroundInterface,
-                               ThreeMLBinnedSourceResponseInterface)
+                               BinnedThreeMLModelResponseInterface,
+                               BinnedThreeMLSourceResponseInterface,
+                               ThreeMLSourceResponseInterface)
 from histpy import Axis, Axes, Histogram
 import numpy as np
 from scipy.stats import norm, uniform
@@ -12,6 +16,8 @@ from scipy.stats import norm, uniform
 from threeML import Constant, PointSource, Model, JointLikelihood, DataList, Parameter
 
 from matplotlib import pyplot as plt
+
+import copy
 
 """
 This is an example on how to use the new interfaces.
@@ -25,7 +31,6 @@ It looks nothing like COSI data, but
 shows how generic the interfaces can be. I'm still working
 on refactoring our current code to this format.
 """
-
 
 # ======== Create toy interfaces for this model ===========
 
@@ -109,38 +114,62 @@ class ToyThreeMLBkg(ToyBkg, ThreeMLBinnedBackgroundInterface):
         self.set_parameters(norm = parameters['norm'].value)
 
 
-class ToySourceResponse(ThreeMLBinnedSourceResponseInterface):
+class ToyPointSourceResponse(BinnedThreeMLSourceResponseInterface):
     """
     This models a Gaussian signal in 1D, centered at 0 and with std = 1.
     The normalization --the "flux"-- is the only free parameters
     """
 
     def __init__(self):
-        self._model = None
+        self._source = None
         self._unit_expectation = Histogram(toy_axis,
                                            contents=np.diff(norm.cdf(toy_axis.edges)))
 
-    def set_model(self, model: Model):
-        self._model = model
+    def set_source(self, source: Source):
+
+        if not isinstance(source, PointSource):
+            raise TypeError("I only know how to handle point sources!")
+
+        self._source = source
 
     def expectation(self, axes: Axes) -> Histogram:
         if axes != self._unit_expectation.axes:
             raise ValueError("Wrong axes. I have fixed axes.")
 
-        if self._model is None:
-            raise RuntimeError("Set model first")
+        if self._source is None:
+            raise RuntimeError("Set a source first")
 
         # Get the latest values of the flux
         # Remember that _model can be modified externally between calls.
-        sources = self._model.sources
-
-        if len(sources) == 0:
-            flux = 0.
-        else:
-            flux = self._model.sources['source'].spectrum.main.shape.k.value
+        flux = self._source.spectrum.main.shape.k.value
 
         return self._unit_expectation * flux
 
+    def copy(self) -> "ToyPointSourceResponse":
+        return copy.copy(self)
+
+class ToyModelResponse(BinnedThreeMLModelResponseInterface):
+
+    def __init__(self, psr: BinnedThreeMLSourceResponseInterface):
+        self._psr = psr
+        self._psr_copies = {}
+
+    def set_model(self, model: Model):
+
+        self._psr_copies = {}
+        for name,source in model.sources.items():
+
+            psr_copy = self._psr.copy()
+            psr_copy.set_source(source)
+            self._psr_copies[name] = psr_copy
+
+    def expectation(self, axes: Axes) -> Histogram:
+        expectation = Histogram(axes)
+
+        for source_name,psr in self._psr_copies.items():
+            expectation = expectation + psr.expectation(axes)
+
+        return expectation
 
 # ======= Actual code. This is how the "tutorial" will look like ================
 
@@ -148,7 +177,8 @@ class ToySourceResponse(ThreeMLBinnedSourceResponseInterface):
 # but since we are generating the data and models on the fly, and most parameter
 # are hardcoded above withing the classes, then it's not necessary here.
 data = ToyData()
-response = ToySourceResponse()
+psr = ToyPointSourceResponse()
+response = ToyModelResponse(psr)
 bkg = ToyThreeMLBkg()
 
 ## Source model
@@ -165,7 +195,7 @@ bkg.threeml_parameters['norm'].value = 1
 spectrum.k.value = 1
 
 # Optional: Perform a background-only or a null-background fit
-#bkg = None # Uncomment for no bkg
+bkg = None # Uncomment for no bkg
 #model = Model() # Uncomment for bkg-only hypothesis
 
 # Fit

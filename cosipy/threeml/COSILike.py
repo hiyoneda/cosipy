@@ -2,7 +2,7 @@ from typing import Dict
 from threeML import PluginPrototype, Parameter
 from cosipy.statistics import UnbinnedLikelihood, PoissonLikelihood
 from cosipy.interfaces import (DataInterface,
-                               ThreeMLSourceResponseInterface,
+                               ThreeMLModelResponseInterface,
                                ThreeMLBackgroundInterface,
                                LikelihoodInterface, ThreeMLBinnedBackgroundInterface)
 
@@ -11,7 +11,7 @@ class COSILike(PluginPrototype):
     def __init__(self,
                  name,
                  data: DataInterface,
-                 response: ThreeMLSourceResponseInterface,
+                 response: ThreeMLModelResponseInterface,
                  bkg: ThreeMLBackgroundInterface,
                  likelihood = 'poisson'):
         """
