@@ -3,12 +3,14 @@ import matplotlib.pyplot as plt
 import astropy.units as u
 from astropy.io import fits
 from astropy.time import Time, TimeDelta
-from astropy.coordinates import SkyCoord, cartesian_to_spherical, Galactic
+from astropy.coordinates import SkyCoord, cartesian_to_spherical, Galactic, EarthLocation, GCRS
 from mhealpy import HealpixMap
 import matplotlib.pyplot as plt
 from matplotlib.colors import LogNorm
 from matplotlib import cm, colors
 from scipy import interpolate
+
+from histpy import TimeAxis
 
 from scoords import Attitude, SpacecraftFrame
 from cosipy.response import FullDetectorResponse
@@ -20,11 +22,11 @@ logger = logging.getLogger(__name__)
 
 class SpacecraftFile():
 
-    def __init__(self, time, x_pointings = None, y_pointings = None, \
-            z_pointings = None, earth_zenith = None, altitude = None,\
-            attitude = None, livetime = None, instrument = "COSI", \
-            frame = "galactic"):
-
+    def __init__(self,
+                 time: Time,
+                 attitude: Attitude,
+                 location: GRCS,
+                 livetime: u.Quantity):
         """
         Handles the spacecraft orientation. Calculates the dwell time 
         map and point source response over a certain orientation period. 
@@ -32,97 +34,31 @@ class SpacecraftFile():
         
         Parameters
         ----------
-        Time : astropy.time.Time
+        time:
             The time stamps for each pointings. Note this is NOT the time duration.
-        x_pointings : astropy.coordinates.SkyCoord, optional
-            The pointings (galactic system) of the x axis of the local 
-            coordinate system attached to the spacecraft (the default 
-            is `None`, which implies no input for the x pointings).
-        y_pointings : astropy.coordinates.SkyCoord, optional
-            The pointings (galactic system) of the y axis of the local 
-            coordinate system attached to the spacecraft (the default 
-            is `None`, which implies no input for the y pointings).
-        z_pointings : astropy.coordinates.SkyCoord, optional
-            The pointings (galactic system) of the z axis of the local 
-            coordinate system attached to the spacecraft (the default 
-            is `None`, which implies no input for the z pointings).
-        earth_zenith : astropy.coordinates.SkyCoord, optional
-            The pointings (galactic system) of the Earth zenith (the 
-            default is `None`, which implies no input for the earth pointings).
-	    altitude : array, optional 
-            Altitude of the spacecraft in km.
-        livetime : array, optional 
+        attitude:
+            Spacecraft orientation with respect to an inertial system.
+        location:
+            Location of the Spacecraft in inertial coordinates relative to
+            the Earth's center.
+        livetime:
             Time in seconds the instrument is live for the corresponding 
-            energy bin (using left endpoints so that the last entry in 
-            the ori file is 0).
-        attitude : numpy.ndarray, optional 
-            The attitude of the spacecraft (the default is `None`, 
-            which implies no input for the attitude of the spacecraft).
-        instrument : str, optional
-            The instrument name (the default is "COSI").
-        frame : str, optional
-            The frame on which the analysis will be based (the default is "galactic").
+            energy bin. Should have one less element than the number of
+            timestamps.
         """
 
-        # check if the inputs are valid
-        # Time
-        if isinstance(time, Time):
-            self._time = time
-        else:
-            raise TypeError("The time should be a astropy.time.Time object")
+        # Note: livetime has one element less than the timestamps
+        self.npoints = np.broadcast_shapes(time.size, len(attitude), location.size, livetime.size + 1)
 
-        # Altitude
-        if not isinstance(altitude, (type(None))):
-            self._altitude = np.array(altitude)
+        self.livetime = livetime
+        self.location = location
+        self.attitude = attitude
+        self.time = TimeAxis(time)
 
-        # livetime
-        if not isinstance(livetime, (type(None))):
-            self.livetime = np.array(livetime)
+    @property
+    def time(self):
+        return self._time.edges
 
-        # x pointings
-        if isinstance(x_pointings, (SkyCoord, type(None))):
-            self.x_pointings = x_pointings
-        else:
-            raise TypeError("The x_pointing should be a NoneType or SkyCoord object!")
-
-        # y pointings
-        if isinstance(y_pointings, (SkyCoord, type(None))):
-            self.y_pointings = y_pointings
-        else:
-            raise TypeError("The y_pointing should be a NoneType or SkyCoord object!")
-
-        # z pointings
-        if isinstance(z_pointings, (SkyCoord, type(None))):
-            self.z_pointings = z_pointings
-        else:
-            raise TypeError("The z_pointing should be a NoneType or SkyCoord object!")
-	    
-	    # earth pointings
-        if isinstance(earth_zenith, (SkyCoord, type(None))):
-            self.earth_zenith = earth_zenith
-        else:
-            raise TypeError("The earth_zenith should be a NoneType or SkyCoord object!")    
-
-        # check if the x, y and z pointings are all None (no inputs). If all None, tt will try to read from attitude parameter
-        if self.x_pointings is None and self.y_pointings is None and self.z_pointings is None:
-            if attitude != None:
-                if type(attitude) is Attitude:
-                    self.attitude = attitude
-                else:
-                    raise TypeError("The attitude must be `scoords.attitude.Attitude` object")
-            else:
-                raise ValueError("Please input the pointings of as least two axes or attitude!")
-
-        else:
-            self.attitude = None  # if you have the inputs of x, y and z pointings, the attitude will be overwritten by a None value regardless of the input for the attitude variable.
-
-        self._load_time = self._time.to_value(format = "unix")  # this is not necessary, but just to make sure evething works fine...
-        self._x_direction = np.array([x_pointings.l.deg, x_pointings.b.deg]).T  # this is not necessary, but just to make sure evething works fine...
-        self._z_direction = np.array([z_pointings.l.deg, z_pointings.b.deg]).T  # this is not necessary, but just to make sure evething works fine...
-        self._earth_direction = np.array([earth_zenith.l.deg, earth_zenith.b.deg]).T  # this is not necessary, but just to make sure evething works fine...
-      
-        self.frame = frame
-                       
     @classmethod
     def parse_from_file(cls, file):
 
@@ -140,113 +76,153 @@ class SpacecraftFile():
             The SpacecraftFile object.
         """
 
-        orientation_file = np.loadtxt(file, usecols=(1, 2, 3, 4, 5, 6, 7, 8, 9),delimiter=' ', skiprows=1, comments=("#", "EN"))
-        time_stamps = orientation_file[:, 0]
-        axis_1 = orientation_file[:, [2, 1]]
-        axis_2 = orientation_file[:, [4, 3]]
-        axis_3 = orientation_file[:, [7, 6]]
-        altitude = np.array(orientation_file[:, 5]) 
-        livetime = np.array(orientation_file[:, 8])
-        livetime = livetime[:-1] # left end points, so remove last bin. 
+        # Current SC format:
+        # 0: Always "OG" (for orbital geometry?)
+        # 1: time: timestamp in unix seconds
+        # 2: lat_x: galactic latitude of SC x-axis (deg)
+        # 3: lon_x: galactic longitude of SC x-axis (deg)
+        # 4: lat_z galactic latitude of SC z-axis (deg)
+        # 5: lon_z: galactic longitude of SC y-axis (deg)
+        # 6: altitude: altitude above from Earth's ellipsoid (km)
+        # 7: Earth_lat: galactic latitude of the direction the Earth's zenith is pointing to at the SC location (deg)
+        # 8: Earth_lon: galactic longitude of the direction the Earth's zenith is pointing to at the SC location (deg)
+        # 9: livetime (previously called SAA): accumulated uptime up to the following entry (seconds)
 
-        time = Time(time_stamps, format = "unix")
-        xpointings = SkyCoord(l = axis_1[:,0]*u.deg, b = axis_1[:,1]*u.deg, frame = "galactic")
-        zpointings = SkyCoord(l = axis_2[:,0]*u.deg, b = axis_2[:,1]*u.deg, frame = "galactic")
-        earthpointings = SkyCoord(l = axis_3[:,0]*u.deg, b = axis_3[:,1]*u.deg, frame = "galactic")
-        
-        return cls(time, x_pointings = xpointings, z_pointings = zpointings, earth_zenith = earthpointings, altitude = altitude, livetime=livetime)
+        time,lat_x,lon_x,lat_z,lon_z,altitude,earth_lat,earth_lon,livetime = orientation_file = np.loadtxt(file, usecols=(1, 2, 3, 4, 5, 6, 7, 8, 9), unpack = true,
+                                                                                                      delimiter=' ', skiprows=1, comments=("#", "EN"))
+        time = Time(time, format="unix")
 
-    def get_time(self, time_array = None):
+        xpointings = SkyCoord(l=lon_x * u.deg, b=lat_x * u.deg, frame="galactic")
+        zpointings = SkyCoord(l=lon_z * u.deg, b=lat_z * u.deg, frame="galactic")
 
+        attitude = Attitude.from_axes(x=xpointings, z=zpointings)
+
+        livetime = livetime[:-1]*u.s # The last element is 0.
+
+        # Currently, the orbit information is in a weird format.
+        # The altitude it's with respect to the Earth's source, like
+        # you would specified it in a geodetic format, while
+        # the lon/lat is specified in J2000, like you would in ECI.
+        # Eventually everything should be in ECI (GCRS in astropy
+        # for all purposes), but for now let's do the conversion.
+        # 1. Get the direction in galactic
+        # 2. Transform to GCRS, which uses RA/Dec (ICRS-like).
+        #    This is represented in the unit sphere
+        # 3. Add the altitude by transforming to EarthLocation.
+        #    Should take care of the non-spherical Earth
+        # 4. Go back GCRS, now with the correct distance
+        #    (from the Earth's center)
+        zenith_gal = SkyCoord(l=earth_lon * u.deg, b=earth_lat * u.deg, frame="galactic")
+        gcrs = zenith_gal.transform_to('gcrs')
+        earth_loc = EarthLocation.from_geodetic(lon=zenith_grcs.ra, lat=zenith_grcs.dec, height=altitude*u.km)
+        location = earth_loc.get_gcrs(grcs.obstime)
+
+        return cls(time, attitude, location, livetime)
+
+    def _interp_attitude(self, bins, weights):
         """
-        Return the array pf pointing times as a astropy.Time object.
 
         Parameters
         ----------
-        time_array : numpy.ndarray, optional
-            The time array (the default is `None`, which implies the time array will be taken from the instance).
+        bins
+        weights
 
         Returns
         -------
-        astropy.time.Time
-            The time stamps of the orientation.
-        """
-
-        if time_array == None:
-            self._time = Time(self._load_time, format = "unix")
-        else:
-            self._time = Time(time_array, format = "unix")
-
-        return self._time
-
-    def get_altitude(self):
 
         """
-        Return the array of Earth altitude.
 
-        
+    def interp_attitude(self):
+        """
 
         Returns
         -------
-        numpy array
-            the Earth altitude.
-        """   
-
-        return self._altitude
-
-    def get_time_delta(self, time_array = None):
 
         """
-        Return an array of the time period between neighbouring time points.
+
+    def _interp_location(self, bins, weights):
+        """
 
         Parameters
         ----------
-        time_array : numpy.ndarray, optional
-           The time delta array (the default is `None`, which implies the time array will be taken from the instance).
+        bins
+        weights
 
         Returns
         -------
-        time_delta : astropy.time.Time
-            The time difference between the neighbouring time stamps.
+
         """
 
-        if time_array == None:
-            self._time_delta = np.diff(self._load_time)
+    def interp_location(self):
+        """
+
+        Returns
+        -------
+
+        """
+
+    def _cummulative_livetime(bins, weights):
+
+        if times.size == 1:
+            delta = TimeDelta([] * u.s)
         else:
-            self._time_delta = np.diff(time_array)
+            delta = times[1:] - times[:-1]
 
-        time_delta = TimeDelta(self._time_delta * u.second)
 
-        return time_delta
+        within_bin = self._time.widths[bins] * weights[0]
 
-    def interpolate_direction(self, trigger, idx, direction):
+        return (self._time.lower_bounds.gps - self._time.lo_lim.gps)*u.s + within_bin
 
+    def cummulative_livetime(self, time: Time) -> u.Quantity:
         """
-        Linearly interpolates position at a given time between two timestamps.
+        Get the cummulative live time up to this time.
+
+        The live time in between the internal timestamp is
+        assumed constant.
 
         Parameters
         ----------
-        trigger : astropy.time.Time
-            The time of the event.
-        idx : int
-            The closest index in the pointing to the trigger time.
-        direction : numpy.ndarray
-            The pointing axis (x,z).
+        time:
+            Timestamps
 
         Returns
         -------
-        numpy.ndarray
-            The interpolated positions.
+        Cummulative live time, with units.
         """
 
-        new_direction_lat = np.interp(trigger.value, self._load_time[idx : idx + 2], direction[idx : idx + 2, 1])
-        if (direction[idx, 0] > direction[idx + 1, 0]):
-            new_direction_long = np.interp(trigger.value, self._load_time[idx : idx + 2], [direction[idx, 0], 360 + direction[idx + 1, 0]])
-            new_direction_long = new_direction_long - 360
-        else:
-            new_direction_long = np.interp(trigger.value, self._load_time[idx : idx + 2], direction[idx : idx + 2, 0])
+        bins, weights = self._time.interp_weights(times)
 
-        return np.array([new_direction_long, new_direction_lat])
+        return self._cummulative_livetime(bins, weights)
+
+    def interp(self, times: Time) -> Tuple[Attitude, GCRS, u.Quantity]:
+
+        """
+        Linearly interpolates attitude and position at a given time.
+
+        Parameters
+        ----------
+        times:
+            Timestamps to interpolate
+
+        Returns
+        -------
+        (attitude, location, livetime)
+        Shape (time.size, time.size, time.size - 1)
+        """
+
+        if times.size < 2:
+            raise ValueError("We need at least two time stamps. See also interp_attitude and inter_location")
+
+        bins, weights = self._time.interp_weights(times)
+
+        interp_attitude = self._interp_attitude(bins, weights)
+        interp_location = self._interp_location(bins, weights)
+
+        interp_livetime = self._cummulative_livetime(bins, weights)
+
+        # Fix liv
+
+        return self.__class__(times, interp_attitude, interp_location, interp_livetime)
 
     def source_interval(self, start, stop):
 
@@ -286,9 +262,9 @@ class SpacecraftFile():
         else:
             start_idx = self._load_time.searchsorted(start.value) - 1
 
-            x_direction_start = self.interpolate_direction(start, start_idx, self._x_direction)
-            z_direction_start = self.interpolate_direction(start, start_idx, self._z_direction)
-            earth_direction_start = self.interpolate_direction(start, start_idx, self._earth_direction)
+            x_direction_start = self.interp(start, start_idx, self._x_direction)
+            z_direction_start = self.interp(start, start_idx, self._z_direction)
+            earth_direction_start = self.interp(start, start_idx, self._earth_direction)
 
             new_times = self._load_time[start_idx + 1 : stop_idx + 1]
             new_times = np.insert(new_times, 0, start.value)
@@ -320,9 +296,9 @@ class SpacecraftFile():
         if (stop.value % 1 != 0):
             stop_idx = self._load_time.searchsorted(stop.value) - 1
 
-            x_direction_stop = self.interpolate_direction(stop, stop_idx, self._x_direction)
-            z_direction_stop = self.interpolate_direction(stop, stop_idx, self._z_direction)
-            earth_direction_stop = self.interpolate_direction(stop, stop_idx, self._earth_direction)
+            x_direction_stop = self.interp(stop, stop_idx, self._x_direction)
+            z_direction_stop = self.interp(stop, stop_idx, self._z_direction)
+            earth_direction_stop = self.interp(stop, stop_idx, self._earth_direction)
 
             new_times = np.delete(new_times, -1)
             new_times = np.append(new_times, stop.value)
@@ -405,7 +381,9 @@ class SpacecraftFile():
 
         return self.attitude
 
-    def get_target_in_sc_frame(self, target_name, target_coord, attitude = None, quiet = False, save = False):
+
+
+    def get_target_in_sc_frame(self, target_coord, attitude = None, quiet = False, save = False):
 
         """
         Convert the x, y and z pointings of the spacescraft axes to the path of the source in the spacecraft frame.
@@ -413,8 +391,6 @@ class SpacecraftFile():
 
         Parameters
         ----------
-        target_name : str
-            The name of the target object.
         target_coord : astropy.coordinates.SkyCoord
             The coordinates of the target object.
         attitude: scoords.Attitude, optional
@@ -435,8 +411,7 @@ class SpacecraftFile():
         else:
             self.attitude = self.get_attitude()
 
-        self.target_name = target_name
-        if quiet == False:
+        if not quite:
             logger.info("Now converting to the Spacecraft frame...")
         self.src_path_cartesian = SkyCoord(np.dot(self.attitude.rot.inv().as_matrix(), target_coord.cartesian.xyz.value),
                                            representation_type = 'cartesian',
@@ -447,22 +422,36 @@ class SpacecraftFile():
         self.src_path_spherical = cartesian_to_spherical(self.src_path_cartesian.x,
                                                          self.src_path_cartesian.y,
                                                          self.src_path_cartesian.z)
-        if quiet == False:
+        if not quiet:
             logger.info(f"Conversion completed!")
 
-        # generate the numpy array of l and b to save to a npy file
-        l = np.array(self.src_path_spherical[2].deg)  # note that 0 is Quanty, 1 is latitude and 2 is longitude and they are in rad not deg
-        b = np.array(self.src_path_spherical[1].deg)
-        self.src_path_lb = np.stack((l,b), axis=-1)
-
-        if save == True:
-            np.save(self.target_name+"_source_path_in_SC_frame", self.src_path_lb)
 
         # convert to SkyCoord objects to get the output object of this method
         self.src_path_skycoord = SkyCoord(self.src_path_lb[:,0], self.src_path_lb[:,1], unit = "deg", frame = SpacecraftFrame())
 
         return self.src_path_skycoord
 
+    def write(self, filename):
+        """
+
+        Parameters
+        ----------
+        filename
+
+        Returns
+        -------
+
+        """
+
+        # generate the numpy array of l and b to save to a npy file
+        l = np.array(self.src_path_spherical[
+                         2].deg)  # note that 0 is Quanty, 1 is latitude and 2 is longitude and they are in rad not deg
+        b = np.array(self.src_path_spherical[1].deg)
+
+        src_path_lb = np.stack((l, b), axis=-1)
+
+
+        np.save(filename, self.src_path_lb)
 
     def get_dwell_map(self, response, src_path = None, save = False, pa_convention=None):
 

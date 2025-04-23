@@ -167,7 +167,7 @@ class ToyModelResponse(BinnedThreeMLModelResponseInterface):
         expectation = Histogram(axes)
 
         for source_name,psr in self._psr_copies.items():
-            expectation = expectation + psr.expectation(axes)
+            expectation += psr.expectation(axes)
 
         return expectation
 
@@ -195,7 +195,7 @@ bkg.threeml_parameters['norm'].value = 1
 spectrum.k.value = 1
 
 # Optional: Perform a background-only or a null-background fit
-bkg = None # Uncomment for no bkg
+#bkg = None # Uncomment for no bkg
 #model = Model() # Uncomment for bkg-only hypothesis
 
 # Fit
