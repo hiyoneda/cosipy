@@ -5,6 +5,7 @@ import astropy.units as u
 from astropy.time import Time
 from astropy.coordinates import SkyCoord, EarthLocation, GCRS, \
     concatenate_representations, ITRS
+from astropy.coordinates import concatenate as concatenate_skycoord
 from histpy import Histogram, HealpixAxis, TimeAxis
 from mhealpy import HealpixMap
 
@@ -199,12 +200,9 @@ class SpacecraftFile:
         # TODO: we could do a better interpolation using more points, or
         #   additional ACS data e.g. the rotation speed
 
-        x,y,z = self._attitude.as_axes()
+        rot_matrix = self._attitude.as_matrix()
 
-        x_interp = x[points[0]]*weights[0] + x[points[1]]*weights[1]
-        y_interp = y[points[0]] * weights[0] + y[points[1]] * weights[1]
-
-        interp_attitude = Attitude.from_axes(x_interp,y_interp)
+        interp_attitude = Attitude.from_matrix(rot_matrix[points[0]]*weights[0] + rot_matrix[points[1]]*weights[1], frame = self._attitude.frame)
 
         return interp_attitude
 
@@ -220,7 +218,7 @@ class SpacecraftFile:
 
         return self._interp_attitude(points, weights)
 
-    def _interp_location(self, points, weights) -> GCRS:
+    def _interp_location(self, points, weights) -> EarthLocation:
         """
 
         Parameters
@@ -235,17 +233,19 @@ class SpacecraftFile:
 
         # TODO: we could do a better interpolation using more points and orbital dynamics
 
-        x,y,z = self._location.itrs.represent_as('cartesian').xyz
+        x = self._location.x
+        y = self._location.y
+        z = self._location.z
 
         x_interp = x[points[0]] * weights[0] + x[points[1]] * weights[1]
         y_interp = y[points[0]] * weights[0] + y[points[1]] * weights[1]
         z_interp = z[points[0]] * weights[0] + z[points[1]] * weights[1]
 
-        interp_location = GCRS(x=x_interp, y=y_interp, z=z_interp, representation_type='cartesian')
+        interp_location = EarthLocation.from_geocentric(x=x_interp, y=y_interp, z=z_interp)
 
         return interp_location
 
-    def interp_location(self, time) -> GCRS:
+    def interp_location(self, time) -> EarthLocation:
         """
 
         Returns
@@ -352,22 +352,29 @@ class SpacecraftFile:
         stop_attitude = self._interp_attitude(stop_points, stop_weights)
 
         att_rot = self._attitude.as_matrix()
-        new_attitude = Attitude.from_matrix(np.append(start_attitude.as_matrix(),
+        new_attitude = Attitude.from_matrix(np.append(start_attitude.as_matrix()[None],
                                                       np.append(att_rot[start_points[1]:stop_points[1]],
-                                                                stop_attitude.as_matrix())),
+                                                                stop_attitude.as_matrix()[None], axis = 0), axis = 0),
                                             frame = self._attitude.frame)
 
-        start_location = self._interp_location(start_points, start_weights)
-        stop_location = self._interp_location(stop_points, stop_weights)
+        start_location = self._interp_location(start_points, start_weights)[None]
+        stop_location = self._interp_location(stop_points, stop_weights)[None]
+        center_locations = self._location[start_points[1]:stop_points[1]]
 
-        new_location = concatenate_representations((start_location, self._location[start_points[1]:stop_points[1]], stop_location))
+        new_location = EarthLocation.from_geocentric(np.concatenate((start_location.x, center_locations.x, stop_location.x)),
+                                                     np.concatenate((start_location.y, center_locations.y, stop_location.y)),
+                                                     np.concatenate((start_location.z, center_locations.z, stop_location.z)))
 
         first_livetime = self.livetime[start_points[0]]*start_weights[1]
         last_livetime = self.livetime[stop_points[0]]*stop_weights[1]
 
         new_livetime = np.append(first_livetime, np.append(self.livetime[start_points[1]:stop_points[0]], last_livetime))
 
-        new_time = np.concatenate((start, self.obstime[start_points[1]:stop_points[1]], stop))
+        middle_times = self.obstime[start_points[1]:stop_points[1]]
+
+        new_time = Time(np.concatenate(([start.jd1], middle_times.jd1, [stop.jd1])),
+                        np.concatenate(([start.jd2], middle_times.jd2, [stop.jd2])),
+                        format = 'jd')
 
         return self.__class__(new_time, new_attitude, new_location, new_livetime)
 
