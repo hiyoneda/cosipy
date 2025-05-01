@@ -10,7 +10,7 @@ from .data_io import ReadTraTest
 from .threeml import COSILike
 from .threeml import Band_Eflux
 
-from .spacecraftfile import SpacecraftFile
+from .spacecraftfile import *
 
 from .ts_map import FastTSMap
 

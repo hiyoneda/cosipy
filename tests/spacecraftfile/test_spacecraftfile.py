@@ -1,5 +1,5 @@
+from cosipy.response import FullDetectorResponse
 from cosipy import test_data
-from pytest import approx
 from cosipy import SpacecraftFile
 import numpy as np
 import astropy.units as u
@@ -15,7 +15,7 @@ def test_get_time():
     
     ori = SpacecraftFile.parse_from_file(ori_path)
     
-    assert np.allclose(ori.get_time().value,
+    assert np.allclose(ori.obstime.unix,
                        [1835478000.0, 1835478001.0, 1835478002.0,
                         1835478003.0, 1835478004.0, 1835478005.0,
                         1835478006.0, 1835478007.0, 1835478008.0,
@@ -26,20 +26,22 @@ def test_get_time_delta():
 
     ori_path = test_data.path / "20280301_first_10sec.ori"
     ori = SpacecraftFile.parse_from_file(ori_path)
-    time_delta = ori.get_time_delta()
-    time_delta.format = "sec"
+    time_delta = ori.intervals_duration.to_value(u.s)
 
-    assert np.allclose(time_delta.value, np.array([1.000000, 1.000000, 1.000000, 1.000000, 1.000000, 
-                                                   1.000000, 1.000000, 1.000000, 1.000000, 1.000000]))
+    assert np.allclose(time_delta, np.array([1.000000, 1.000000, 1.000000, 1.000000, 1.000000,
+                                             1.000000, 1.000000, 1.000000, 1.000000, 1.000000]))
 
+    time_delta = ori.livetime.to_value(u.s)
 
+    assert np.allclose(time_delta, np.array([1.000000, 1.000000, 1.000000, 1.000000, 1.000000,
+                                             1.000000, 1.000000, 1.000000, 1.000000, 1.000000]))
 
 def test_get_attitude():
 
     ori_path = test_data.path / "20280301_first_10sec.ori"
     ori = SpacecraftFile.parse_from_file(ori_path)
     
-    attitude = ori.get_attitude()
+    attitude = ori.attitude
 
     matrix = np.array([[[0.215904, -0.667290, -0.712818],
                         [0.193436, 0.744798, -0.638638],
@@ -93,10 +95,9 @@ def test_get_target_in_sc_frame():
     ori_path = test_data.path / "20280301_first_10sec.ori"
     ori = SpacecraftFile.parse_from_file(ori_path)
 
-    target_name = "Crab"
     target_coord = SkyCoord(l=184.5551, b = -05.7877, unit = (u.deg, u.deg), frame = "galactic")
 
-    path_in_sc = ori.get_target_in_sc_frame(target_name, target_coord)
+    path_in_sc = ori.get_target_in_sc_frame(target_coord)
 
     assert np.allclose(path_in_sc.lon.deg, 
                        np.array([118.393522, 118.425255, 118.456868, 118.488362, 118.519735, 
@@ -109,17 +110,14 @@ def test_get_target_in_sc_frame():
 
 def test_get_dwell_map():
 
-    response_path =test_data.path / "test_full_detector_response.h5"
     ori_path = test_data.path / "20280301_first_10sec.ori"
     ori = SpacecraftFile.parse_from_file(ori_path)
     
-    target_name = "Crab"
     target_coord = SkyCoord(l=184.5551, b = -05.7877, unit = (u.deg, u.deg), frame = "galactic")
-    path_in_sc = ori.get_target_in_sc_frame(target_name, target_coord)
+
+    dwell_map = ori.get_dwell_map(target_coord, nside=1, scheme = 'ring')
     
-    dwell_map = ori.get_dwell_map(response = response_path)
-    
-    assert np.allclose(dwell_map[:].value, 
+    assert np.allclose(dwell_map[:].to_value(u.s),
                        np.array([1.895057, 7.615584, 0.244679, 0.244679, 0.000000, 0.000000, 
                                 0.000000, 0.000000, 0.000000, 0.000000, 0.000000, 0.000000]))
 
