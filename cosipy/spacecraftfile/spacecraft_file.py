@@ -1,9 +1,12 @@
+from pathlib import Path
+
 import numpy as np
 
 import astropy.units as u
 
 from astropy.time import Time
 from astropy.coordinates import SkyCoord, EarthLocation, GCRS, ITRS
+from docutils.io import Input
 from histpy import Histogram, TimeAxis
 from mhealpy import HealpixMap
 
@@ -140,8 +143,20 @@ class SpacecraftFile:
             The SpacecraftFile object.
         """
 
-        # Current SC format:
-        # 0: Always "OG" (for orbital geometry?)
+        file = Path(file)
+
+        if file.suffix == ".ori":
+            return cls._parse_from_file(file)
+        else:
+            raise ValueError(f"File format for {file} not supported")
+
+    @classmethod
+    def _parse_from_file(cls, file) -> "SpacecraftFile":
+        """
+        Parses an .ori txt file with MEGAlib formatting.
+
+        # Columns
+        # 0: Always "OG" (orbital geometry)
         # 1: obstime: timestamp in unix seconds
         # 2: lat_x: galactic latitude of SC x-axis (deg)
         # 3: lon_x: galactic longitude of SC x-axis (deg)
@@ -151,6 +166,17 @@ class SpacecraftFile:
         # 7: Earth_lat: galactic latitude of the direction the Earth's zenith is pointing to at the SC location (deg)
         # 8: Earth_lon: galactic longitude of the direction the Earth's zenith is pointing to at the SC location (deg)
         # 9: livetime (previously called SAA): accumulated uptime up to the following entry (seconds)
+
+        Parameters
+        ----------
+        file:
+            Path to .ori file
+
+        Returns
+        -------
+        cosipy.spacecraftfile.spacecraft_file
+            The SpacecraftFile object.
+        """
 
         time,lat_x,lon_x,lat_z,lon_z,altitude,earth_lat,earth_lon,livetime = orientation_file = np.loadtxt(file, usecols=(1, 2, 3, 4, 5, 6, 7, 8, 9), unpack = True,
                                                                                                       delimiter=' ', skiprows=1, comments=("#", "EN"))
