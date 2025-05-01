@@ -15,7 +15,7 @@ def test_inject_point_source():
     # defind the response and orientation
     response_path = test_data.path / "test_full_detector_response_dense.h5"
     orientation_path = test_data.path / "20280301_2s.ori"
-    ori = SpacecraftFile.parse_from_file(orientation_path)
+    ori = SpacecraftFile.open(orientation_path)
     
     # powerlaw model 
     index = -2.2

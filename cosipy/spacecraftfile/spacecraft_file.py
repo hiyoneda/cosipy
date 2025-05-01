@@ -4,7 +4,7 @@ import astropy.units as u
 
 from astropy.time import Time
 from astropy.coordinates import SkyCoord, EarthLocation, GCRS, ITRS
-from histpy import Histogram, HealpixAxis, TimeAxis
+from histpy import Histogram, TimeAxis
 from mhealpy import HealpixMap
 
 from scoords import Attitude, SpacecraftFrame
@@ -124,7 +124,7 @@ class SpacecraftFile:
         return self._location
 
     @classmethod
-    def parse_from_file(cls, file) -> "SpacecraftFile":
+    def open(cls, file) -> "SpacecraftFile":
 
         """
         Parses timestamps, axis positions from file and returns to __init__.

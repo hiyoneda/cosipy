@@ -13,7 +13,7 @@ def test_get_time():
 
     ori_path = test_data.path / "20280301_first_10sec.ori"
     
-    ori = SpacecraftFile.parse_from_file(ori_path)
+    ori = SpacecraftFile.open(ori_path)
     
     assert np.allclose(ori.obstime.unix,
                        [1835478000.0, 1835478001.0, 1835478002.0,
@@ -25,7 +25,7 @@ def test_get_time():
 def test_get_time_delta():
 
     ori_path = test_data.path / "20280301_first_10sec.ori"
-    ori = SpacecraftFile.parse_from_file(ori_path)
+    ori = SpacecraftFile.open(ori_path)
     time_delta = ori.intervals_duration.to_value(u.s)
 
     assert np.allclose(time_delta, np.array([1.000000, 1.000000, 1.000000, 1.000000, 1.000000,
@@ -39,7 +39,7 @@ def test_get_time_delta():
 def test_get_attitude():
 
     ori_path = test_data.path / "20280301_first_10sec.ori"
-    ori = SpacecraftFile.parse_from_file(ori_path)
+    ori = SpacecraftFile.open(ori_path)
     
     attitude = ori.attitude
 
@@ -93,7 +93,7 @@ def test_get_attitude():
 def test_get_target_in_sc_frame():
 
     ori_path = test_data.path / "20280301_first_10sec.ori"
-    ori = SpacecraftFile.parse_from_file(ori_path)
+    ori = SpacecraftFile.open(ori_path)
 
     target_coord = SkyCoord(l=184.5551, b = -05.7877, unit = (u.deg, u.deg), frame = "galactic")
 
@@ -111,7 +111,7 @@ def test_get_target_in_sc_frame():
 def test_get_dwell_map():
 
     ori_path = test_data.path / "20280301_first_10sec.ori"
-    ori = SpacecraftFile.parse_from_file(ori_path)
+    ori = SpacecraftFile.open(ori_path)
     
     target_coord = SkyCoord(l=184.5551, b = -05.7877, unit = (u.deg, u.deg), frame = "galactic")
 
@@ -124,7 +124,7 @@ def test_get_dwell_map():
 def test_select_interval():
 
     ori_path = test_data.path / "20280301_first_10sec.ori"
-    ori = SpacecraftFile.parse_from_file(ori_path)
+    ori = SpacecraftFile.open(ori_path)
 
     new_ori = ori.select_interval(ori.tstart+0.1*u.s, ori.tstart+2.1*u.s)
 

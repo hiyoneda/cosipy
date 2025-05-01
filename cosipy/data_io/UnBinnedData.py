@@ -441,7 +441,7 @@ class UnBinnedData(DataIO):
         """
 
         # Get ori info:
-        ori = SpacecraftFile.parse_from_file(self.ori_file)
+        ori = SpacecraftFile.open(self.ori_file)
         time_tags = ori._load_time
         x_pointings = ori.x_pointings
         z_pointings = ori.z_pointings
@@ -842,7 +842,7 @@ class UnBinnedData(DataIO):
             self.cosi_dataset = self.get_dict(unbinned_data)
 
         # Get ori info:
-        ori = SpacecraftFile.parse_from_file(self.ori_file)
+        ori = SpacecraftFile.open(self.ori_file)
         
         # Get bad time intervals:
         bti = self.find_bad_intervals(ori._time, ori.livetime)

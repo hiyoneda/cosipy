@@ -16,7 +16,7 @@ def test_parallel_ts_fit():
     response_path = test_data.path / "test_full_detector_response.h5"
 
     orientation_path = test_data.path / "20280301_2s.ori"
-    ori = SpacecraftFile.parse_from_file(orientation_path)
+    ori = SpacecraftFile.open(orientation_path)
 
     src_bkg = Histogram.open(src_bkg_path).project(['Em', 'PsiChi', 'Phi'])
     bkg = Histogram.open(bkg_path).project(['Em', 'PsiChi', 'Phi'])
@@ -121,7 +121,7 @@ def test_get_ei_cds_array_detector():
     
     response_path = test_data.path / "test_full_detector_response.h5"
     orientation_path = test_data.path / "20280301_2s.ori"
-    ori = SpacecraftFile.parse_from_file(orientation_path)
+    ori = SpacecraftFile.open(orientation_path)
 
     index = -2.2
     K = 10 / u.cm / u.cm / u.s / u.keV
@@ -154,7 +154,7 @@ def test_fast_ts_fit():
     bkg_path = test_data.path / "ts_map_bkg.h5"
 
     orientation_path = test_data.path / "20280301_2s.ori"
-    ori = SpacecraftFile.parse_from_file(orientation_path)
+    ori = SpacecraftFile.open(orientation_path)
 
     src_bkg = Histogram.open(src_bkg_path).project(['Em', 'PsiChi', 'Phi'])
     bkg = Histogram.open(bkg_path).project(['Em', 'PsiChi', 'Phi'])
