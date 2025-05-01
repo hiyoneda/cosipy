@@ -1,7 +1,7 @@
 import logging
 logger = logging.getLogger(__name__)
 
-from cosipy import SpacecraftFile
+from .spacecraft_file import  SpacecraftFile
 
 import numpy as np
 import astropy.units as u
@@ -330,9 +330,9 @@ class RspArfRmfConverter:
         else:
             self.arf_file = f'{self.out_name}.arf'
 
-        if exposure_time is None:
+        if exposure_time is not None:
             self.exposure_time = exposure_time
-        if dts is not None:
+        elif dts is not None:
             livetime = self.__str_or_array(dts)
             self.exposure_time = livetime.sum()
         self.telescope = telescope

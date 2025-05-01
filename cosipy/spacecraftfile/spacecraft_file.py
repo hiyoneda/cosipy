@@ -3,9 +3,7 @@ import numpy as np
 import astropy.units as u
 
 from astropy.time import Time
-from astropy.coordinates import SkyCoord, EarthLocation, GCRS, \
-    concatenate_representations, ITRS
-from astropy.coordinates import concatenate as concatenate_skycoord
+from astropy.coordinates import SkyCoord, EarthLocation, GCRS, ITRS
 from histpy import Histogram, HealpixAxis, TimeAxis
 from mhealpy import HealpixMap
 
