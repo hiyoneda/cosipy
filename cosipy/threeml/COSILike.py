@@ -22,7 +22,7 @@ class COSILike(PluginPrototype):
         data
         response
         bkg
-        likefun: str or LikelihoodInterface (Use at your own risk. make sure uses data, response and bkg)
+        likefun: str or LikelihoodInterface (Use at your own risk. make sure it knows about the input data, response and bkg)
         """
 
         # PluginPrototype.__init__ does the following:
@@ -47,7 +47,7 @@ class COSILike(PluginPrototype):
 
     @property
     def nuisance_parameters(self) -> Dict[str, Parameter]:
-        # Add plugin name, required by 3ML code
+        # Adds plugin name, required by 3ML code
         # See https://github.com/threeML/threeML/blob/7a16580d9d5ed57166e3b1eec3d4fccd3eeef1eb/threeML/classicMLE/joint_likelihood.py#L131
         if self._bkg is None:
             return {}

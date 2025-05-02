@@ -24,13 +24,20 @@ class PoissonLikelihood(BinnedLikelihoodInterface):
         self._bkg = bkg
         self._response = response
 
+    @property
+    def has_bkg(self):
+        return self._bkg is not None
+
     def get_log_like(self) -> float:
 
         # Compute expectation including background
-        expectation = self._response.expectation(self._data.data.axes)
+        # If we don't have background, we won't modify the expectation, so
+        # it's safe to use the internal cache.
+        expectation = self._response.expectation(self._data.data.axes, copy = self.has_bkg)
 
-        if self._bkg is not None:
-            expectation = expectation + self._bkg.expectation(self._data.data.axes)
+        if self.has_bkg:
+            # We won't modify the bkg expectation, so it's safe to use the internal cache
+            expectation += self._bkg.expectation(self._data.data.axes, copy = False)
 
         # Get the arrays
         expectation = expectation.contents

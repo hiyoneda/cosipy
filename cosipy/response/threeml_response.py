@@ -34,10 +34,9 @@ class BinnedThreeMLResponse(BinnedThreeMLModelResponseInterface):
         self._expectation = None
         self._model = None
 
-        # TODO: currently Model.__eq__ seems broken. It returns. True even
-        #  if the internal parameters changed. Caching the expected value
-        #  is not implemented.
-        self._last_convolved_model = None
+        # See this issue for the caveats of comparing models
+        # https://github.com/threeML/threeML/issues/645
+        self._last_convolved_model_dict = None
 
     def set_model(self, model: Model):
         """
@@ -61,10 +60,18 @@ class BinnedThreeMLResponse(BinnedThreeMLModelResponseInterface):
         for name,source in model.sources.items():
 
             if isinstance(source, PointSource):
+
+                if self._psr is None:
+                    raise RuntimeError("The model includes a point source but no point source response was provided")
+
                 psr_copy = self._psr.copy()
                 psr_copy.set_source(source)
                 self._source_responses[name] = psr_copy
             elif isinstance(source, ExtendedSource):
+
+                if self._esr is None:
+                    raise RuntimeError("The model includes an extended source but no extended source response was provided")
+
                 esr_copy = self._esr.copy()
                 esr_copy.set_source(source)
                 self._source_responses[name] = esr_copy
@@ -75,17 +82,22 @@ class BinnedThreeMLResponse(BinnedThreeMLModelResponseInterface):
 
         self._model = model
 
-    def expectation(self, axes:Axes)->Histogram:
+    def expectation(self, axes:Axes, copy:bool = True)->Histogram:
         """
 
         Parameters
         ----------
         axes
+        copy
 
         Returns
         -------
 
         """
+        # See this issue for the caveats of comparing models
+        # https://github.com/threeML/threeML/issues/645
+        current_model_dict = self._model.to_dict()
+
         if self._expectation is None or self._expectation.axes != axes:
             # Needs new memory allocation, and recompute everything
             self._expectation = Histogram(axes)
@@ -98,8 +110,11 @@ class BinnedThreeMLResponse(BinnedThreeMLModelResponseInterface):
             # TODO: currently Model.__eq__ seems broken. It returns. True even
             #  if the internal parameters changed. Caching the expected value
             #  is not implemented. Remove the "False and" when fixed
-            if False and (self._last_convolved_model == self._model):
-                return self._expectation
+            if self._last_convolved_model_dict == current_model_dict:
+                if copy:
+                    self._expectation.copy()
+                else:
+                    self._expectation
             else:
                 self._expectation.clear()
 
@@ -107,8 +122,11 @@ class BinnedThreeMLResponse(BinnedThreeMLModelResponseInterface):
         for source_name,psr in self._source_responses.items():
             self._expectation += psr.expectation(axes)
 
-        # Get a copy with at model parameter values at the current time,
-        # not just a reference to the model object
-        self._last_convolved_model = copy.deepcopy(self._model)
+        # See this issue for the caveats of comparing models
+        # https://github.com/threeML/threeML/issues/645
+        self._last_convolved_model_dict = current_model_dict
 
-        return self._expectation
+        if copy:
+            self._expectation.copy()
+        else:
+            self._expectation

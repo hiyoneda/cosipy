@@ -30,8 +30,8 @@ class ThreeMLBackgroundInterface(BackgroundInterface, Protocol):
     """
     This must translate to/from regular parameters
     with arbitrary type from/to 3ML parameters
-
     """
+
     def set_threeml_parameters(self, **parameters: Parameter):
         """
         The Parameter objects are passed "as reference", and can change.

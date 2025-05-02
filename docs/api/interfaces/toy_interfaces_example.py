@@ -1,6 +1,8 @@
 from typing import Dict, Any
 
 from astromodels.sources import Source
+from astromodels import LinearPolarization, SpectralComponent
+from astromodels.core.polarization import Polarization
 
 from cosipy.threeml import COSILike
 from cosipy.interfaces import (BinnedDataInterface,
@@ -139,6 +141,8 @@ class ToyPointSourceResponse(BinnedThreeMLSourceResponseInterface):
         if self._source is None:
             raise RuntimeError("Set a source first")
 
+        print(self._source.to_dict())
+
         # Get the latest values of the flux
         # Remember that _model can be modified externally between calls.
         flux = self._source.spectrum.main.shape.k.value
@@ -184,9 +188,22 @@ bkg = ToyThreeMLBkg()
 ## Source model
 ## We'll just use the K value in u.cm / u.cm / u.s / u.keV
 spectrum = Constant()
-source = PointSource("source",  # arbitrary, but needs to be unique
-                     l=0, b=0,  # Doesn't matter
-                     spectral_shape=spectrum)
+
+polarized = False
+
+if polarized:
+    polarization = LinearPolarization(10, 10)
+    polarization.degree.value = 0.
+    polarization.angle.value = 10
+
+    spectral_component = SpectralComponent('arbitrary_spectrum_name', spectrum, polarization)
+    source = PointSource('arbitrary_source_name', 0, 0, components=[spectral_component])
+else:
+
+    source = PointSource("arbitrary_source_name",
+                         l=0, b=0,  # Doesn't matter
+                         spectral_shape=spectrum)
+
 model = Model(source)
 
 # Here you can set the parameters initial values, bounds, etc.
@@ -203,6 +220,7 @@ cosi = COSILike('cosi', data, response, bkg)
 plugins = DataList(cosi)
 like = JointLikelihood(model, plugins)
 like.fit()
+print(like.minimizer)
 
 # Plot results
 fig, ax = plt.subplots()

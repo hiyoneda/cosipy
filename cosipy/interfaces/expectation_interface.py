@@ -12,7 +12,21 @@ __all__ = [
 
 @runtime_checkable
 class BinnedExpectationInterface(Protocol):
-    def expectation(self, axes:histpy.Axes)->histpy.Histogram:...
+    def expectation(self, axes:histpy.Axes, copy:bool)->histpy.Histogram:
+        """
+
+        Parameters
+        ----------
+        axes
+        copy:
+            If True, it will return an array that the user if free to modify.
+            Otherwise, it will result a reference, possible to the cache, that
+            the user should not modify
+
+        Returns
+        -------
+
+        """
 
 @runtime_checkable
 class UnbinnedExpectationInterface(Protocol):

@@ -1,3 +1,6 @@
+import logging
+logger = logging.getLogger(__name__)
+
 import copy
 
 from astromodels.sources import Source, PointSource
@@ -8,10 +11,9 @@ from cosipy.interfaces import BinnedThreeMLSourceResponseInterface
 from cosipy.response import FullDetectorResponse
 from cosipy.spacecraftfile import SpacecraftFile, SpacecraftAttitudeMap
 
-__name__ = []
-
 from mhealpy import HealpixMap
 
+__all__ = ["BinnedThreeMlPointSourceResponse"]
 
 class BinnedThreeMlPointSourceResponse(BinnedThreeMLSourceResponseInterface):
     """
@@ -34,23 +36,33 @@ class BinnedThreeMlPointSourceResponse(BinnedThreeMLSourceResponseInterface):
         # TODO: FullDetectorResponse -> BinnedInstrumentResponseInterface
 
         self._dr = dr
-        self._sc_orientation = sc_orientation
-
-        self._init_cache()
-
-    def _init_cache(self):
-
-        # Prevent unnecessary calculations and new memory allocations
-        self._expectation = None
-        self._scatt_map = None
+        self._sc_ori = sc_orientation
 
         self._source = None
 
-        # TODO: currently Model.__eq__ seems broken. It returns True even
-        #  if the internal parameters changed. Currently, caching only work
-        #  for the source position, but everything related to spectral and
-        #  polarization is recalculated even if it's still the same
-        self._last_convolved_source = None
+        # Prevent unnecessary calculations and new memory allocations
+
+        # See this issue for the caveats of comparing models
+        # https://github.com/threeML/threeML/issues/645
+        self._last_convolved_source_dict = None
+
+        self._expectation = None
+
+        # The PSR change for each direction, but it's the same for all spectrum parameters
+
+        # Source location cached separately since changing the response
+        # for a given direction is expensive
+        self._last_convolved_source_skycoord = None
+
+        self._psr = None
+
+    def clear_cache(self):
+
+        self._source = None
+        self._last_convolved_source_dict = None
+        self._expectation = None
+        self._last_convolved_source_skycoord = None
+        self._psr = None
 
     def copy(self) -> "BinnedThreeMlPointSourceResponse":
         """
@@ -60,7 +72,7 @@ class BinnedThreeMlPointSourceResponse(BinnedThreeMLSourceResponseInterface):
         A copy than can be used safely to convolve another source
         """
         new = copy.copy(self)
-        new._init_cache()
+        new.clear_cache()
         return new
 
     def set_source(self, source: Source):
@@ -74,9 +86,15 @@ class BinnedThreeMlPointSourceResponse(BinnedThreeMLSourceResponseInterface):
 
         self._source = source
 
-    def expectation(self, axes:Axes)-> Histogram:
+    def expectation(self, axes:Axes, copy = True)-> Histogram:
         # TODO: check coordsys from axis
         # TODO: Earth occ always true in this case
+
+        # See this issue for the caveats of comparing models
+        # https://github.com/threeML/threeML/issues/645
+        source_dict = self._source.to_dict()
+
+        coord = self._source.position.sky_coord
 
         # Check if we can use these axes
         if 'PsiChi' not in axes.labels:
@@ -85,96 +103,58 @@ class BinnedThreeMlPointSourceResponse(BinnedThreeMLSourceResponseInterface):
         if axes["PsiChi"].coordsys is None:
             raise ValueError("PsiChi axes doesn't have a coordinate system")
 
-        # Check what we can use from the cache
-        if self._expectation is None or self._expectation.axes != axes:
-            # Needs new memory allocation, and recompute everything
-            self._expectation = Histogram(axes)
-        else:
-            # If nothing has changed in the source, we can use the cached expectation
-            # as is.
-            # If the source has changed but the axes haven't, we can at least reuse
-            # it and prevent new memory allocation, we just need to zero it out
-
-            # TODO: currently Source.__eq__ seems broken. It returns True even
-            #  if some of the internal parameters changed. Caching the expected
-            #  value is not implemented. Remove the "False and" when fixed
-            #  Getting the source position explicitly does seem to work though
-            if False and (self._last_convolved_source == self._source):
-                return self._expectation
+        # Use cached expectation if nothing has changed
+        if self._expectation is not None and self._last_convolved_source_dict == source_dict:
+            if copy:
+                self._expectation.copy()
             else:
-                self._expectation.clear()
+                self._expectation
 
         # Expectation calculation
 
         # Check if the source position change, since these operations
         # are expensive
-        coord = self._source.position.sky_coord
-        if coord != self._last_convolved_source.position.sky_coord:
+        if self._psr is None or coord != self._last_convolved_source_skycoord:
 
             coordsys = axes["PsiChi"].coordsys
 
+            logger.info("... Calculating point source response ...")
+
             if coordsys == 'spacecraftframe':
-                dwell_time_map = self._get_dwell_time_map(coord)
-                self._psr[name] = self._dr.get_point_source_response(exposure_map=dwell_time_map)
-            elif self._coordsys == 'galactic':
-                scatt_map = self._get_scatt_map(coord)
-                self._psr[name] = self._dr.get_point_source_response(coord=coord, scatt_map=scatt_map)
+                dwell_time_map = self._sc_ori.get_dwell_map(coord, base = self._dr)
+                self._psr = self._dr.get_point_source_response(exposure_map=dwell_time_map)
+            elif coordsys == 'galactic':
+                scatt_map = self._sc_ori.get_scatt_map(nside=self._dr.nside * 2,
+                                                       target_coord=coord,
+                                                       coordsys='galactic',
+                                                       earth_occ = True)
+                self._psr = self._dr.get_point_source_response(coord=coord, scatt_map=scatt_map)
             else:
                 raise RuntimeError("Unknown coordinate system")
 
-        return self._expectation
-
-        coord = self._source.position.sky_coord
+            logger.info(f"--> done (source name : {self._source.name})")
 
 
-        if self._last_convolved_source.position != :
 
+        # Convolve with spectrum
+        self._expectation = self._psr.get_expectation(self._source.spectrum.main.shape,
+                                                      self._source.spectrum.main.polarization)
 
-        self._last_convolved_source = copy.deepcopy(self._source)
+        # Check if axes match
+        if axes != self._expectation.axes:
+            raise ValueError(
+                "Currently, the expectation axes must exactly match the detector response measurement axes")
 
-    def _get_scatt_map(self, coord:SkyCoord)->SpacecraftAttitudeMap:
-        """
-        Get the spacecraft attitude map of the source.
+        # Cache. Use dict and copy since the internal variables can change
+        # See this issue for the caveats of comparing models
+        # https://github.com/threeML/threeML/issues/645
+        self._last_convolved_source_dict = source_dict
+        self._last_convolved_source_skycoord = coord.copy()
 
-        Since we're accounting for Earth occultation, this is specific
-        to this coordinate
-
-        Parameters
-        ----------
-        coord : astropy.coordinates.SkyCoord
-            The coordinates of the target object.
-
-        Returns
-        -------
-        scatt_map : SpacecraftAttitudeMap
-        """
-
-        scatt_map = self._sc_orientation.get_scatt_map(nside=self._dr.nside * 2, target_coord=coord,
-                                                       coordsys='galactic', earth_occ = True)
-
-        return scatt_map
-
-    def _get_dwell_time_map(self, coord: SkyCoord) -> HealpixMap:
-        """
-        Get the dwell time map of the source.
-
-        This is always specific to a coordinate.
-
-        Parameters
-        ----------
-        coord : astropy.coordinates.SkyCoord
-            Coordinates of the target source
-
-        Returns
-        -------
-        dwell_time_map : mhealpy.containers.healpix_map.HealpixMap
-            Dwell time map
-        """
-
-        self._sc_orientation.get_target_in_sc_frame(target_name=self._name, target_coord=coord)
-        dwell_time_map = self._sc_orientation.get_dwell_map(response=self._rsp_path)
-
-        return dwell_time_map
-
+        # Copy to prevent user to modify our cache
+        if copy:
+            self._expectation.copy()
+        else:
+            self._expectation
 
 
