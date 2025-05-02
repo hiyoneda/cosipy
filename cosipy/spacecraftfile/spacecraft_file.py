@@ -12,6 +12,8 @@ from mhealpy import HealpixMap
 
 from scoords import Attitude, SpacecraftFrame
 
+import pandas as pd
+
 from .scatt_map import SpacecraftAttitudeMap
 
 from typing import Union
@@ -150,10 +152,7 @@ class SpacecraftFile:
         else:
             raise ValueError(f"File format for {file} not supported")
 
-    from line_profiler_pycharm import profile
-
     @classmethod
-    @profile
     def _parse_from_file(cls, file) -> "SpacecraftFile":
         """
         Parses an .ori txt file with MEGAlib formatting.
@@ -181,8 +180,14 @@ class SpacecraftFile:
             The SpacecraftFile object.
         """
 
-        time,lat_x,lon_x,lat_z,lon_z,altitude,earth_lat,earth_lon,livetime = orientation_file = np.loadtxt(file, usecols=(1, 2, 3, 4, 5, 6, 7, 8, 9), unpack = True,
-                                                                                                      delimiter=' ', skiprows=1, comments=("#", "EN"))
+        # First and last line are read only by MEGAlib e.g.
+        # Type OrientationsGalactic
+        # ...
+        # EN
+        # Using [:-1] instead of skipfooter=1 because otherwise it's slow and you get
+        # ParserWarning: Falling back to the 'python' engine because the 'c' engine does not support skipfooter; you can avoid this warning by specifying engine='python'.
+        time,lat_x,lon_x,lat_z,lon_z,altitude,earth_lat,earth_lon,livetime = pd.read_csv(file, sep="\s+", skiprows=1, usecols=(1, 2, 3, 4, 5, 6, 7, 8, 9), header = None, comment = '#').values[:-1].transpose()
+
         time = Time(time, format="unix")
 
         xpointings = SkyCoord(l=lon_x * u.deg, b=lat_x * u.deg, frame="galactic")
