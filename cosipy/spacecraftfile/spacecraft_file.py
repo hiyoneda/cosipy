@@ -6,7 +6,7 @@ import astropy.units as u
 
 from astropy.time import Time
 from astropy.coordinates import SkyCoord, EarthLocation, GCRS, ITRS
-from docutils.io import Input
+from mhealpy import HealpixBase
 from histpy import Histogram, TimeAxis
 from mhealpy import HealpixMap
 
@@ -150,7 +150,10 @@ class SpacecraftFile:
         else:
             raise ValueError(f"File format for {file} not supported")
 
+    from line_profiler_pycharm import profile
+
     @classmethod
+    @profile
     def _parse_from_file(cls, file) -> "SpacecraftFile":
         """
         Parses an .ori txt file with MEGAlib formatting.
@@ -372,35 +375,63 @@ class SpacecraftFile:
         start_points, start_weights = self.interp_weights(start)
         stop_points, stop_weights = self.interp_weights(stop)
 
-        start_attitude = self._interp_attitude(start_points, start_weights)
+        # Center values
+        new_obstime = self.obstime[start_points[1]:stop_points[1]]
+        new_attitude = self._attitude.as_matrix()[start_points[1]:stop_points[1]]
+        new_location = self._location[start_points[1]:stop_points[1]]
+        new_livetime = self.livetime[start_points[1]:stop_points[0]]
+
+        # Left edge
+        # new_obstime.size can be zero if the requested interval fell completely
+        # an existing interval
+        if new_obstime.size == 0 or new_obstime[0] != start:
+            # Left edge might be included already
+
+            new_obstime = Time(np.append(start.jd1, new_obstime.jd1),
+                               np.append(start.jd2, new_obstime.jd2),
+                               format = 'jd')
+
+            start_attitude = self._interp_attitude(start_points, start_weights)
+            new_attitude = np.append(start_attitude.as_matrix()[None], new_attitude, axis=0)
+
+            start_location = self._interp_location(start_points, start_weights)[None]
+            new_location = EarthLocation.from_geocentric(np.append(start_location.x, new_location.x),
+                                                         np.append(start_location.y, new_location.y),
+                                                         np.append(start_location.z, new_location.z))
+
+            first_livetime = self.livetime[start_points[0]] * start_weights[0]
+            new_livetime = np.append(first_livetime, new_livetime)
+
+        # Right edge
+        # It's never included, since stop <= self.obstime[stop_points[1]], and the
+        # selection above excludes stop_points[1]
+        new_obstime = Time(np.append(new_obstime.jd1, stop.jd1),
+                           np.append(new_obstime.jd2, stop.jd2),
+                           format='jd')
+
         stop_attitude = self._interp_attitude(stop_points, stop_weights)
+        new_attitude = np.append(new_attitude, stop_attitude.as_matrix()[None], axis=0)
+        new_attitude = Attitude.from_matrix(new_attitude, frame=self._attitude.frame)
 
-        att_rot = self._attitude.as_matrix()
-        new_attitude = Attitude.from_matrix(np.append(start_attitude.as_matrix()[None],
-                                                      np.append(att_rot[start_points[1]:stop_points[1]],
-                                                                stop_attitude.as_matrix()[None], axis = 0), axis = 0),
-                                            frame = self._attitude.frame)
-
-        start_location = self._interp_location(start_points, start_weights)[None]
         stop_location = self._interp_location(stop_points, stop_weights)[None]
-        center_locations = self._location[start_points[1]:stop_points[1]]
+        new_location = EarthLocation.from_geocentric(np.append(new_location.x, stop_location.x),
+                                                     np.append(new_location.y, stop_location.y),
+                                                     np.append(new_location.z, stop_location.z))
 
-        new_location = EarthLocation.from_geocentric(np.concatenate((start_location.x, center_locations.x, stop_location.x)),
-                                                     np.concatenate((start_location.y, center_locations.y, stop_location.y)),
-                                                     np.concatenate((start_location.z, center_locations.z, stop_location.z)))
 
-        first_livetime = self.livetime[start_points[0]]*start_weights[1]
-        last_livetime = self.livetime[stop_points[0]]*stop_weights[1]
+        if np.all(start_points == stop_points):
+            # This can only happen if the requested interval fell completely
+            # an existing interval
+            new_livetime[0] -= self.livetime[stop_points[0]]*stop_weights[0]
+        else:
+            last_livetime = self.livetime[stop_points[0]]*stop_weights[1]
+            new_livetime = np.append(new_livetime, last_livetime)
 
-        new_livetime = np.append(first_livetime, np.append(self.livetime[start_points[1]:stop_points[0]], last_livetime))
+        # We used the internal jd1 and jd2 values, which might have changed the format.
+        # Bring it back
+        new_obstime.format = self.obstime.format
 
-        middle_times = self.obstime[start_points[1]:stop_points[1]]
-
-        new_time = Time(np.concatenate(([start.jd1], middle_times.jd1, [stop.jd1])),
-                        np.concatenate(([start.jd2], middle_times.jd2, [stop.jd2])),
-                        format = 'jd')
-
-        return self.__class__(new_time, new_attitude, new_location, new_livetime)
+        return self.__class__(new_obstime, new_attitude, new_location, new_livetime)
 
 
     def get_target_in_sc_frame(self, target_coord: SkyCoord) -> SkyCoord:
@@ -430,7 +461,7 @@ class SpacecraftFile:
 
         return src_path
 
-    def get_dwell_map(self, target_coord:SkyCoord, nside:int, scheme = 'ring') -> HealpixMap:
+    def get_dwell_map(self, target_coord:SkyCoord, nside:int, scheme = 'ring', base:HealpixBase = None) -> HealpixMap:
 
         """
         Generates the dwell obstime map for the source.
@@ -443,6 +474,8 @@ class SpacecraftFile:
             Healpix NSIDE
         scheme:
             Healpix pixel ordering scheme
+        base:
+            HealpixBase defining the grid. Alternative to nside & scheme.
 
         Returns
         -------
@@ -456,6 +489,7 @@ class SpacecraftFile:
         # Empty map
         dwell_map = HealpixMap(nside = nside,
                                scheme = scheme,
+                               base = base,
                                coordsys = SpacecraftFrame())
 
         # Fill

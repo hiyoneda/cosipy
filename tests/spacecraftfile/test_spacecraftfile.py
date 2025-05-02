@@ -140,4 +140,21 @@ def test_select_interval():
     assert np.allclose(np.asarray([z.transform_to('galactic').l.deg, z.transform_to('galactic').b.deg]).transpose().flatten(),
                        np.array([221.86062093,  16.85631235, 221.88225011,  16.90482073,
                                 221.90629597,  16.9587162 , 221.9087019 ,  16.96410546]))
-    
+
+    # Edge cases
+    new_ori = ori.select_interval(ori.tstart, ori.tstop)
+    assert np.all(new_ori.obstime == ori.obstime)
+
+    new_ori = ori.select_interval(ori.obstime[1], ori.tstop)
+    assert np.all(new_ori.obstime == ori.obstime[1:])
+
+    new_ori = ori.select_interval(ori.tstart, ori.obstime[-2])
+    assert np.all(new_ori.obstime == ori.obstime[:-1])
+
+    # Fully within single interval
+    new_ori = ori.select_interval(ori.tstart + .4*u.s, ori.tstart + .6*u.s)
+    assert new_ori.tstart == ori.tstart + .4*u.s
+    assert new_ori.tstop == ori.tstart + .6*u.s
+    assert new_ori.nintervals == 1
+    assert np.isclose(new_ori.livetime[0], 0.2*u.s)
+
