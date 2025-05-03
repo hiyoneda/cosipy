@@ -129,7 +129,7 @@ class SpacecraftFile:
         return self._location
 
     @classmethod
-    def open(cls, file) -> "SpacecraftFile":
+    def open(cls, file, tstart:Time = None, tstop:Time = None) -> "SpacecraftFile":
 
         """
         Parses timestamps, axis positions from file and returns to __init__.
@@ -138,6 +138,12 @@ class SpacecraftFile:
         ----------
         file : str
             The file path of the pointings.
+        tstart:
+            Start reading the file from an interval *including* this time. Use select_interval() to
+            cut the SC file at exactly this tiem.
+        tstop:
+            Stop reading the file at an interval *including* this time. Use select_interval() to
+            cut the SC file at exactly this tiem.
 
         Returns
         -------
@@ -148,12 +154,14 @@ class SpacecraftFile:
         file = Path(file)
 
         if file.suffix == ".ori":
-            return cls._parse_from_file(file)
+            return cls._parse_from_file(file, tstart, tstop)
         else:
             raise ValueError(f"File format for {file} not supported")
 
+    from line_profiler_pycharm import profile
     @classmethod
-    def _parse_from_file(cls, file) -> "SpacecraftFile":
+    @profile
+    def _parse_from_file(cls, file, tstart:Time = None, tstop:Time = None) -> "SpacecraftFile":
         """
         Parses an .ori txt file with MEGAlib formatting.
 
@@ -186,9 +194,28 @@ class SpacecraftFile:
         # EN
         # Using [:-1] instead of skipfooter=1 because otherwise it's slow and you get
         # ParserWarning: Falling back to the 'python' engine because the 'c' engine does not support skipfooter; you can avoid this warning by specifying engine='python'.
-        time,lat_x,lon_x,lat_z,lon_z,altitude,earth_lat,earth_lon,livetime = pd.read_csv(file, sep="\s+", skiprows=1, usecols=(1, 2, 3, 4, 5, 6, 7, 8, 9), header = None, comment = '#').values[:-1].transpose()
 
+        # Read only the time column, to make it faster
+        time, = pd.read_csv(file, sep="\s+", skiprows=1, usecols=(1,), header=None, comment='#').values[:-1].transpose()
         time = Time(time, format="unix")
+
+        start_row = 0
+        nrows = time.size
+
+        if tstart is not None or tstop is not None:
+
+            time_axis = TimeAxis(time, copy=False)
+
+            if tstart is not None:
+                start_row = time_axis.find_bin(tstart)
+
+            if tstop is not None:
+                nrows = time_axis.find_bin(tstop) - start_row + 2
+
+        time = time[slice(start_row, start_row+nrows)]
+
+        skiprows = 1 + start_row
+        lat_x,lon_x,lat_z,lon_z,altitude,earth_lat,earth_lon,livetime = pd.read_csv(file, sep="\s+", skiprows=skiprows, nrows = nrows, usecols=(2, 3, 4, 5, 6, 7, 8, 9), header = None, comment = '#', ).values.transpose()
 
         xpointings = SkyCoord(l=lon_x * u.deg, b=lat_x * u.deg, frame="galactic")
         zpointings = SkyCoord(l=lon_z * u.deg, b=lat_z * u.deg, frame="galactic")
@@ -466,7 +493,7 @@ class SpacecraftFile:
 
         return src_path
 
-    def get_dwell_map(self, target_coord:SkyCoord, nside:int, scheme = 'ring', base:HealpixBase = None) -> HealpixMap:
+    def get_dwell_map(self, target_coord:SkyCoord, nside:int = None, scheme = 'ring', base:HealpixBase = None) -> HealpixMap:
 
         """
         Generates the dwell obstime map for the source.
