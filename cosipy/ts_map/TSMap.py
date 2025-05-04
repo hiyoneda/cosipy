@@ -1,5 +1,3 @@
-from cosipy.threeml.COSILike import COSILike
-
 from threeML import DataList, Powerlaw, PointSource, Model, JointLikelihood
 
 import numpy as np

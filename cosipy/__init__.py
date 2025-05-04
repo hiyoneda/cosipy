@@ -9,7 +9,6 @@ from .data_io import UnBinnedData
 from .data_io import BinnedData
 from .data_io import ReadTraTest
 
-from .threeml import COSILike
 from .threeml import Band_Eflux
 
 from .ts_map import FastTSMap

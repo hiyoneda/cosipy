@@ -25,6 +25,13 @@ class PoissonLikelihood(BinnedLikelihoodInterface):
         self._response = response
 
     @property
+    def data (self) -> BinnedDataInterface: return self._data
+    @property
+    def response(self) -> BinnedExpectationInterface: return self._response
+    @property
+    def bkg (self) -> BinnedBackgroundInterface: return self._bkg
+
+    @property
     def has_bkg(self):
         return self._bkg is not None
 

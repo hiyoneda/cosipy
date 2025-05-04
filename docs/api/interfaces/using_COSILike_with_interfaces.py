@@ -1,14 +1,15 @@
+from cosipy.statistics import PoissonLikelihood
 from histpy import Histogram
 
 from cosipy.background_estimation import FreeNormThreeMLBinnedBackground
-from cosipy.threeml import COSILike
+from cosipy.interfaces import ThreeMLPluginInterface
 from cosipy.response import BinnedThreeMLResponse, BinnedThreeMlPointSourceResponse
 from threeML import Band, PointSource, Model, JointLikelihood, DataList
 from cosipy.util import fetch_wasabi_file
 from cosipy.spacecraftfile import SpacecraftFile
 from astropy import units as u
 
-from cosipy import COSILike, BinnedData
+from cosipy import BinnedData
 from cosipy.spacecraftfile import SpacecraftFile
 from cosipy.response.FullDetectorResponse import FullDetectorResponse
 from cosipy.util import fetch_wasabi_file
@@ -125,7 +126,7 @@ def main():
 
     # Optional: if you want to call get_log_like manually, then you also need to set the model manually
     # 3ML does this internally during the fit though
-    cosi = COSILike('cosi', data, response, bkg)
+    cosi = ThreeMLPluginInterface('cosi', PoissonLikelihood(data, response, bkg))
     plugins = DataList(cosi)
     like = JointLikelihood(model, plugins)
     like.fit()

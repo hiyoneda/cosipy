@@ -11,7 +11,10 @@ __all__ = [
            ]
 
 @runtime_checkable
-class BinnedExpectationInterface(Protocol):
+class ExpectationInterface(Protocol):...
+
+@runtime_checkable
+class BinnedExpectationInterface(ExpectationInterface, Protocol):
     def expectation(self, axes:histpy.Axes, copy:bool)->histpy.Histogram:
         """
 
@@ -29,7 +32,7 @@ class BinnedExpectationInterface(Protocol):
         """
 
 @runtime_checkable
-class UnbinnedExpectationInterface(Protocol):
+class UnbinnedExpectationInterface(ExpectationInterface, Protocol):
     @property
     def ncounts(self) -> float:...
     def probability(self, measurements:Measurements) -> np.ndarray:...

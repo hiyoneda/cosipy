@@ -4,16 +4,28 @@ __all__ = ['LikelihoodInterface',
            'BinnedLikelihoodInterface',
            'UnbinnedLikelihoodInterface']
 
-from .expectation_interface import UnbinnedExpectationInterface, BinnedExpectationInterface
-from .data_interface import UnbinnedDataInterface, BinnedDataInterface
-from .background_interface import UnbinnedBackgroundInterface, BinnedBackgroundInterface
+from .expectation_interface import UnbinnedExpectationInterface, BinnedExpectationInterface, ExpectationInterface
+from .data_interface import UnbinnedDataInterface, BinnedDataInterface, DataInterface
+from .background_interface import UnbinnedBackgroundInterface, BinnedBackgroundInterface, BackgroundInterface, \
+    ThreeMLBackgroundInterface
 
 @runtime_checkable
 class LikelihoodInterface(Protocol):
+    def __init__(self,
+                 data: DataInterface,
+                 response: ExpectationInterface,
+                 bkg: BackgroundInterface,
+                 *args, **kwargs):...
     def get_log_like(self) -> float:...
     @property
     def nobservations(self) -> int:
         """For BIC and other statistics"""
+    @property
+    def data (self) -> DataInterface: ...
+    @property
+    def response(self) -> ExpectationInterface: ...
+    @property
+    def bkg (self) -> BackgroundInterface: ...
 
 @runtime_checkable
 class BinnedLikelihoodInterface(LikelihoodInterface, Protocol):

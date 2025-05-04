@@ -4,13 +4,15 @@ from astromodels.sources import Source
 from astromodels import LinearPolarization, SpectralComponent
 from astromodels.core.polarization import Polarization
 
-from cosipy.threeml import COSILike
+from cosipy.statistics import UnbinnedLikelihood, PoissonLikelihood
+
 from cosipy.interfaces import (BinnedDataInterface,
                                BinnedBackgroundInterface,
                                ThreeMLBinnedBackgroundInterface,
                                BinnedThreeMLModelResponseInterface,
                                BinnedThreeMLSourceResponseInterface,
-                               ThreeMLSourceResponseInterface)
+                               ThreeMLSourceResponseInterface,
+                               ThreeMLPluginInterface)
 from histpy import Axis, Axes, Histogram
 import numpy as np
 from scipy.stats import norm, uniform
@@ -78,11 +80,12 @@ class ToyBkg(BinnedBackgroundInterface):
     def parameters(self) -> Dict[str, Any]:
         return {'norm': self._norm}
 
-    def expectation(self, axes: Axes) -> Histogram:
+    def expectation(self, axes: Axes, copy = True) -> Histogram:
 
         if axes != self._unit_expectation.axes:
             raise ValueError("Wrong axes. I have fixed axes.")
 
+        # Always a copy
         return self._unit_expectation * self._norm
 
 
@@ -100,12 +103,12 @@ class ToyThreeMLBkg(ToyBkg, ThreeMLBinnedBackgroundInterface):
         # a "bare" parameter.
         self._threeml_parameters = {'norm':Parameter('norm', self._norm)}
 
-    def expectation(self, axes: Axes) -> Histogram:
+    def expectation(self, axes: Axes, copy = True) -> Histogram:
         # Overrides ToyBkg expectation
         # Update, inn case it changed externally
         self.set_parameters(norm = self._threeml_parameters['norm'].value)
 
-        return super().expectation(axes)
+        return super().expectation(axes, copy = copy)
 
     @property
     def threeml_parameters(self) -> Dict[str, Parameter]:
@@ -134,19 +137,18 @@ class ToyPointSourceResponse(BinnedThreeMLSourceResponseInterface):
 
         self._source = source
 
-    def expectation(self, axes: Axes) -> Histogram:
+    def expectation(self, axes: Axes, copy = True) -> Histogram:
         if axes != self._unit_expectation.axes:
             raise ValueError("Wrong axes. I have fixed axes.")
 
         if self._source is None:
             raise RuntimeError("Set a source first")
 
-        print(self._source.to_dict())
-
         # Get the latest values of the flux
         # Remember that _model can be modified externally between calls.
         flux = self._source.spectrum.main.shape.k.value
 
+        # Always copies
         return self._unit_expectation * flux
 
     def copy(self) -> "ToyPointSourceResponse":
@@ -167,12 +169,13 @@ class ToyModelResponse(BinnedThreeMLModelResponseInterface):
             psr_copy.set_source(source)
             self._psr_copies[name] = psr_copy
 
-    def expectation(self, axes: Axes) -> Histogram:
+    def expectation(self, axes: Axes, copy = True) -> Histogram:
         expectation = Histogram(axes)
 
         for source_name,psr in self._psr_copies.items():
-            expectation += psr.expectation(axes)
+            expectation += psr.expectation(axes, copy = False)
 
+        # Always a copy
         return expectation
 
 # ======= Actual code. This is how the "tutorial" will look like ================
@@ -216,7 +219,7 @@ spectrum.k.value = 1
 #model = Model() # Uncomment for bkg-only hypothesis
 
 # Fit
-cosi = COSILike('cosi', data, response, bkg)
+cosi = ThreeMLPluginInterface('cosi', PoissonLikelihood(data, response, bkg))
 plugins = DataList(cosi)
 like = JointLikelihood(model, plugins)
 like.fit()
