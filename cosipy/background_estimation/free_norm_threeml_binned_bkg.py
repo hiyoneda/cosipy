@@ -5,10 +5,11 @@ from astromodels import Parameter
 from histpy import Histogram
 from histpy import Axes
 
-from cosipy.interfaces import ThreeMLBinnedBackgroundInterface, BinnedBackgroundInterface
+from astropy import units as u
 
-__all__ = ["FreeNormBinnedBackground",
-           "FreeNormThreeMLBinnedBackground"]
+from cosipy.interfaces import BinnedBackgroundInterface
+
+__all__ = ["FreeNormBinnedBackground"]
 
 class FreeNormBinnedBackground(BinnedBackgroundInterface):
     """
@@ -90,29 +91,27 @@ class FreeNormBinnedBackground(BinnedBackgroundInterface):
         for n,norm in enumerate(args):
             self._set_norm(n, norm)
 
-        for label, bkg in kwargs.items():
+        for label,norm in kwargs.items():
             self._set_norm(label, norm)
 
     def _set_norm(self, label, norm):
 
         label = self._standardized_label(label)
 
-        if label in self.labels:
+        if label not in self.labels:
             raise RuntimeError(f"Component {label} doesn't exist")
 
         self._norms[label] = norm
 
-    def set_parameters(self, **parameters:Any) -> None:
+    def set_parameters(self, **parameters:Dict[str, u.Quantity]) -> None:
         """
         Same keys as background components
         """
-
-        self.set_norm(**parameters)
+        self.set_norm(**{l:p.value for l,p in parameters.items()})
 
     @property
-    def parameters(self) -> Dict[str, Any]:
-
-        return self._norms
+    def parameters(self) -> Dict[str, u.Quantity]:
+        return {l:u.Quantity(n) for l,n in self._norms.items()}
 
     def expectation(self, axes:Axes, copy:bool)->Histogram:
         """
@@ -151,7 +150,7 @@ class FreeNormBinnedBackground(BinnedBackgroundInterface):
 
         # Compute expectation
         for label in self.labels:
-            self._expectation += self._norms[label] * self._components[label]
+            self._expectation += self._components[label] * self._norms[label]
 
         # Cache. Regular copy is enough since norm values are float en not mutable
         self._last_norm_values = self._norms.copy()
@@ -160,26 +159,4 @@ class FreeNormBinnedBackground(BinnedBackgroundInterface):
             return self._expectation.copy()
         else:
             return self._expectation
-
-class FreeNormThreeMLBinnedBackground(FreeNormBinnedBackground, ThreeMLBinnedBackgroundInterface):
-
-    def __init__(self, *args:Tuple[Histogram], **kwargs:Dict[str, Histogram]):
-
-        super().__init__(*args, **kwargs)
-
-        # 3ML "Parameter" keeps track of a few more things than
-        # a "bare" parameter.
-        self._threeml_parameters = {label:Parameter(label, norm) for label,norm in self._norms.items()}
-
-    def set_threeml_parameters(self, **parameters: Parameter):
-        self._threeml_parameters = parameters
-        self.set_parameters(**{label:parameter.value for label,parameter in parameters.items()})
-
-    @property
-    def threeml_parameters(self) -> Dict[str, Parameter]:
-        return self._threeml_parameters
-
-
-
-
 

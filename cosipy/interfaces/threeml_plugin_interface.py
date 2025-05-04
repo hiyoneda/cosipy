@@ -1,5 +1,6 @@
 from typing import Dict
 
+from cosipy.interfaces import BinnedThreeMLModelResponseInterface, ThreeMLModelResponseInterface
 from cosipy.interfaces.likelihood_interface import LikelihoodInterface
 from threeML import PluginPrototype, Parameter
 
@@ -26,20 +27,57 @@ class ThreeMLPluginInterface(PluginPrototype):
 
         self._like = likelihood
 
+        # Check we can use this likelihood
+        if not isinstance(self._like.response, ThreeMLModelResponseInterface):
+            raise TypeError("ThreeMLPluginInterface needs a LikelihoodInterface using a response of type ThreeMLModelResponseInterface")
+
+        # Currently, the only nuisance parameters are the ones for the bkg
+        # We could have systematics here as well
+        if self._like.bkg is None:
+            self._threeml_bkg_parameters = {}
+        else:
+            # 1. Adds plugin name, required by 3ML code
+            # See https://github.com/threeML/threeML/blob/7a16580d9d5ed57166e3b1eec3d4fccd3eeef1eb/threeML/classicMLE/joint_likelihood.py#L131
+            # 2. Translation to bkg bare parameters. 3ML "Parameter" keeps track of a few more things than a "bare" (Quantity) parameter.
+            self._threeml_bkg_parameters = {self._add_prefix_name(label): Parameter(label, param.value, unit=param.unit) for label, param in self._like.bkg.parameters.items()}
+
+        # Allows idiom plugin.bkg_parameters["bkg_param_name"] to get 3ML parameter
+        self.bkg_parameter = ThreeMLPluginInterface._Bkg_parameter(self)
+
+    def _add_prefix_name(self, label):
+        return self._name + "_" + label
+
+    def _remove_prefix_name(self, label):
+        return label[len(self._name) + 1:]
+
     @property
     def nuisance_parameters(self) -> Dict[str, Parameter]:
-        # Adds plugin name, required by 3ML code
-        # See https://github.com/threeML/threeML/blob/7a16580d9d5ed57166e3b1eec3d4fccd3eeef1eb/threeML/classicMLE/joint_likelihood.py#L131
-        if self._like.bkg is None:
-            return {}
-        else:
-            return {self._name + "_" + l:p for l,p in self._like.bkg.threeml_parameters.items()}
+        # Currently, the only nuisance parameters are the ones for the bkg
+        # We could have systematics here as well
+        return self._threeml_bkg_parameters
 
     def update_nuisance_parameters(self, new_nuisance_parameters: Dict[str, Parameter]):
-        # Remove plugin name. Opposite of the nuisance_parameters property
+        # Currently, the only nuisance parameters are the ones for the bkg
+        # We could have systematics here as well
+        self._threeml_bkg_parameters = new_nuisance_parameters
+
+        # Set underlying bkg model
+        self._update_bkg_parameters()
+
+    def _update_bkg_parameters(self):
+        # 1. Remove plugin name. Opposite of the nuisance_parameters property
+        # 2. Convert to "bare" Quantity value
         if self._like.bkg is not None:
-            new_nuisance_parameters = {l[len(self._name)+1:]:p for l,p in new_nuisance_parameters.items()}
-            self._like.bkg.set_threeml_parameters(**new_nuisance_parameters)
+            self._like.bkg.set_parameters(**{self._remove_prefix_name(label): parameter.as_quantity for label, parameter in
+                                            self._threeml_bkg_parameters.items()})
+
+    class _Bkg_parameter:
+        # Allows idiom plugin.bkg_parameters["bkg_param_name"] to get 3ML parameter
+        def __init__(self, plugin):
+            self._plugin = plugin
+        def __getitem__(self, label):
+            # Adds plugin name, required by 3ML code
+            return self._plugin._threeml_bkg_parameters[self._plugin._add_prefix_name(label)]
 
     def get_number_of_data_points(self) -> int:
         return self._like.nobservations
@@ -48,6 +86,9 @@ class ThreeMLPluginInterface(PluginPrototype):
         self._like.response.set_model(model)
 
     def get_log_like(self):
+        # Update underlying background object in case the Parameter objects changed internally
+        self._update_bkg_parameters()
+
         return self._like.get_log_like()
 
     def inner_fit(self):

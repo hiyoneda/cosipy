@@ -1,23 +1,22 @@
 from typing import Dict, Any
 
 from astromodels.sources import Source
-from astromodels import LinearPolarization, SpectralComponent
+from astromodels import LinearPolarization, SpectralComponent, Parameter
 from astromodels.core.polarization import Polarization
+import astropy.units as u
 
-from cosipy.statistics import UnbinnedLikelihood, PoissonLikelihood
+from cosipy.statistics import PoissonLikelihood
 
 from cosipy.interfaces import (BinnedDataInterface,
                                BinnedBackgroundInterface,
-                               ThreeMLBinnedBackgroundInterface,
                                BinnedThreeMLModelResponseInterface,
                                BinnedThreeMLSourceResponseInterface,
-                               ThreeMLSourceResponseInterface,
-                               ThreeMLPluginInterface)
+                               ThreeMLPluginInterface, BackgroundInterface)
 from histpy import Axis, Axes, Histogram
 import numpy as np
 from scipy.stats import norm, uniform
 
-from threeML import Constant, PointSource, Model, JointLikelihood, DataList, Parameter
+from threeML import Constant, PointSource, Model, JointLikelihood, DataList
 
 from matplotlib import pyplot as plt
 
@@ -73,12 +72,12 @@ class ToyBkg(BinnedBackgroundInterface):
         self._unit_expectation[:] = 1 / self._unit_expectation.nbins
         self._norm = 1
 
-    def set_parameters(self, **parameters:Any) -> None:
-        self._norm = parameters['norm']
+    def set_parameters(self, **parameters:u.Quantity) -> None:
+        self._norm = parameters['norm'].value
 
     @property
-    def parameters(self) -> Dict[str, Any]:
-        return {'norm': self._norm}
+    def parameters(self) -> Dict[str, u.Quantity]:
+        return {'norm': u.Quantity(self._norm)}
 
     def expectation(self, axes: Axes, copy = True) -> Histogram:
 
@@ -87,37 +86,6 @@ class ToyBkg(BinnedBackgroundInterface):
 
         # Always a copy
         return self._unit_expectation * self._norm
-
-
-class ToyThreeMLBkg(ToyBkg, ThreeMLBinnedBackgroundInterface):
-    """
-    This class extends the core ToyBkg class by providing the extra
-    "translation" methods needed to interface with 3ML.
-    """
-
-    def __init__(self):
-
-        super().__init__()
-
-        # 3ML "Parameter" keeps track of a few more things than
-        # a "bare" parameter.
-        self._threeml_parameters = {'norm':Parameter('norm', self._norm)}
-
-    def expectation(self, axes: Axes, copy = True) -> Histogram:
-        # Overrides ToyBkg expectation
-        # Update, inn case it changed externally
-        self.set_parameters(norm = self._threeml_parameters['norm'].value)
-
-        return super().expectation(axes, copy = copy)
-
-    @property
-    def threeml_parameters(self) -> Dict[str, Parameter]:
-        return self._threeml_parameters
-
-    def set_threeml_parameters(self, **parameters: Parameter):
-        self._threeml_parameters = parameters
-        self.set_parameters(norm = parameters['norm'].value)
-
 
 class ToyPointSourceResponse(BinnedThreeMLSourceResponseInterface):
     """
@@ -186,7 +154,7 @@ class ToyModelResponse(BinnedThreeMLModelResponseInterface):
 data = ToyData()
 psr = ToyPointSourceResponse()
 response = ToyModelResponse(psr)
-bkg = ToyThreeMLBkg()
+bkg = ToyBkg()
 
 ## Source model
 ## We'll just use the K value in u.cm / u.cm / u.s / u.keV
@@ -209,11 +177,6 @@ else:
 
 model = Model(source)
 
-# Here you can set the parameters initial values, bounds, etc.
-# This is passed to the minimizer
-bkg.threeml_parameters['norm'].value = 1
-spectrum.k.value = 1
-
 # Optional: Perform a background-only or a null-background fit
 #bkg = None # Uncomment for no bkg
 #model = Model() # Uncomment for bkg-only hypothesis
@@ -222,6 +185,13 @@ spectrum.k.value = 1
 cosi = ThreeMLPluginInterface('cosi', PoissonLikelihood(data, response, bkg))
 plugins = DataList(cosi)
 like = JointLikelihood(model, plugins)
+
+# Before the fit, you can set the parameters initial values, bounds, etc.
+# This is passed to the minimizer
+cosi.bkg_parameter['norm'].value = 1
+spectrum.k.value = 1
+
+# Run minimizer
 like.fit()
 print(like.minimizer)
 

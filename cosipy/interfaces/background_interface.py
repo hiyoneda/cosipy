@@ -1,8 +1,10 @@
-from typing import Protocol, runtime_checkable, Dict, Any
+from typing import Protocol, runtime_checkable, Dict, Any, Union
 import histpy
 import numpy as np
 
 import logging
+
+import astropy.units as u
 
 from astromodels import Parameter
 
@@ -14,36 +16,13 @@ __all__ = [
            "BackgroundInterface",
            "BinnedBackgroundInterface",
            "UnbinnedBackgroundInterface",
-           "ThreeMLBackgroundInterface",
-           "ThreeMLBinnedBackgroundInterface",
-           "ThreeMLUnbinnedBackgroundInterface",
            ]
 
 @runtime_checkable
 class BackgroundInterface(Protocol):
-    def set_parameters(self, **parameters:Any) -> None:...
+    def set_parameters(self, **parameters:Dict[str, u.Quantity]) -> None:...
     @property
-    def parameters(self) -> Dict[str, Any]:...
-
-@runtime_checkable
-class ThreeMLBackgroundInterface(BackgroundInterface, Protocol):
-    """
-    This must translate to/from regular parameters
-    with arbitrary type from/to 3ML parameters
-    """
-
-    def set_threeml_parameters(self, **parameters: Parameter):
-        """
-        The Parameter objects are passed "as reference", and can change.
-        Remember to call set_parameters() before computing the expetation
-        """
-    @property
-    def threeml_parameters(self)->Dict[str, Parameter]:
-        """
-        Note than we need more information (e.g. bounds) than what you
-        get from base parameters property
-        """
-        return {} # Silence warning
+    def parameters(self) -> Dict[str, u.Quantity]:...
 
 @runtime_checkable
 class BinnedBackgroundInterface(BackgroundInterface, BinnedExpectationInterface, Protocol):
@@ -52,19 +31,7 @@ class BinnedBackgroundInterface(BackgroundInterface, BinnedExpectationInterface,
     """
 
 @runtime_checkable
-class ThreeMLBinnedBackgroundInterface(BinnedBackgroundInterface, ThreeMLBackgroundInterface, Protocol):
-    """
-    No new methods, just the inherited one
-    """
-
-@runtime_checkable
 class UnbinnedBackgroundInterface(BackgroundInterface, UnbinnedExpectationInterface, Protocol):
-    """
-    No new methods, just the inherited one
-    """
-
-@runtime_checkable
-class ThreeMLUnbinnedBackgroundInterface(BinnedBackgroundInterface, ThreeMLBackgroundInterface, Protocol):
     """
     No new methods, just the inherited one
     """

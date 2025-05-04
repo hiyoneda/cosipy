@@ -6,8 +6,7 @@ __all__ = ['LikelihoodInterface',
 
 from .expectation_interface import UnbinnedExpectationInterface, BinnedExpectationInterface, ExpectationInterface
 from .data_interface import UnbinnedDataInterface, BinnedDataInterface, DataInterface
-from .background_interface import UnbinnedBackgroundInterface, BinnedBackgroundInterface, BackgroundInterface, \
-    ThreeMLBackgroundInterface
+from .background_interface import UnbinnedBackgroundInterface, BinnedBackgroundInterface, BackgroundInterface
 
 @runtime_checkable
 class LikelihoodInterface(Protocol):

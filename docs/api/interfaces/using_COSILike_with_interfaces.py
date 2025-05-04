@@ -1,7 +1,7 @@
 from cosipy.statistics import PoissonLikelihood
 from histpy import Histogram
 
-from cosipy.background_estimation import FreeNormThreeMLBinnedBackground
+from cosipy.background_estimation import FreeNormBinnedBackground
 from cosipy.interfaces import ThreeMLPluginInterface
 from cosipy.response import BinnedThreeMLResponse, BinnedThreeMlPointSourceResponse
 from threeML import Band, PointSource, Model, JointLikelihood, DataList
@@ -98,7 +98,7 @@ def main():
     bkg_tmax = 1842597550.0
     bkg_min = np.where(bkg.binned_data.axes['Time'].edges.value == bkg_tmin)[0][0]
     bkg_max = np.where(bkg.binned_data.axes['Time'].edges.value == bkg_tmax)[0][0]
-    bkg = FreeNormThreeMLBinnedBackground(bkg.binned_data.slice[{'Time':slice(bkg_min,bkg_max)}].project('Em', 'Phi', 'PsiChi'))
+    bkg = FreeNormBinnedBackground(bkg.binned_data.slice[{'Time':slice(bkg_min,bkg_max)}].project('Em', 'Phi', 'PsiChi'))
 
     # Response preparation
     # fetch_wasabi_file('COSI-SMEX/DC2/Data/Orientation/20280301_3_month_with_orbital_info.ori', output=str(data_path / '20280301_3_month_with_orbital_info.ori'), checksum = '416fcc296fc37a056a069378a2d30cb2')
