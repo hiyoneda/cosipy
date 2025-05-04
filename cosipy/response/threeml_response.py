@@ -112,9 +112,9 @@ class BinnedThreeMLResponse(BinnedThreeMLModelResponseInterface):
             #  is not implemented. Remove the "False and" when fixed
             if self._last_convolved_model_dict == current_model_dict:
                 if copy:
-                    self._expectation.copy()
+                    return self._expectation.copy()
                 else:
-                    self._expectation
+                    return self._expectation
             else:
                 self._expectation.clear()
 
@@ -127,6 +127,6 @@ class BinnedThreeMLResponse(BinnedThreeMLModelResponseInterface):
         self._last_convolved_model_dict = current_model_dict
 
         if copy:
-            self._expectation.copy()
+            return self._expectation.copy()
         else:
-            self._expectation
+            return self._expectation

@@ -4,7 +4,7 @@ logger = logging.getLogger(__name__)
 import copy
 
 from astromodels.sources import Source, PointSource
-from astropy.coordinates import SkyCoord
+from scoords import SpacecraftFrame
 from histpy import Axes, Histogram
 from cosipy.interfaces import BinnedThreeMLSourceResponseInterface
 
@@ -106,9 +106,9 @@ class BinnedThreeMlPointSourceResponse(BinnedThreeMLSourceResponseInterface):
         # Use cached expectation if nothing has changed
         if self._expectation is not None and self._last_convolved_source_dict == source_dict:
             if copy:
-                self._expectation.copy()
+                return self._expectation.copy()
             else:
-                self._expectation
+                return self._expectation
 
         # Expectation calculation
 
@@ -120,17 +120,15 @@ class BinnedThreeMlPointSourceResponse(BinnedThreeMLSourceResponseInterface):
 
             logger.info("... Calculating point source response ...")
 
-            if coordsys == 'spacecraftframe':
+            if isinstance(coordsys, SpacecraftFrame):
                 dwell_time_map = self._sc_ori.get_dwell_map(coord, base = self._dr)
                 self._psr = self._dr.get_point_source_response(exposure_map=dwell_time_map)
-            elif coordsys == 'galactic':
+            else:
                 scatt_map = self._sc_ori.get_scatt_map(nside=self._dr.nside * 2,
                                                        target_coord=coord,
-                                                       coordsys='galactic',
+                                                       coordsys=coordsys,
                                                        earth_occ = True)
                 self._psr = self._dr.get_point_source_response(coord=coord, scatt_map=scatt_map)
-            else:
-                raise RuntimeError("Unknown coordinate system")
 
             logger.info(f"--> done (source name : {self._source.name})")
 
@@ -153,8 +151,8 @@ class BinnedThreeMlPointSourceResponse(BinnedThreeMLSourceResponseInterface):
 
         # Copy to prevent user to modify our cache
         if copy:
-            self._expectation.copy()
+            return self._expectation.copy()
         else:
-            self._expectation
+            return self._expectation
 
 

@@ -22,6 +22,30 @@ def test_get_time():
                         1835478009.0, 1835478010.0])
 
 
+def test_read_only_selected_range():
+
+    ori_path = test_data.path / "20280301_first_10sec.ori"
+
+    ori = SpacecraftFile.open(ori_path,
+                              tstart=Time(1835478002.0, format = 'unix'),
+                              tstop = Time(1835478008.0, format='unix')
+                            )
+
+    assert np.allclose(ori.obstime.unix,
+                       [1835478002.0,
+                        1835478003.0, 1835478004.0, 1835478005.0,
+                        1835478006.0, 1835478007.0, 1835478008.0, 1835478009.0])
+
+    ori = SpacecraftFile.open(ori_path,
+                              tstart=Time(1835478002.5, format = 'unix'),
+                              tstop = Time(1835478007.5, format='unix')
+                            )
+
+    assert np.allclose(ori.obstime.unix,
+                       [1835478002.0,
+                        1835478003.0, 1835478004.0, 1835478005.0,
+                        1835478006.0, 1835478007.0, 1835478008.0])
+
 def test_get_time_delta():
 
     ori_path = test_data.path / "20280301_first_10sec.ori"

@@ -158,9 +158,7 @@ class SpacecraftFile:
         else:
             raise ValueError(f"File format for {file} not supported")
 
-    from line_profiler_pycharm import profile
     @classmethod
-    @profile
     def _parse_from_file(cls, file, tstart:Time = None, tstop:Time = None) -> "SpacecraftFile":
         """
         Parses an .ori txt file with MEGAlib formatting.

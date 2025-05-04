@@ -45,6 +45,7 @@ class PointSourceResponse(Histogram):
         
         return self.axes['Ei']
 
+    @property
     def measurement_axes(self):
         return self.axes['Em', 'Phi', 'PsiChi']
 
