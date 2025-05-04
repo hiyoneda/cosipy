@@ -129,6 +129,14 @@ def main():
     cosi = ThreeMLPluginInterface('cosi', PoissonLikelihood(data, response, bkg))
     plugins = DataList(cosi)
     like = JointLikelihood(model, plugins)
+
+    # Nuisance bounds
+    cosi.bkg_parameter['norm'].value = .1
+    cosi.bkg_parameter['norm'].min_value = 0
+    cosi.bkg_parameter['norm'].max_value = 5
+    cosi.bkg_parameter['norm'].delta = 1e-3
+
+    # Fit
     like.fit()
 
     results = like.results

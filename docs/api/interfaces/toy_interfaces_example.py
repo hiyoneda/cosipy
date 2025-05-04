@@ -159,6 +159,7 @@ bkg = ToyBkg()
 ## Source model
 ## We'll just use the K value in u.cm / u.cm / u.s / u.keV
 spectrum = Constant()
+spectrum.k.value = 1
 
 polarized = False
 
@@ -187,9 +188,9 @@ plugins = DataList(cosi)
 like = JointLikelihood(model, plugins)
 
 # Before the fit, you can set the parameters initial values, bounds, etc.
-# This is passed to the minimizer
+# This is passed to the minimizer.
+# In addition to model. Nuisanse.
 cosi.bkg_parameter['norm'].value = 1
-spectrum.k.value = 1
 
 # Run minimizer
 like.fit()
