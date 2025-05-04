@@ -127,14 +127,17 @@ def main():
     # Optional: if you want to call get_log_like manually, then you also need to set the model manually
     # 3ML does this internally during the fit though
     cosi = ThreeMLPluginInterface('cosi', PoissonLikelihood(data, response, bkg))
-    plugins = DataList(cosi)
-    like = JointLikelihood(model, plugins)
 
     # Nuisance bounds
-    cosi.bkg_parameter['norm'].value = .1
-    cosi.bkg_parameter['norm'].min_value = 0
-    cosi.bkg_parameter['norm'].max_value = 5
-    cosi.bkg_parameter['norm'].delta = 1e-3
+    cosi.bkg_parameter['norm'] = Parameter("norm",  # background parameter
+                                      0.1,  # initial value of parameter
+                                      min_value=0,  # minimum value of parameter
+                                      max_value=5,  # maximum value of parameter
+                                      delta=1e-3,  # initial step used by fitting engine
+                                      desc="Background parameter for cosi")
+
+    plugins = DataList(cosi)
+    like = JointLikelihood(model, plugins)
 
     # Fit
     like.fit()

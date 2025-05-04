@@ -64,20 +64,31 @@ class ThreeMLPluginInterface(PluginPrototype):
         # Set underlying bkg model
         self._update_bkg_parameters()
 
-    def _update_bkg_parameters(self):
+    def _update_bkg_parameters(self, name = None):
         # 1. Remove plugin name. Opposite of the nuisance_parameters property
         # 2. Convert to "bare" Quantity value
         if self._like.bkg is not None:
-            self._like.bkg.set_parameters(**{self._remove_prefix_name(label): parameter.as_quantity for label, parameter in
+            if name is None:
+                #Update all
+                self._like.bkg.set_parameters(**{self._remove_prefix_name(label): parameter.as_quantity for label, parameter in
                                             self._threeml_bkg_parameters.items()})
+            else:
+                # Only specific value
+                self._like.bkg.set_parameters(**{name:self._threeml_bkg_parameters[self._add_prefix_name(name)].as_quantity})
 
     class _Bkg_parameter:
         # Allows idiom plugin.bkg_parameters["bkg_param_name"] to get 3ML parameter
         def __init__(self, plugin):
             self._plugin = plugin
-        def __getitem__(self, label):
+        def __getitem__(self, name):
             # Adds plugin name, required by 3ML code
-            return self._plugin._threeml_bkg_parameters[self._plugin._add_prefix_name(label)]
+            return self._plugin._threeml_bkg_parameters[self._plugin._add_prefix_name(name)]
+        def __setitem__(self, name, param: Parameter):
+            if param.name != self[name].name:
+                raise ValueError(f"Name of new set parameter need to match existing parameters ({param.name} != {self[name].name})")
+            self._plugin._threeml_bkg_parameters[self._plugin._add_prefix_name(name)] = param
+            self._plugin._update_bkg_parameters(name)
+
 
     def get_number_of_data_points(self) -> int:
         return self._like.nobservations
