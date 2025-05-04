@@ -1,3 +1,7 @@
+import logging
+
+logger = logging.getLogger(__name__)
+
 from cosipy.interfaces import (BinnedLikelihoodInterface,
                                UnbinnedLikelihoodInterface,
                                BinnedDataInterface,
@@ -49,6 +53,9 @@ class PoissonLikelihood(BinnedLikelihoodInterface):
         # Get the arrays
         expectation = expectation.contents
         data = self._data.data.contents
+
+        expectation += 1e-12
+        logger.warning("Adding 1e-12 to each bin of the expectation to avoid log-likelihood = -inf.")
 
         # Compute the log-likelihood:
         log_like = np.nansum(data * np.log(expectation) - expectation)
