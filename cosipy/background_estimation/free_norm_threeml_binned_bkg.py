@@ -16,15 +16,17 @@ class FreeNormBinnedBackground(BinnedBackgroundInterface):
     This must translate to/from regular parameters
     with arbitrary type from/to 3ML parameters
 
-    Parameter names are "{label}_norm". Default to just "norm" is there was a single
+    Parameter names are "{label}_norm". Default to "bkg_norm" is there was a single
     unlabeled component
     """
+
+    _default_label = 'bkg'
 
     def __init__(self, distribution:Union[Histogram, Dict[str, Histogram]]):
 
         if isinstance(distribution, Histogram):
             # Single component
-            self._distributions = {'bkg': distribution}
+            self._distributions = {self._default_label: distribution}
             self._norms = 1.
         else:
             # Multiple label components.
@@ -69,7 +71,7 @@ class FreeNormBinnedBackground(BinnedBackgroundInterface):
     @property
     def norms(self):
         if self._single_component:
-            return {"norm": self._norms}
+            return {f"{self._default_label}_norm": self._norms}
         else:
             return self._norms.items()
 
@@ -89,12 +91,11 @@ class FreeNormBinnedBackground(BinnedBackgroundInterface):
 
         if self._single_component:
             if isinstance(norm, dict):
-                self._norms = norm['norm']
+                self._norms = norm[f'{self._default_label}_norm']
             else:
                 self._norms = norm
         else:
             # Multiple
-
             if not isinstance(norm, dict):
                 raise TypeError("This a multi-component background. Provide labeled norm values in a dictionary")
 
@@ -109,7 +110,7 @@ class FreeNormBinnedBackground(BinnedBackgroundInterface):
         Same keys as background components
         """
 
-        self.set_norm(**{l:p.value for l,p in parameters.items()})
+        self.set_norm({l:p.value for l,p in parameters.items()})
 
     @property
     def parameters(self) -> Dict[str, u.Quantity]:

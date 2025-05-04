@@ -120,6 +120,8 @@ class ToyPointSourceResponse(BinnedThreeMLSourceResponseInterface):
         return self._unit_expectation * flux
 
     def copy(self) -> "ToyPointSourceResponse":
+        # We are not caching any results, so it's safe to do shallow copy without
+        # re-initializing any member.
         return copy.copy(self)
 
 class ToyModelResponse(BinnedThreeMLModelResponseInterface):
@@ -132,7 +134,6 @@ class ToyModelResponse(BinnedThreeMLModelResponseInterface):
 
         self._psr_copies = {}
         for name,source in model.sources.items():
-
             psr_copy = self._psr.copy()
             psr_copy.set_source(source)
             self._psr_copies[name] = psr_copy
