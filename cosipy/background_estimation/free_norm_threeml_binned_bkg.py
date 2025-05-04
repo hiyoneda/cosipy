@@ -20,30 +20,30 @@ class FreeNormBinnedBackground(BinnedBackgroundInterface):
     unlabeled component
     """
 
-    def __init__(self, hist:Union[Histogram, Dict[str, Histogram]]):
+    def __init__(self, distribution:Union[Histogram, Dict[str, Histogram]]):
 
-        if isinstance(hist, Histogram):
+        if isinstance(distribution, Histogram):
             # Single component
-            self._components = {'bkg': hist}
+            self._distributions = {'bkg': distribution}
             self._norms = 1.
         else:
             # Multiple label components.
-            self._components = hist
+            self._distributions = distribution
             self._norms = {f"{l}_norm":1. for l in self.labels}
 
         # These will be densify anyway since _expectation is dense
         # And histpy doesn't yet handle this operation efficiently
         # See Histogram._inplace_operation_handle_sparse()
         # Do it once and for all
-        for label, bkg in self._components.items():
+        for label, bkg in self._distributions.items():
             if bkg.is_sparse:
-                self._components[label] = bkg.to_dense()
+                self._distributions[label] = bkg.to_dense()
 
         if self.ncomponents == 0:
             raise ValueError("You need to input at least one components")
 
         self._axes = None
-        for bkg in self._components.values():
+        for bkg in self._distributions.values():
             if self._axes is None:
                 self._axes = bkg.axes
             else:
@@ -75,7 +75,7 @@ class FreeNormBinnedBackground(BinnedBackgroundInterface):
 
     @property
     def ncomponents(self):
-        return len(self._components)
+        return len(self._distributions)
 
     @property
     def meausured_axes(self):
@@ -83,7 +83,7 @@ class FreeNormBinnedBackground(BinnedBackgroundInterface):
 
     @property
     def labels(self):
-        return self._components.keys()
+        return self._distributions.keys()
 
     def set_norm(self, norm: Union[float, Dict[str, float]]):
 
@@ -151,7 +151,7 @@ class FreeNormBinnedBackground(BinnedBackgroundInterface):
             self._expectation.clear()
 
         # Compute expectation
-        for norm,bkg in zip(self.norms.values(), self._components.values()):
+        for norm,bkg in zip(self.norms.values(), self._distributions.values()):
             self._expectation += bkg * norm
 
         # Cache. Regular copy is enough since norm values are float en not mutable
