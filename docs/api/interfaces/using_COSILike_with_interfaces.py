@@ -1,3 +1,5 @@
+import sys
+
 from cosipy.statistics import PoissonLikelihood
 from histpy import Histogram
 
@@ -99,7 +101,14 @@ def main():
     bkg_tmax = 1842597550.0
     bkg_min = np.where(bkg.binned_data.axes['Time'].edges.value == bkg_tmin)[0][0]
     bkg_max = np.where(bkg.binned_data.axes['Time'].edges.value == bkg_tmax)[0][0]
-    bkg = FreeNormBinnedBackground(bkg.binned_data.slice[{'Time':slice(bkg_min,bkg_max)}].project('Em', 'Phi', 'PsiChi'))
+    bkg_dist = bkg.binned_data.slice[{'Time':slice(bkg_min,bkg_max)}].project('Em', 'Phi', 'PsiChi')
+
+    # Workaround to avoid inf values. Out bkg should be smooth, but currently it's not.
+    # Reproduces results before refactoring. It's not _exactly_ the same, since this fudge value was 1e-12, and
+    # it was added to the expectation, not the normalized bkg
+    bkg_dist += sys.float_info.min
+
+    bkg = FreeNormBinnedBackground(bkg_dist)
 
     # Response preparation
     tmin = Time(1842597410.0, format='unix')

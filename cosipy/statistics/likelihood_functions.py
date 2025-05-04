@@ -54,9 +54,6 @@ class PoissonLikelihood(BinnedLikelihoodInterface):
         expectation = expectation.contents
         data = self._data.data.contents
 
-        expectation += 1e-12
-        logger.warning("Adding 1e-12 to each bin of the expectation to avoid log-likelihood = -inf.")
-
         # Compute the log-likelihood:
         log_like = np.nansum(data * np.log(expectation) - expectation)
 
