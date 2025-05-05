@@ -4,7 +4,7 @@ from pathlib import Path
 import numpy as np
 from astropy.coordinates import SkyCoord
 from astropy.io import fits
-from cosipy import test_data, SpacecraftFile
+from cosipy import test_data, SpacecraftHistory
 from cosipy.response import FullDetectorResponse
 from cosipy.spacecraftfile import RspArfRmfConverter
 
@@ -14,7 +14,7 @@ def test_get_psr_rsp():
     response_path = test_data.path / "test_full_detector_response.h5"
     response = FullDetectorResponse.open(response_path)
     ori_path = test_data.path / "20280301_first_10sec.ori"
-    ori = SpacecraftFile.open(ori_path)
+    ori = SpacecraftHistory.open(ori_path)
     target_coord = SkyCoord(l=184.5551, b=-05.7877, unit=(u.deg, u.deg), frame="galactic")
     converter = RspArfRmfConverter(response, ori, target_coord)
 
@@ -80,7 +80,7 @@ def test_get_arf():
     response_path = test_data.path / "test_full_detector_response.h5"
     response = FullDetectorResponse.open(response_path)
     ori_path = test_data.path / "20280301_first_10sec.ori"
-    ori = SpacecraftFile.open(ori_path)
+    ori = SpacecraftHistory.open(ori_path)
     target_coord = SkyCoord(l=184.5551, b=-05.7877, unit=(u.deg, u.deg), frame="galactic")
     converter = RspArfRmfConverter(response, ori, target_coord)
 
@@ -107,7 +107,7 @@ def test_get_rmf():
     response_path = test_data.path / "test_full_detector_response.h5"
     response = FullDetectorResponse.open(response_path)
     ori_path = test_data.path / "20280301_first_10sec.ori"
-    ori = SpacecraftFile.open(ori_path)
+    ori = SpacecraftHistory.open(ori_path)
     target_coord = SkyCoord(l=184.5551, b=-05.7877, unit=(u.deg, u.deg), frame="galactic")
     converter = RspArfRmfConverter(response, ori, target_coord)
 
@@ -203,7 +203,7 @@ def test_get_pha():
     response_path = test_data.path / "test_full_detector_response.h5"
     response = FullDetectorResponse.open(response_path)
     ori_path = test_data.path / "20280301_first_10sec.ori"
-    ori = SpacecraftFile.open(ori_path)
+    ori = SpacecraftHistory.open(ori_path)
     target_coord = SkyCoord(l=184.5551, b=-05.7877, unit=(u.deg, u.deg), frame="galactic")
     converter = RspArfRmfConverter(response, ori, target_coord)
 
@@ -238,7 +238,7 @@ def test_plot_arf():
     response_path = test_data.path / "test_full_detector_response.h5"
     response = FullDetectorResponse.open(response_path)
     ori_path = test_data.path / "20280301_first_10sec.ori"
-    ori = SpacecraftFile.open(ori_path)
+    ori = SpacecraftHistory.open(ori_path)
     target_coord = SkyCoord(l=184.5551, b=-05.7877, unit=(u.deg, u.deg), frame="galactic")
     converter = RspArfRmfConverter(response, ori, target_coord)
 
@@ -257,7 +257,7 @@ def test_plot_rmf():
     response_path = test_data.path / "test_full_detector_response.h5"
     response = FullDetectorResponse.open(response_path)
     ori_path = test_data.path / "20280301_first_10sec.ori"
-    ori = SpacecraftFile.open(ori_path)
+    ori = SpacecraftHistory.open(ori_path)
     target_coord = SkyCoord(l=184.5551, b=-05.7877, unit=(u.deg, u.deg), frame="galactic")
     converter = RspArfRmfConverter(response, ori, target_coord)
 

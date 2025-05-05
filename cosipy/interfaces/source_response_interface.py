@@ -15,6 +15,7 @@ __all__ = ["SourceResponseInterface",
 @runtime_checkable
 class SourceResponseInterface(Protocol):
     ...
+    def set_spacecraft_history(self, sc_history):
 
 @runtime_checkable
 class ThreeMLModelResponseInterface(SourceResponseInterface, Protocol):

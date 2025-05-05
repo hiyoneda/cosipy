@@ -9,7 +9,7 @@ from histpy import Axes, Histogram
 from cosipy.interfaces import BinnedThreeMLSourceResponseInterface
 
 from cosipy.response import FullDetectorResponse
-from cosipy.spacecraftfile import SpacecraftFile, SpacecraftAttitudeMap
+from cosipy.spacecraftfile import SpacecraftHistory, SpacecraftAttitudeMap
 
 from mhealpy import HealpixMap
 
@@ -30,7 +30,7 @@ class BinnedThreeMlPointSourceResponse(BinnedThreeMLSourceResponseInterface):
 
     def __init__(self,
                  dr: FullDetectorResponse,
-                 sc_orientation: SpacecraftFile,
+                 sc_orientation: SpacecraftHistory,
                  ):
 
         # TODO: FullDetectorResponse -> BinnedInstrumentResponseInterface

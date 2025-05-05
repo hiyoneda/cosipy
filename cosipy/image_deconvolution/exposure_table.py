@@ -67,7 +67,7 @@ class SpacecraftAttitudeExposureTable(pd.DataFrame):
 
         Parameters
         ----------
-        orientation : :py:class:`cosipy.spacecraftfile.SpacecraftFile` 
+        orientation : :py:class:`cosipy.spacecraftfile.SpacecraftHistory` 
             Orientation
         nside : int
             Healpix NSIDE parameter.
@@ -101,7 +101,7 @@ class SpacecraftAttitudeExposureTable(pd.DataFrame):
 
         Parameters
         ----------
-        orientation : :py:class:`cosipy.spacecraftfile.SpacecraftFile` 
+        orientation : :py:class:`cosipy.spacecraftfile.SpacecraftHistory` 
             Orientation
         nside : int
             Healpix NSIDE parameter.

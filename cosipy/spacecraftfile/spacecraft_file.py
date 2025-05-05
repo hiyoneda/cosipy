@@ -21,9 +21,9 @@ from typing import Union
 import logging
 logger = logging.getLogger(__name__)
 
-__all__ = ["SpacecraftFile"]
+__all__ = ["SpacecraftHistory"]
 
-class SpacecraftFile:
+class SpacecraftHistory:
 
     def __init__(self,
                  obstime: Time,
@@ -129,7 +129,7 @@ class SpacecraftFile:
         return self._location
 
     @classmethod
-    def open(cls, file, tstart:Time = None, tstop:Time = None) -> "SpacecraftFile":
+    def open(cls, file, tstart:Time = None, tstop:Time = None) -> "SpacecraftHistory":
 
         """
         Parses timestamps, axis positions from file and returns to __init__.
@@ -148,7 +148,7 @@ class SpacecraftFile:
         Returns
         -------
         cosipy.spacecraftfile.spacecraft_file
-            The SpacecraftFile object.
+            The SpacecraftHistory object.
         """
 
         file = Path(file)
@@ -159,7 +159,7 @@ class SpacecraftFile:
             raise ValueError(f"File format for {file} not supported")
 
     @classmethod
-    def _parse_from_file(cls, file, tstart:Time = None, tstop:Time = None) -> "SpacecraftFile":
+    def _parse_from_file(cls, file, tstart:Time = None, tstop:Time = None) -> "SpacecraftHistory":
         """
         Parses an .ori txt file with MEGAlib formatting.
 
@@ -183,7 +183,7 @@ class SpacecraftFile:
         Returns
         -------
         cosipy.spacecraftfile.spacecraft_file
-            The SpacecraftFile object.
+            The SpacecraftHistory object.
         """
 
         # First and last line are read only by MEGAlib e.g.
@@ -355,7 +355,7 @@ class SpacecraftFile:
     def interp_weights(self, times: Time):
         return self._hist.axis.interp_weights_edges(times)
 
-    def interp(self, times: Time) -> 'SpacecraftFile':
+    def interp(self, times: Time) -> 'SpacecraftHistory':
 
         """
         Linearly interpolates attitude and position at a given obstime
@@ -367,7 +367,7 @@ class SpacecraftFile:
 
         Returns
         -------
-        A new SpacecraftFile object interpolated at these location
+        A new SpacecraftHistory object interpolated at these location
         """
 
         if times.size < 2:
@@ -383,9 +383,9 @@ class SpacecraftFile:
 
         return self.__class__(times, interp_attitude, interp_location, diff_livetime)
 
-    def select_interval(self, start:Time = None, stop:Time = None) -> "SpacecraftFile":
+    def select_interval(self, start:Time = None, stop:Time = None) -> "SpacecraftHistory":
         """
-        Returns the SpacecraftFile file class object for the source interval.
+        Returns the SpacecraftHistory file class object for the source interval.
 
         Parameters
         ----------
@@ -396,7 +396,7 @@ class SpacecraftFile:
 
         Returns
         -------
-        cosipy.spacecraft.SpacecraftFile
+        cosipy.spacecraft.SpacecraftHistory
         """
 
         if start is None:

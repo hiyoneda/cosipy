@@ -8,7 +8,7 @@ from cosipy.interfaces import ThreeMLPluginInterface
 from cosipy.response import BinnedThreeMLResponse, BinnedThreeMlPointSourceResponse
 
 from cosipy import BinnedData
-from cosipy.spacecraftfile import SpacecraftFile
+from cosipy.spacecraftfile import SpacecraftHistory
 from cosipy.response.FullDetectorResponse import FullDetectorResponse
 from cosipy.util import fetch_wasabi_file
 
@@ -83,7 +83,7 @@ def main():
     # Prepare instrument response and SC history
     tmin = Time(1842597410.0, format='unix')
     tmax = Time(1842597450.0, format='unix')
-    ori = SpacecraftFile.open(data_path / "20280301_3_month_with_orbital_info.ori", tmin, tmax)
+    ori = SpacecraftHistory.open(data_path / "20280301_3_month_with_orbital_info.ori", tmin, tmax)
     ori = ori.select_interval(tmin, tmax) # Function changed name during refactoring
 
     dr = FullDetectorResponse.open(

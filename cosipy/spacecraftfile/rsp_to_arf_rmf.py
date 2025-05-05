@@ -1,7 +1,7 @@
 import logging
 logger = logging.getLogger(__name__)
 
-from .spacecraft_file import  SpacecraftFile
+from .spacecraft_file import  SpacecraftHistory
 
 import numpy as np
 import astropy.units as u
@@ -15,7 +15,7 @@ from cosipy.response import FullDetectorResponse
 
 class RspArfRmfConverter:
 
-    def __init__(self, response:FullDetectorResponse, ori:SpacecraftFile, target_coord:SkyCoord):
+    def __init__(self, response:FullDetectorResponse, ori:SpacecraftHistory, target_coord:SkyCoord):
 
         self.response = response
         self.ori = ori

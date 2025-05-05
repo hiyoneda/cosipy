@@ -983,7 +983,7 @@ class FullDetectorResponse(HealpixBase):
         ----------
         ipix_image : int
             HEALPix pixel index
-        orientation : cosipy.spacecraftfile.SpacecraftFile
+        orientation : cosipy.spacecraftfile.SpacecraftHistory
             Spacecraft attitude information
         coordsys : str, default 'galactic'
             Coordinate system (currently only 'galactic' is supported)
@@ -1024,7 +1024,7 @@ class FullDetectorResponse(HealpixBase):
 
         Parameters
         ----------
-        orientation : cosipy.spacecraftfile.SpacecraftFile
+        orientation : cosipy.spacecraftfile.SpacecraftHistory
             Spacecraft attitude information
         coordsys : str, default 'galactic'
             Coordinate system (currently only 'galactic' is supported)

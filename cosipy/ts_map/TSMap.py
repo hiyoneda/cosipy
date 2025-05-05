@@ -35,7 +35,7 @@ class TSMap:
             Binned data. Note: Eventually this should be a cosipy data class.
         bkg : histpy.Histogram
             Binned background model. Note: Eventually this should be a cosipy data class.
-        sc_orientation : cosipy.spacecraftfile.SpacecraftFile
+        sc_orientation : cosipy.spacecraftfile.SpacecraftHistory
             Contains the information of the orientation: timestamps (astropy.Time) and attitudes (scoord.Attitude) that describe
             the spacecraft for the duration of the data included in the analysis.
         piv : float
