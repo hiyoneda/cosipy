@@ -1,7 +1,7 @@
 import logging
 logger = logging.getLogger(__name__)
 
-from .spacecraft_file import  SpacecraftHistory
+from cosipy.spacecraftfile.spacecraft_file import  SpacecraftHistory
 
 import numpy as np
 import astropy.units as u
