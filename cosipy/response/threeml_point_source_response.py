@@ -1,43 +1,60 @@
 import logging
+from pathlib import Path
+from typing import Union
+
+from mhealpy import HealpixBase
+
+from cosipy.data_io import EmCDSBinnedData
+from cosipy.interfaces.instrument_response_interface import BinnedInstrumentResponseInterface
+from cosipy.polarization.polarization_axis import PolarizationAxis
+from cosipy.threeml.util import to_linear_polarization
+
 logger = logging.getLogger(__name__)
 
 import copy
 
 from astromodels.sources import Source, PointSource
 from scoords import SpacecraftFrame
-from histpy import Axes, Histogram
-from cosipy.interfaces import BinnedThreeMLSourceResponseInterface
+from histpy import Axes, Histogram, Axis
+from cosipy.interfaces import BinnedThreeMLSourceResponseInterface, BinnedDataInterface
 
-from cosipy.response import FullDetectorResponse
+from cosipy.response import FullDetectorResponse, PointSourceResponse
 from cosipy.spacecraftfile import SpacecraftHistory, SpacecraftAttitudeMap
 
 from mhealpy import HealpixMap
 
-__all__ = ["BinnedThreeMlPointSourceResponse"]
+__all__ = ["BinnedThreeMLPointSourceResponseLocal"]
 
-class BinnedThreeMlPointSourceResponse(BinnedThreeMLSourceResponseInterface):
+class BinnedThreeMLPointSourceResponseLocal(BinnedThreeMLSourceResponseInterface):
     """
     COSI 3ML plugin.
 
     Parameters
     ----------
     dr:
-        Full detector response handle (**not** the file path)
-    sc_orientation:
+        Full detector response handle, or the file path
+    sc_history:
         Contains the information of the orientation: timestamps (astropy.Time) and attitudes (scoord.Attitude) that describe
         the spacecraft for the duration of the data included in the analysis
     """
 
     def __init__(self,
-                 dr: FullDetectorResponse,
-                 sc_orientation: SpacecraftHistory,
-                 ):
+                 instrument_response: BinnedInstrumentResponseInterface,
+                 sc_history: SpacecraftHistory,
+                 dwell_time_map_base: HealpixBase,
+                 energy_axis:Axis,
+                 polarization_axis:PolarizationAxis = None):
 
         # TODO: FullDetectorResponse -> BinnedInstrumentResponseInterface
 
-        self._dr = dr
-        self._sc_ori = sc_orientation
+        self._sc_ori = sc_history
 
+        if not isinstance(dwell_time_map_base.coordsys, SpacecraftFrame):
+            raise ValueError("The dwell_time_map_base must have a SpacecraftFrame coordinate system.")
+
+        self._dwell_time_map_base = dwell_time_map_base
+
+        # Use setters for these
         self._source = None
 
         # Prevent unnecessary calculations and new memory allocations
@@ -55,6 +72,10 @@ class BinnedThreeMlPointSourceResponse(BinnedThreeMLSourceResponseInterface):
         self._last_convolved_source_skycoord = None
 
         self._psr = None
+
+        self._response = instrument_response
+        self._energy_axis = energy_axis
+        self._polarization_axis = polarization_axis
 
     def clear_cache(self):
 
@@ -84,24 +105,30 @@ class BinnedThreeMlPointSourceResponse(BinnedThreeMLSourceResponseInterface):
         if not isinstance(source, PointSource):
             raise TypeError("I only know how to handle point sources!")
 
+        if (to_linear_polarization(source.spectrum.main.polarization) is not None and
+                self._polarization_axis is None):
+            raise RuntimeError("This response can't handle a polarized source.")
+
         self._source = source
 
-    def expectation(self, axes:Axes, copy = True)-> Histogram:
+    def expectation(self, data:BinnedDataInterface, copy = True)-> Histogram:
         # TODO: check coordsys from axis
         # TODO: Earth occ always true in this case
+
+        if not isinstance(data, EmCDSBinnedData):
+            raise TypeError(f"Wrong data type '{type(data)}', expected {EmCDSBinnedData}.")
+
+        if self._source is None:
+            raise RuntimeError("Call set_source() first.")
+
+        if self._sc_ori is None:
+            raise RuntimeError("Call set_spacecraft_history() first.")
 
         # See this issue for the caveats of comparing models
         # https://github.com/threeML/threeML/issues/645
         source_dict = self._source.to_dict()
 
         coord = self._source.position.sky_coord
-
-        # Check if we can use these axes
-        if 'PsiChi' not in axes.labels:
-            raise ValueError("PsiChi axes not present")
-
-        if axes["PsiChi"].coordsys is None:
-            raise ValueError("PsiChi axes doesn't have a coordinate system")
 
         # Use cached expectation if nothing has changed
         if self._expectation is not None and self._last_convolved_source_dict == source_dict:
@@ -116,30 +143,31 @@ class BinnedThreeMlPointSourceResponse(BinnedThreeMLSourceResponseInterface):
         # are expensive
         if self._psr is None or coord != self._last_convolved_source_skycoord:
 
-            coordsys = axes["PsiChi"].coordsys
+            coordsys = data.axes["PsiChi"].coordsys
 
             logger.info("... Calculating point source response ...")
 
-            if isinstance(coordsys, SpacecraftFrame):
-                dwell_time_map = self._sc_ori.get_dwell_map(coord, base = self._dr)
-                self._psr = self._dr.get_point_source_response(exposure_map=dwell_time_map)
-            else:
-                scatt_map = self._sc_ori.get_scatt_map(nside=self._dr.nside * 2,
-                                                       target_coord=coord,
-                                                       coordsys=coordsys,
-                                                       earth_occ = True)
-                self._psr = self._dr.get_point_source_response(coord=coord, scatt_map=scatt_map)
+            dwell_time_map = self._sc_ori.get_dwell_map(coord, base=self._dwell_time_map_base)
+
+            self._psr = PointSourceResponse.from_dwell_time_map(data.axes, self._response,
+                                                                dwell_time_map, self._energy_axis,
+                                                                self._polarization_axis)
+
+            # TODO: Move these lines to inertial version.
+            # scatt_map = self._sc_ori.get_scatt_map(nside=self._dr.nside * 2,
+            #                                        target_coord=coord,
+            #                                        coordsys=coordsys,
+            #                                        earth_occ = True)
+            # self._psr = self._dr.get_point_source_response(coord=coord, scatt_map=scatt_map)
 
             logger.info(f"--> done (source name : {self._source.name})")
-
-
 
         # Convolve with spectrum
         self._expectation = self._psr.get_expectation(self._source.spectrum.main.shape,
                                                       self._source.spectrum.main.polarization)
 
         # Check if axes match
-        if axes != self._expectation.axes:
+        if data.axes != self._expectation.axes:
             raise ValueError(
                 "Currently, the expectation axes must exactly match the detector response measurement axes")
 

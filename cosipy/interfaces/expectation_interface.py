@@ -2,6 +2,7 @@ from typing import Protocol, runtime_checkable, Dict, Any
 
 import histpy
 import numpy as np
+from cosipy.interfaces import BinnedDataInterface
 
 from .measurements import Measurements
 
@@ -15,12 +16,12 @@ class ExpectationInterface(Protocol):...
 
 @runtime_checkable
 class BinnedExpectationInterface(ExpectationInterface, Protocol):
-    def expectation(self, axes:histpy.Axes, copy:bool)->histpy.Histogram:
+    def expectation(self, data:BinnedDataInterface, copy:bool)->histpy.Histogram:
         """
 
         Parameters
         ----------
-        axes
+        data
         copy:
             If True, it will return an array that the user if free to modify.
             Otherwise, it will result a reference, possible to the cache, that

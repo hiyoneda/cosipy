@@ -1,10 +1,13 @@
-from histpy import Histogram#, Axes, Axis
+from cosipy.polarization.polarization_axis import PolarizationAxis
+from cosipy.threeml.util import to_linear_polarization
+from mhealpy import HealpixMap
+from cosipy.interfaces import BinnedInstrumentResponseInterface
+from cosipy.polarization import PolarizationAngle
+from histpy import Histogram, Axis, Axes  # , Axes, Axis
 
 import numpy as np
 import astropy.units as u
 from scoords import SpacecraftFrame, Attitude
-
-from astromodels.core.polarization import Polarization, LinearPolarization, StokesPolarization
 
 from .functions import get_integrated_spectral_model
 
@@ -67,38 +70,7 @@ class PointSourceResponse(Histogram):
              Histogram with the expected counts on each analysis bin
         """
 
-        # FIXME: the logic of this code block should be moved to 3ML.
-        #   We want to see if the source is polarized, and if so, confirm
-        #   transform to linear polarization.
-        #   https://github.com/threeML/astromodels/blob/master/astromodels/core/polarization.py
-        if polarization is not None:
-
-            if type(polarization) == Polarization:
-                # FIXME: Polarization is the base class, but a 3ML source
-                #   with no polarization default to the base class.
-                #   The base class shouldn't be able to be instantiated,
-                #   and we should have a NullPolarization subclass or None
-                polarization = None
-
-            elif isinstance(polarization, LinearPolarization):
-
-                if polarization.degree.value is 0:
-                    polarization = None
-
-            elif isinstance(polarization, StokesPolarization):
-
-                # FIXME: Here we should convert the any Stokes parameters to Linear
-                #    The circular component looks like unpolarized to us.
-                #    This conversion is not yet implemented in Astromodels
-                raise ValueError("Fix me. I can't handle StokesPolarization yet")
-
-            else:
-
-                if isinstance(polarization, Polarization):
-                    raise TypeError(f"Fix me. I don't know how to handle this polarization type")
-                else:
-                    raise TypeError(f"Polarization must be a Polarization subclass")
-
+        polarization = to_linear_polarization(polarization)
 
         if polarization is None:
 
@@ -147,3 +119,43 @@ class PointSourceResponse(Histogram):
             raise RuntimeError("Expectation should be dimensionless, but has units of " + str(hist.unit) + ".")
 
         return hist
+
+    @classmethod
+    def from_dwell_time_map(cls,
+                            measured_axes:Axes,
+                            response: BinnedInstrumentResponseInterface,
+                            exposure_map: HealpixMap,
+                            energy_axis: Axis,
+                            polarization_axis: PolarizationAxis = None
+                            ):
+
+        axes = [energy_axis]
+
+        polarization_centers = None
+        if polarization_axis is not None:
+            axes += [polarization_axis]
+            polarization_centers = polarization_axis.centers
+
+        axes += list(measured_axes)
+
+        psr = PointSourceResponse(axes, unit=u.cm * u.cm * u.s)
+
+        for p in range(exposure_map.npix):
+
+            coord = exposure_map.pix2skycoord(p)
+
+            if exposure_map[p] != 0:
+                psr += response.differential_effective_area(measured_axes, coord, energy_axis.centers, polarization_centers) * exposure_map[p]
+
+        return psr
+
+    @classmethod
+    def from_scatt_map(cls,
+                        measured_axes:Axes,
+                        response: BinnedInstrumentResponseInterface,
+                        exposure_map: HealpixMap,
+                        energy_axis: Axis,
+                        polarization_axis: PolarizationAxis = None
+                        ):
+        pass
+

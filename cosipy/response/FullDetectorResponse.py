@@ -1,3 +1,5 @@
+from cosipy.polarization.polarization_axis import PolarizationAxis
+
 from .PointSourceResponse import PointSourceResponse
 from .DetectorResponse import DetectorResponse
 from .ExtendedSourceResponse import ExtendedSourceResponse
@@ -575,8 +577,11 @@ class FullDetectorResponse(HealpixBase):
                                  coordsys=SpacecraftFrame())
 
         new.pa_convention = pa_convention
-        if 'Pol' in new._axes.labels and not (pa_convention == 'RelativeX' or pa_convention == 'RelativeY' or pa_convention == 'RelativeZ'):
-            raise RuntimeError("Polarization angle convention of response ('RelativeX', 'RelativeY', or 'RelativeZ') must be provided")
+        if 'Pol' in new._axes.labels:
+            if not (pa_convention == 'RelativeX' or pa_convention == 'RelativeY' or pa_convention == 'RelativeZ'):
+                raise RuntimeError("Polarization angle convention of response ('RelativeX', 'RelativeY', or 'RelativeZ') must be provided")
+
+            new._axes['Pol'] = PolarizationAxis(new._axes['Pol'].edges, convention=pa_convention)
 
         return new
 
@@ -867,81 +872,84 @@ class FullDetectorResponse(HealpixBase):
         # TODO: deprecate exposure_map in favor of coords + scatt map for both local
         # and interntial coords
 
-        if Earth_occ == True:
+        if exposure_map is not None:
+            return self.get_local_point_source_response(exposure_map)
+        else:
+            return self.get_inertial_point_source_response(coord, scatt_map, Earth_occ)
+
+    def get_local_point_source_response(self, exposure_map):
+
+        if not self.conformable(exposure_map):
+            raise ValueError(
+                "Exposure map has a different grid than the detector response")
+
+        polarization_axis = None
+        if 'Pol' in self.axes.labels:
+            polarization_axis = self.axes['Pol']
+
+        return PointSourceResponse.from_dwell_time_map(self.axes[('Em','Phi','PsiChi')], exposure_map, self.axes['Ei'], polarization_axis)
+
+    def get_inertial_point_source_response(self,
+                                             coord = None,
+                                             scatt_map = None,
+                                             earth_occ = True):
+
+        # Rotate to inertial coordinates
+        if earth_occ:
             if coord != None:
                 if coord.size > 1:
-                    raise ValueError("For Earth occultation you must use the same coordinate as was used for the scatt map!")
+                    raise ValueError(
+                        "For Earth occultation you must use the same coordinate as was used for the scatt map!")
 
-        if exposure_map is not None:
-            if not self.conformable(exposure_map):
-                raise ValueError(
-                    "Exposure map has a different grid than the detector response")
+        if coord is None or scatt_map is None:
+            raise ValueError("Provide either exposure map or coord + scatt_map")
 
-            psr = PointSourceResponse(self.axes[1:],
-                                      sparse=self._sparse,
-                                      unit=u.cm*u.cm*u.s)
+        if isinstance(coord.frame, SpacecraftFrame):
+            raise ValueError("Local coordinate + scatt_map not currently supported")
 
-            for p in range(self.npix):
+        if self.is_sparse:
+            raise ValueError("Coord +  scatt_map currently only supported for dense responses")
 
-                if exposure_map[p] != 0:
-                    psr += self[p]*exposure_map[p]
+        axis = "PsiChi"
 
-            return psr
+        coords_axis = Axis(np.arange(coord.size + 1), label='coords')
 
-        else:
+        psr = Histogram([coords_axis] + list(deepcopy(self.axes[1:])),
+                        unit=self.unit * scatt_map.unit)
 
-            # Rotate to inertial coordinates
+        psr.axes[axis].coordsys = coord.frame
 
-            if coord is None or scatt_map is None:
-                raise ValueError("Provide either exposure map or coord + scatt_map")
-
-            if isinstance(coord.frame, SpacecraftFrame):
-                raise ValueError("Local coordinate + scatt_map not currently supported")
-
-            if self.is_sparse:
-                raise ValueError("Coord +  scatt_map currently only supported for dense responses")
-
-            axis = "PsiChi"
-
-            coords_axis = Axis(np.arange(coord.size+1), label = 'coords')
-
-            psr = Histogram([coords_axis] + list(deepcopy(self.axes[1:])),
-                            unit = self.unit * scatt_map.unit)
-
-            psr.axes[axis].coordsys = coord.frame
-
-            for i,(pixels, exposure) in \
+        for i, (pixels, exposure) in \
                 enumerate(zip(scatt_map.contents.coords.transpose(),
                               scatt_map.contents.data * scatt_map.unit)):
+            # gc.collect() # HDF5 cache issues
 
-                #gc.collect() # HDF5 cache issues
+            att = Attitude.from_axes(x=scatt_map.axes['x'].pix2skycoord(pixels[0]),
+                                     y=scatt_map.axes['y'].pix2skycoord(pixels[1]))
 
-                att = Attitude.from_axes(x = scatt_map.axes['x'].pix2skycoord(pixels[0]),
-                                         y = scatt_map.axes['y'].pix2skycoord(pixels[1]))
+            coord.attitude = att
 
-                coord.attitude = att
+            # TODO: Change this to interpolation
+            loc_nulambda_pixels = np.array(self.axes['NuLambda'].find_bin(coord),
+                                           ndmin=1)
 
-                #TODO: Change this to interpolation
-                loc_nulambda_pixels = np.array(self.axes['NuLambda'].find_bin(coord),
-                                               ndmin = 1)
+            dr_pix = Histogram.concatenate(coords_axis, [self[i] for i in loc_nulambda_pixels])
 
-                dr_pix = Histogram.concatenate(coords_axis, [self[i] for i in loc_nulambda_pixels])
+            dr_pix.axes['PsiChi'].coordsys = SpacecraftFrame(attitude=att)
 
-                dr_pix.axes['PsiChi'].coordsys = SpacecraftFrame(attitude = att)
+            self._sum_rot_hist(dr_pix, psr, exposure, coord, self.pa_convention)
 
-                self._sum_rot_hist(dr_pix, psr, exposure, coord, self.pa_convention)
+        # Convert to PSR
+        psr = tuple([PointSourceResponse(psr.axes[1:],
+                                         contents=data,
+                                         sparse=psr.is_sparse,
+                                         unit=psr.unit)
+                     for data in psr[:]])
 
-            # Convert to PSR
-            psr = tuple([PointSourceResponse(psr.axes[1:],
-                                             contents = data,
-                                             sparse = psr.is_sparse,
-                                             unit = psr.unit)
-                         for data in psr[:]])
-
-            if coord.size == 1:
-                return psr[0]
-            else:
-                return psr
+        if coord.size == 1:
+            return psr[0]
+        else:
+            return psr
 
     def _setup_extended_source_response_params(self, coordsys, nside_image, nside_scatt_map):
         """

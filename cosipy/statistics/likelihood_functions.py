@@ -1,12 +1,14 @@
 import logging
 
+from cosipy.interfaces.expectation_interface import ExpectationInterface
+
 logger = logging.getLogger(__name__)
 
 from cosipy.interfaces import (BinnedLikelihoodInterface,
                                UnbinnedLikelihoodInterface,
                                BinnedDataInterface,
                                BinnedExpectationInterface,
-                               BinnedBackgroundInterface,
+                               BinnedBackgroundInterface, DataInterface, BackgroundInterface,
                                )
 
 import numpy as np
@@ -18,15 +20,23 @@ class UnbinnedLikelihood(UnbinnedLikelihoodInterface):
     ...
 
 class PoissonLikelihood(BinnedLikelihoodInterface):
-    def __init__(self,
-                 data: BinnedDataInterface,
-                 response: BinnedExpectationInterface,
-                 bkg: BinnedBackgroundInterface,
-                 *args, **kwargs):
+    def __init__(self):
 
+        self._data = None
+        self._bkg = None
+        self._response = None
+
+    def set_data(self, data: DataInterface):
+        super().set_data(data) # Checks type
         self._data = data
-        self._bkg = bkg
+
+    def set_response(self, response: ExpectationInterface):
+        super().set_response(response)  # Checks type
         self._response = response
+
+    def set_background(self, bkg: BackgroundInterface):
+        super().set_background(bkg)  # Checks type
+        self._bkg = bkg
 
     @property
     def data (self) -> BinnedDataInterface: return self._data
@@ -41,14 +51,17 @@ class PoissonLikelihood(BinnedLikelihoodInterface):
 
     def get_log_like(self) -> float:
 
+        if self._data is None or self._response is None:
+            raise RuntimeError("Set data and response before calling this function.")
+
         # Compute expectation including background
         # If we don't have background, we won't modify the expectation, so
         # it's safe to use the internal cache.
-        expectation = self._response.expectation(self._data.data.axes, copy = self.has_bkg)
+        expectation = self._response.expectation(self._data, copy = self.has_bkg)
 
         if self.has_bkg:
             # We won't modify the bkg expectation, so it's safe to use the internal cache
-            expectation += self._bkg.expectation(self._data.data.axes, copy = False)
+            expectation += self._bkg.expectation(self._data, copy = False)
 
         # Get the arrays
         expectation = expectation.contents
@@ -61,6 +74,10 @@ class PoissonLikelihood(BinnedLikelihoodInterface):
 
     @property
     def nobservations(self) -> int:
+
+        if self._data is None:
+            raise RuntimeError("Set the data before calling this function.")
+
         return self._data.data.contents.size
 
 

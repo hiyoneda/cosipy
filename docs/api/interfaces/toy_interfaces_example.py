@@ -4,6 +4,7 @@ from astromodels.sources import Source
 from astromodels import LinearPolarization, SpectralComponent, Parameter
 from astromodels.core.polarization import Polarization
 import astropy.units as u
+from cosipy import SpacecraftHistory
 
 from cosipy.statistics import PoissonLikelihood
 
@@ -61,6 +62,10 @@ class ToyData(BinnedDataInterface):
     def data(self) -> Histogram:
         return self._data
 
+    @property
+    def axes(self) -> Axes:
+        return self._data.axes
+
 
 class ToyBkg(BinnedBackgroundInterface):
     """
@@ -79,9 +84,12 @@ class ToyBkg(BinnedBackgroundInterface):
     def parameters(self) -> Dict[str, u.Quantity]:
         return {'norm': u.Quantity(self._norm)}
 
-    def expectation(self, axes: Axes, copy = True) -> Histogram:
+    def expectation(self, data: BinnedDataInterface, copy = True) -> Histogram:
 
-        if axes != self._unit_expectation.axes:
+        if not isinstance(data, ToyData):
+            raise TypeError(f"Wrong data type '{type(data)}', expected {ToyData}.")
+
+        if data.axes != self._unit_expectation.axes:
             raise ValueError("Wrong axes. I have fixed axes.")
 
         # Always a copy
@@ -105,8 +113,12 @@ class ToyPointSourceResponse(BinnedThreeMLSourceResponseInterface):
 
         self._source = source
 
-    def expectation(self, axes: Axes, copy = True) -> Histogram:
-        if axes != self._unit_expectation.axes:
+    def expectation(self, data: BinnedDataInterface, copy = True) -> Histogram:
+
+        if not isinstance(data, ToyData):
+            raise TypeError(f"Wrong data type '{type(data)}', expected {ToyData}.")
+
+        if data.axes != self._unit_expectation.axes:
             raise ValueError("Wrong axes. I have fixed axes.")
 
         if self._source is None:
@@ -127,6 +139,10 @@ class ToyPointSourceResponse(BinnedThreeMLSourceResponseInterface):
 class ToyModelResponse(BinnedThreeMLModelResponseInterface):
 
     def __init__(self, psr: BinnedThreeMLSourceResponseInterface):
+
+        if not isinstance(psr, ToyPointSourceResponse):
+            raise TypeError(f"Wrong psr type '{type(psr)}', expected {ToyPointSourceResponse}.")
+
         self._psr = psr
         self._psr_copies = {}
 
@@ -138,11 +154,15 @@ class ToyModelResponse(BinnedThreeMLModelResponseInterface):
             psr_copy.set_source(source)
             self._psr_copies[name] = psr_copy
 
-    def expectation(self, axes: Axes, copy = True) -> Histogram:
-        expectation = Histogram(axes)
+    def expectation(self, data: BinnedDataInterface, copy = True) -> Histogram:
+
+        if not isinstance(data, ToyData):
+            raise TypeError(f"Wrong data type '{type(data)}', expected {ToyData}.")
+
+        expectation = Histogram(data.axes)
 
         for source_name,psr in self._psr_copies.items():
-            expectation += psr.expectation(axes, copy = False)
+            expectation += psr.expectation(data, copy = False)
 
         # Always a copy
         return expectation
@@ -184,7 +204,11 @@ model = Model(source)
 #model = Model() # Uncomment for bkg-only hypothesis
 
 # Fit
-cosi = ThreeMLPluginInterface('cosi', PoissonLikelihood(data, response, bkg))
+like_fun = PoissonLikelihood()
+like_fun.set_data(data)
+like_fun.set_response(response)
+like_fun.set_background(bkg)
+cosi = ThreeMLPluginInterface('cosi', like_fun)
 plugins = DataList(cosi)
 like = JointLikelihood(model, plugins)
 
@@ -200,8 +224,8 @@ print(like.minimizer)
 # Plot results
 fig, ax = plt.subplots()
 data.data.plot(ax)
-expectation = response.expectation(data.data.axes)
+expectation = response.expectation(data)
 if bkg is not None:
-    expectation = expectation + bkg.expectation(data.data.axes)
+    expectation = expectation + bkg.expectation(data)
 expectation.plot(ax)
 plt.show()

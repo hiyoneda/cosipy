@@ -10,15 +10,13 @@ from .background_interface import UnbinnedBackgroundInterface, BinnedBackgroundI
 
 @runtime_checkable
 class LikelihoodInterface(Protocol):
-    def __init__(self,
-                 data: DataInterface,
-                 response: ExpectationInterface,
-                 bkg: BackgroundInterface,
-                 *args, **kwargs):...
     def get_log_like(self) -> float:...
     @property
     def nobservations(self) -> int:
         """For BIC and other statistics"""
+    def set_data(self, data: DataInterface):...
+    def set_response(self, response: ExpectationInterface): ...
+    def set_background(self, bkg: BackgroundInterface): ...
     @property
     def data (self) -> DataInterface: ...
     @property
@@ -31,20 +29,32 @@ class BinnedLikelihoodInterface(LikelihoodInterface, Protocol):
     """
     Needs to check that data, response and bkg are compatible
     """
-    def __init__(self,
-                 data: BinnedDataInterface,
-                 response: BinnedExpectationInterface,
-                 bkg: BinnedBackgroundInterface,
-                 *args, **kwargs):...
+    def set_data(self, data: DataInterface):
+        if not isinstance(data, BinnedDataInterface):
+            raise TypeError("Incorrect data type for binned likelihood.")
+
+    def set_response(self, response: ExpectationInterface):
+        if not isinstance(response, BinnedExpectationInterface):
+            raise TypeError("Incorrect data type for binned likelihood.")
+
+    def set_background(self, bkg: BackgroundInterface):
+        if not isinstance(bkg, BinnedBackgroundInterface):
+            raise TypeError("Incorrect background type for binned likelihood.")
 
 @runtime_checkable
 class UnbinnedLikelihoodInterface(LikelihoodInterface, Protocol):
     """
         Needs to check that data, response and bkg are compatible
     """
-    def __init__(self,
-                 data: UnbinnedDataInterface,
-                 response: UnbinnedExpectationInterface,
-                 bkg: UnbinnedBackgroundInterface,
-                 *args, **kwargs):...
+    def set_data(self, data: DataInterface):
+        if not isinstance(data, UnbinnedDataInterface):
+            raise TypeError("Incorrect data type for unbinned likelihood.")
+
+    def set_response(self, response: ExpectationInterface):
+        if not isinstance(response, UnbinnedExpectationInterface):
+            raise TypeError("Incorrect data type for unbinned likelihood.")
+
+    def set_background(self, bkg: BackgroundInterface):
+        if not isinstance(bkg, UnbinnedBackgroundInterface):
+            raise TypeError("Incorrect background type for unbinned likelihood.")
 

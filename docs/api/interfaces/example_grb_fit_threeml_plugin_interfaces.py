@@ -1,16 +1,20 @@
 import sys
 
+from mhealpy import HealpixBase
+
 from cosipy.statistics import PoissonLikelihood
 from histpy import Histogram
 
 from cosipy.background_estimation import FreeNormBinnedBackground
 from cosipy.interfaces import ThreeMLPluginInterface
-from cosipy.response import BinnedThreeMLResponse, BinnedThreeMlPointSourceResponse
+from cosipy.response import BinnedThreeMLResponse, BinnedInstrumentResponse, \
+    BinnedThreeMLPointSourceResponseLocal
 
 from cosipy import BinnedData
 from cosipy.spacecraftfile import SpacecraftHistory
 from cosipy.response.FullDetectorResponse import FullDetectorResponse
 from cosipy.util import fetch_wasabi_file
+from cosipy.polarization import PolarizationAxis
 
 from scoords import SpacecraftFrame
 
@@ -67,12 +71,11 @@ def main():
 
     # Data preparation
     grb_bkg = BinnedData(data_path / "grb.yaml")
+    grb_bkg.load_binned_data_from_hdf5(binned_data=data_path / "grb_bkg_binned_data.hdf5")
+
     bkg = BinnedData(data_path / "background.yaml")
 
-    grb_bkg.load_binned_data_from_hdf5(binned_data=data_path / "grb_bkg_binned_data.hdf5")
     bkg.load_binned_data_from_hdf5(binned_data=data_path / "bkg_binned_data_1s_local.hdf5")
-
-    data = grb_bkg.binned_data.project('Em', 'Phi', 'PsiChi')
 
     bkg_tmin = 1842597310.0
     bkg_tmax = 1842597550.0
@@ -86,8 +89,8 @@ def main():
     ori = SpacecraftHistory.open(data_path / "20280301_3_month_with_orbital_info.ori", tmin, tmax)
     ori = ori.select_interval(tmin, tmax) # Function changed name during refactoring
 
-    dr = FullDetectorResponse.open(
-        data_path / "SMEXv12.Continuum.HEALPixO3_10bins_log_flat.binnedimaging.imagingresponse.nonsparse_nside8.area.good_chunks_unzip.h5")
+    dr_path = data_path / "SMEXv12.Continuum.HEALPixO3_10bins_log_flat.binnedimaging.imagingresponse.nonsparse_nside8.area.good_chunks_unzip.h5"
+    dr = FullDetectorResponse.open(dr_path)
 
     # Workaround to avoid inf values. Out bkg should be smooth, but currently it's not.
     # Reproduces results before refactoring. It's not _exactly_ the same, since this fudge value was 1e-12, and
@@ -95,23 +98,44 @@ def main():
     bkg_dist += sys.float_info.min
 
     # ============ Interfaces ==============
+    data = grb_bkg.get_em_cds()
+
     bkg = FreeNormBinnedBackground(bkg_dist)
 
-    psr = BinnedThreeMlPointSourceResponse(dr, ori)
+    instrument_response = BinnedInstrumentResponse(dr)
+
+    if isinstance(data.axes['PsiChi'].coordsys, SpacecraftFrame):
+        local_coord_fit = True
+    else:
+        local_coord_fit = False
+
+    if local_coord_fit:
+        pass
+        # polarization_axis = dr.axes
+        #     PolarizationAxis(pola))
+
+    if local_coord_fit:
+        # Currently using the same NnuLambda, Ei and Pol axes as the underlying FullDetectorResponse,
+        # matching the behavior of v0.3. This is all the current BinnedInstrumentResponse can do.
+        # In principle, this can be decoupled, and a BinnedInstrumentResponseInterface implementation
+        # can provide the response for an arbitrary directions, Ei and Pol values.
+        psr = BinnedThreeMLPointSourceResponseLocal(instrument_response,
+                                                    sc_history=ori,
+                                                    dwell_time_map_base = HealpixBase(nside = dr.nside, scheme = dr.scheme, coordsys=SpacecraftFrame()),
+                                                    energy_axis=dr.axes['Ei'],
+                                                    polarization_axis=dr.axes['Pol'] if 'Pol' in dr.axes.labels else None)
+    else:
+        psr = BinnedThreeMLPointSourceResponse()
+
 
     response = BinnedThreeMLResponse(point_source_response = psr)
 
-    class BinnedDataAux:
-        # We can move this to BinnedData later, but this shows the flexibility of using Protocols over abstract classes
-        # BinnedDataAux is a "BinnedDataInterface" since it implements the data() method, even if it doesn't
-        # explicitly derive from BinnedDataInterface
-        @property
-        def data(self) -> Histogram:
-            return data
 
-    data_aux = BinnedDataAux()
 
-    like_fun = PoissonLikelihood(data_aux, response, bkg)
+    like_fun = PoissonLikelihood()
+    like_fun.set_data(data)
+    like_fun.set_response(response)
+    like_fun.set_background(bkg)
 
     cosi = ThreeMLPluginInterface('cosi', like_fun)
 

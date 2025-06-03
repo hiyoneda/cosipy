@@ -1,5 +1,7 @@
 from typing import Protocol, runtime_checkable, Dict, Type, Any
 
+from histpy import Histogram, Axes
+
 from .measurements import Measurements
 
 import histpy
@@ -22,8 +24,9 @@ class UnbinnedDataInterface(DataInterface, Protocol):
 @runtime_checkable
 class BinnedDataInterface(DataInterface, Protocol):
     @property
-    def data(self) -> histpy.Histogram:...
-
+    def data(self) -> Histogram:...
+    @property
+    def axes(self) -> Axes:...
 
 
 

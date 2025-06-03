@@ -4,8 +4,9 @@ from astromodels.sources import Source
 
 from .expectation_interface import BinnedExpectationInterface, UnbinnedExpectationInterface
 
-__all__ = ["SourceResponseInterface",
-           "ThreeMLModelResponseInterface",
+from cosipy.spacecraftfile import SpacecraftHistory
+
+__all__ = ["ThreeMLModelResponseInterface",
            "UnbinnedThreeMLModelResponseInterface",
            "BinnedThreeMLModelResponseInterface",
            "ThreeMLSourceResponseInterface",
@@ -13,12 +14,7 @@ __all__ = ["SourceResponseInterface",
            "BinnedThreeMLSourceResponseInterface"]
 
 @runtime_checkable
-class SourceResponseInterface(Protocol):
-    ...
-    def set_spacecraft_history(self, sc_history):
-
-@runtime_checkable
-class ThreeMLModelResponseInterface(SourceResponseInterface, Protocol):
+class ThreeMLModelResponseInterface(Protocol):
     def set_model(self, model: Model):
         """
         The model is passed as a reference and it's parameters
@@ -39,7 +35,8 @@ class BinnedThreeMLModelResponseInterface(ThreeMLModelResponseInterface, BinnedE
     """
 
 @runtime_checkable
-class ThreeMLSourceResponseInterface(SourceResponseInterface, Protocol):
+class ThreeMLSourceResponseInterface(Protocol):
+
     def set_source(self, source: Source):
         """
         The source is passed as a reference and it's parameters

@@ -1,6 +1,7 @@
 import copy
 
-from cosipy.interfaces import BinnedThreeMLModelResponseInterface, BinnedThreeMLSourceResponseInterface
+from cosipy.interfaces import BinnedThreeMLModelResponseInterface, BinnedThreeMLSourceResponseInterface, \
+    BinnedDataInterface
 
 from astromodels import Model
 from astromodels.sources import PointSource, ExtendedSource
@@ -82,12 +83,12 @@ class BinnedThreeMLResponse(BinnedThreeMLModelResponseInterface):
 
         self._model = model
 
-    def expectation(self, axes:Axes, copy:bool = True)->Histogram:
+    def expectation(self, data:BinnedDataInterface, copy:bool = True)->Histogram:
         """
 
         Parameters
         ----------
-        axes
+        data
         copy
 
         Returns
@@ -98,9 +99,9 @@ class BinnedThreeMLResponse(BinnedThreeMLModelResponseInterface):
         # https://github.com/threeML/threeML/issues/645
         current_model_dict = self._model.to_dict()
 
-        if self._expectation is None or self._expectation.axes != axes:
+        if self._expectation is None or self._expectation.axes != data.axes:
             # Needs new memory allocation, and recompute everything
-            self._expectation = Histogram(axes)
+            self._expectation = Histogram(data.axes)
         else:
             # If nothing has changed in the model, we can use the cached expectation
             # as is.
@@ -120,7 +121,7 @@ class BinnedThreeMLResponse(BinnedThreeMLModelResponseInterface):
 
         # Convolve all sources with the response
         for source_name,psr in self._source_responses.items():
-            self._expectation += psr.expectation(axes)
+            self._expectation += psr.expectation(data)
 
         # See this issue for the caveats of comparing models
         # https://github.com/threeML/threeML/issues/645
