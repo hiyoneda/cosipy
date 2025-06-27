@@ -729,7 +729,7 @@ class FullDetectorResponse(HealpixBase):
         return self.axes.ndim
 
     @property
-    def axes(self):
+    def axes(self) -> Axes:
         """
         List of axes.
 
