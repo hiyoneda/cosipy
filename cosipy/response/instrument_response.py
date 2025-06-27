@@ -39,6 +39,10 @@ class BinnedInstrumentResponse(BinnedInstrumentResponseInterface):
         """
 
         # Check if we can use these axes
+
+        if self._dr.measurement_axes != axes:
+            raise ValueError("This implementation can only handle a fixed set of measurement axes equal to the underlying response file.")
+
         if 'PsiChi' not in axes.labels:
             raise ValueError("PsiChi axis not present")
 
@@ -46,7 +50,7 @@ class BinnedInstrumentResponse(BinnedInstrumentResponseInterface):
             raise ValueError("PsiChi axes doesn't have a coordinate system")
 
         if polarization is not None:
-            if 'Pol' not in axes.labels:
+            if 'Pol' not in self._dr.axes.labels:
                 raise RuntimeError("The FullDetectorResponse does not contain polarization information")
             elif not np.array_equal(polarization, self._dr.axes['Pol'].centers):
                 # Matches the v0.3 behaviour
