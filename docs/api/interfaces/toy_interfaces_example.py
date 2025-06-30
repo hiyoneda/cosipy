@@ -10,7 +10,7 @@ from cosipy.statistics import PoissonLikelihood
 
 from cosipy.interfaces import (BinnedDataInterface,
                                BinnedBackgroundInterface,
-                               BinnedThreeMLModelResponseInterface,
+                               BinnedThreeMLModelFoldingInterface,
                                BinnedThreeMLSourceResponseInterface,
                                ThreeMLPluginInterface, BackgroundInterface)
 from histpy import Axis, Axes, Histogram
@@ -136,7 +136,7 @@ class ToyPointSourceResponse(BinnedThreeMLSourceResponseInterface):
         # re-initializing any member.
         return copy.copy(self)
 
-class ToyModelResponse(BinnedThreeMLModelResponseInterface):
+class ToyModelFolding(BinnedThreeMLModelFoldingInterface):
 
     def __init__(self, psr: BinnedThreeMLSourceResponseInterface):
 
@@ -174,7 +174,7 @@ class ToyModelResponse(BinnedThreeMLModelResponseInterface):
 # are hardcoded above withing the classes, then it's not necessary here.
 data = ToyData()
 psr = ToyPointSourceResponse()
-response = ToyModelResponse(psr)
+response = ToyModelFolding(psr)
 bkg = ToyBkg()
 
 ## Source model

@@ -1,6 +1,6 @@
 import copy
 
-from cosipy.interfaces import BinnedThreeMLModelResponseInterface, BinnedThreeMLSourceResponseInterface, \
+from cosipy.interfaces import BinnedThreeMLModelFoldingInterface, BinnedThreeMLSourceResponseInterface, \
     BinnedDataInterface
 
 from astromodels import Model
@@ -8,9 +8,9 @@ from astromodels.sources import PointSource, ExtendedSource
 
 from histpy import Axes, Histogram
 
-__all__ = ["BinnedThreeMLResponse"]
+__all__ = ["BinnedThreeMLModelFolding"]
 
-class BinnedThreeMLResponse(BinnedThreeMLModelResponseInterface):
+class BinnedThreeMLModelFolding(BinnedThreeMLModelFoldingInterface):
 
     def __init__(self,
                  point_source_response:BinnedThreeMLSourceResponseInterface = None,

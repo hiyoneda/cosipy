@@ -6,15 +6,15 @@ from .expectation_interface import BinnedExpectationInterface, UnbinnedExpectati
 
 from cosipy.spacecraftfile import SpacecraftHistory
 
-__all__ = ["ThreeMLModelResponseInterface",
-           "UnbinnedThreeMLModelResponseInterface",
-           "BinnedThreeMLModelResponseInterface",
+__all__ = ["ThreeMLModelFoldingInterface",
+           "UnbinnedThreeMLModelFoldingInterface",
+           "BinnedThreeMLModelFoldingInterface",
            "ThreeMLSourceResponseInterface",
            "UnbinnedThreeMLSourceResponseInterface",
            "BinnedThreeMLSourceResponseInterface"]
 
 @runtime_checkable
-class ThreeMLModelResponseInterface(Protocol):
+class ThreeMLModelFoldingInterface(Protocol):
     def set_model(self, model: Model):
         """
         The model is passed as a reference and it's parameters
@@ -23,13 +23,13 @@ class ThreeMLModelResponseInterface(Protocol):
         """
 
 @runtime_checkable
-class UnbinnedThreeMLModelResponseInterface(UnbinnedExpectationInterface, ThreeMLModelResponseInterface, Protocol):
+class UnbinnedThreeMLModelFoldingInterface(UnbinnedExpectationInterface, ThreeMLModelFoldingInterface, Protocol):
     """
     No new methods. Just the inherited ones.
     """
 
 @runtime_checkable
-class BinnedThreeMLModelResponseInterface(ThreeMLModelResponseInterface, BinnedExpectationInterface, Protocol):
+class BinnedThreeMLModelFoldingInterface(ThreeMLModelFoldingInterface, BinnedExpectationInterface, Protocol):
     """
     No new methods. Just the inherited ones.
     """

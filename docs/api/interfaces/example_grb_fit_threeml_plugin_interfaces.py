@@ -6,7 +6,7 @@ from cosipy.statistics import PoissonLikelihood
 
 from cosipy.background_estimation import FreeNormBinnedBackground
 from cosipy.interfaces import ThreeMLPluginInterface
-from cosipy.response import BinnedThreeMLResponse, BinnedInstrumentResponse, BinnedThreeMLPointSourceResponse
+from cosipy.response import BinnedThreeMLModelFolding, BinnedInstrumentResponse, BinnedThreeMLPointSourceResponse
 
 from cosipy import BinnedData
 from cosipy.spacecraftfile import SpacecraftHistory
@@ -108,7 +108,7 @@ def main():
                                                energy_axis = dr.axes['Ei'],
                                                polarization_axis = dr.axes['Pol'] if 'Pol' in dr.axes.labels else None)
 
-    response = BinnedThreeMLResponse(point_source_response = psr)
+    response = BinnedThreeMLModelFolding(point_source_response = psr)
 
     like_fun = PoissonLikelihood()
     like_fun.set_data(data)

@@ -1,6 +1,6 @@
 from typing import Dict
 
-from cosipy.interfaces import BinnedThreeMLModelResponseInterface, ThreeMLModelResponseInterface
+from cosipy.interfaces import ThreeMLModelFoldingInterface
 from cosipy.interfaces.likelihood_interface import LikelihoodInterface
 from threeML import PluginPrototype, Parameter
 
@@ -28,7 +28,7 @@ class ThreeMLPluginInterface(PluginPrototype):
         self._like = likelihood
 
         # Check we can use this likelihood
-        if not isinstance(self._like.response, ThreeMLModelResponseInterface):
+        if not isinstance(self._like.response, ThreeMLModelFoldingInterface):
             raise TypeError("ThreeMLPluginInterface needs a LikelihoodInterface using a response of type ThreeMLModelResponseInterface")
 
         # Currently, the only nuisance parameters are the ones for the bkg
