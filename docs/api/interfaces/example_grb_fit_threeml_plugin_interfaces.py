@@ -3,26 +3,19 @@ import sys
 from mhealpy import HealpixBase
 
 from cosipy.statistics import PoissonLikelihood
-from histpy import Histogram
 
 from cosipy.background_estimation import FreeNormBinnedBackground
 from cosipy.interfaces import ThreeMLPluginInterface
-from cosipy.response import BinnedThreeMLResponse, BinnedInstrumentResponse, \
-    BinnedThreeMLPointSourceResponseLocal
+from cosipy.response import BinnedThreeMLResponse, BinnedInstrumentResponse, BinnedThreeMLPointSourceResponse
 
 from cosipy import BinnedData
 from cosipy.spacecraftfile import SpacecraftHistory
 from cosipy.response.FullDetectorResponse import FullDetectorResponse
-from cosipy.util import fetch_wasabi_file
-from cosipy.polarization import PolarizationAxis
-
-from scoords import SpacecraftFrame
 
 from astropy.time import Time
 import astropy.units as u
 
 import numpy as np
-import matplotlib.pyplot as plt
 
 from threeML import Band, PointSource, Model, JointLikelihood, DataList
 from astromodels import Parameter
@@ -104,33 +97,18 @@ def main():
 
     instrument_response = BinnedInstrumentResponse(dr)
 
-    if isinstance(data.axes['PsiChi'].coordsys, SpacecraftFrame):
-        local_coord_fit = True
-    else:
-        local_coord_fit = False
-
-    if local_coord_fit:
-        pass
-        # polarization_axis = dr.axes
-        #     PolarizationAxis(pola))
-
-    if local_coord_fit:
-        # Currently using the same NnuLambda, Ei and Pol axes as the underlying FullDetectorResponse,
-        # matching the behavior of v0.3. This is all the current BinnedInstrumentResponse can do.
-        # In principle, this can be decoupled, and a BinnedInstrumentResponseInterface implementation
-        # can provide the response for an arbitrary directions, Ei and Pol values.
-        psr = BinnedThreeMLPointSourceResponseLocal(instrument_response,
-                                                    sc_history=ori,
-                                                    dwell_time_map_base = HealpixBase(nside = dr.nside, scheme = dr.scheme, coordsys=SpacecraftFrame()),
-                                                    energy_axis=dr.axes['Ei'],
-                                                    polarization_axis=dr.axes['Pol'] if 'Pol' in dr.axes.labels else None)
-    else:
-        psr = BinnedThreeMLPointSourceResponse()
-
+    # Currently using the same NnuLambda, Ei and Pol axes as the underlying FullDetectorResponse,
+    # matching the behavior of v0.3. This is all the current BinnedInstrumentResponse can do.
+    # In principle, this can be decoupled, and a BinnedInstrumentResponseInterface implementation
+    # can provide the response for an arbitrary directions, Ei and Pol values.
+    # NOTE: this is currently only implemented for data in local coords
+    psr = BinnedThreeMLPointSourceResponse(instrument_response,
+                                               sc_history=ori,
+                                               direction_axis = data.axes['PsiChi'],
+                                               energy_axis = dr.axes['Ei'],
+                                               polarization_axis = dr.axes['Pol'] if 'Pol' in dr.axes.labels else None)
 
     response = BinnedThreeMLResponse(point_source_response = psr)
-
-
 
     like_fun = PoissonLikelihood()
     like_fun.set_data(data)

@@ -153,9 +153,11 @@ class PointSourceResponse(Histogram):
     def from_scatt_map(cls,
                         measured_axes:Axes,
                         response: BinnedInstrumentResponseInterface,
-                        exposure_map: HealpixMap,
+                        scatt_map: HealpixMap,
                         energy_axis: Axis,
                         polarization_axis: PolarizationAxis = None
                         ):
-        pass
+
+        raise NotImplementedError("WiP")
+        #self._psr = self._dr.get_point_source_response(coord=coord, scatt_map=scatt_map)
 

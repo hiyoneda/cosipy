@@ -15,7 +15,7 @@ import copy
 
 from astromodels.sources import Source, PointSource
 from scoords import SpacecraftFrame
-from histpy import Axes, Histogram, Axis
+from histpy import Axes, Histogram, Axis, HealpixAxis
 from cosipy.interfaces import BinnedThreeMLSourceResponseInterface, BinnedDataInterface
 
 from cosipy.response import FullDetectorResponse, PointSourceResponse
@@ -23,9 +23,9 @@ from cosipy.spacecraftfile import SpacecraftHistory, SpacecraftAttitudeMap
 
 from mhealpy import HealpixMap
 
-__all__ = ["BinnedThreeMLPointSourceResponseLocal"]
+__all__ = ["BinnedThreeMLPointSourceResponse"]
 
-class BinnedThreeMLPointSourceResponseLocal(BinnedThreeMLSourceResponseInterface):
+class BinnedThreeMLPointSourceResponse(BinnedThreeMLSourceResponseInterface):
     """
     COSI 3ML plugin.
 
@@ -41,18 +41,14 @@ class BinnedThreeMLPointSourceResponseLocal(BinnedThreeMLSourceResponseInterface
     def __init__(self,
                  instrument_response: BinnedInstrumentResponseInterface,
                  sc_history: SpacecraftHistory,
-                 dwell_time_map_base: HealpixBase,
+                 direction_axis: HealpixAxis,
                  energy_axis:Axis,
-                 polarization_axis:PolarizationAxis = None):
+                 polarization_axis:PolarizationAxis = None,
+                 ):
 
         # TODO: FullDetectorResponse -> BinnedInstrumentResponseInterface
 
         self._sc_ori = sc_history
-
-        if not isinstance(dwell_time_map_base.coordsys, SpacecraftFrame):
-            raise ValueError("The dwell_time_map_base must have a SpacecraftFrame coordinate system.")
-
-        self._dwell_time_map_base = dwell_time_map_base
 
         # Use setters for these
         self._source = None
@@ -74,8 +70,13 @@ class BinnedThreeMLPointSourceResponseLocal(BinnedThreeMLSourceResponseInterface
         self._psr = None
 
         self._response = instrument_response
+        self._direction_axis = direction_axis
         self._energy_axis = energy_axis
         self._polarization_axis = polarization_axis
+
+    @property
+    def coordsys(self):
+        return self._direction_axis.coordsys
 
     def clear_cache(self):
 
@@ -145,20 +146,30 @@ class BinnedThreeMLPointSourceResponseLocal(BinnedThreeMLSourceResponseInterface
 
             coordsys = data.axes["PsiChi"].coordsys
 
+            if coordsys != self.coordsys:
+                raise ValueError(f"Coordinate system mismatch. Data has {coordsys} while this class has {self.coordsys}.")
+
             logger.info("... Calculating point source response ...")
 
-            dwell_time_map = self._sc_ori.get_dwell_map(coord, base=self._dwell_time_map_base)
+            if isinstance(self.coordsys, SpacecraftFrame):
+                # Local coordinates
 
-            self._psr = PointSourceResponse.from_dwell_time_map(data.axes, self._response,
-                                                                dwell_time_map, self._energy_axis,
-                                                                self._polarization_axis)
+                dwell_time_map = self._sc_ori.get_dwell_map(coord, base=self._direction_axis)
 
-            # TODO: Move these lines to inertial version.
-            # scatt_map = self._sc_ori.get_scatt_map(nside=self._dr.nside * 2,
-            #                                        target_coord=coord,
-            #                                        coordsys=coordsys,
-            #                                        earth_occ = True)
-            # self._psr = self._dr.get_point_source_response(coord=coord, scatt_map=scatt_map)
+                self._psr = PointSourceResponse.from_dwell_time_map(data.axes, self._response,
+                                                                    dwell_time_map, self._energy_axis,
+                                                                    self._polarization_axis)
+
+            else:
+                # Inertial e/.g. galactic
+                raise NotImplementedError("Only local coordinates are supported for now.")
+
+                # WiP
+                # TODO: Move these lines to inertial version.
+                scatt_map = self._sc_ori.get_scatt_map(nside=self._direction_axis.nside * 2,
+                                                       target_coord=coord,
+                                                       coordsys=self._direction_axis.coordsys,
+                                                       earth_occ=True)
 
             logger.info(f"--> done (source name : {self._source.name})")
 
@@ -182,5 +193,3 @@ class BinnedThreeMLPointSourceResponseLocal(BinnedThreeMLSourceResponseInterface
             return self._expectation.copy()
         else:
             return self._expectation
-
-

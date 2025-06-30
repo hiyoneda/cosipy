@@ -739,6 +739,7 @@ class FullDetectorResponse(HealpixBase):
         """
         return self._axes
 
+    @property
     def measurement_axes(self):
         return self.axes['Em', 'Phi', 'PsiChi']
 
