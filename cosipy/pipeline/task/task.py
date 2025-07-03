@@ -114,7 +114,7 @@ def cosi_bindata(argv=None):
     write_yaml(str(data_path),str(ori_path),str(resp_path),dt,tmin,tmax,str(yaml_path))
 
     #Apply optional time selection:
-    if tmin > is not None and tmax is not None:
+    if tmin is not None and tmax is not None:
         #
         print("Applying time selection %f-%f to the unbinned data" % (tmin,tmax))
         #
