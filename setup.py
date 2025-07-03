@@ -38,6 +38,7 @@ setup(name='cosipy',
       entry_points={"console_scripts":[
           "cosi-response = cosipy.response.FullDetectorResponse:cosi_response",
           "cosi-threemlfit= cosipy.pipeline.task.task:cosi_threemlfit",
+          "cosi-bindata=cosipy.pipeline.task.task:cosi_bindata"
           ]},
       long_description = long_description,
       long_description_content_type="text/markdown",
