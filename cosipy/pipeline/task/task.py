@@ -21,6 +21,7 @@ from pathlib import Path
 from astromodels.core.model_parser import ModelParser
 
 
+
 def cosi_bindata(argv=None):
     # Parse arguments from commandline
     apar = argparse.ArgumentParser(
@@ -42,7 +43,7 @@ def cosi_bindata(argv=None):
     apar.add_argument('--config',
                       help="Path to .yaml file listing all the parameters.See example in test_data.",
                       required=True)
-    apar.add_argument("--config_group", default='bindata',
+    apar.add_argument("--config_group", default='prepbdata',
                       help="Path within the config file with the tutorials information")
     apar.add_argument("--override", nargs='*',
                       help="Override config parameters. e.g. \"section:param_int = 2\" \"section:param_string = b\"")
@@ -84,10 +85,7 @@ def cosi_bindata(argv=None):
     # Default output
     odir = Path.cwd() if not args.output_dir else Path(args.output_dir)
     yaml_name="bin.yaml" if not args.suffix else str("bin_"+args.suffix+".yaml")
-    # Coordinate system
-    psichi_coo = config.get("coo_sys")
-    #
-    bdata_name=str("binned_data_"+psichi_coo) if not args.suffix else str("binned_data_"+psichi_coo+"_"+args.suffix)
+    bdata_name="binned_data" if not args.suffix else str("binned_data_"+args.suffix)
 
 
     # Parse input files from config file
@@ -106,6 +104,8 @@ def cosi_bindata(argv=None):
         tmax = np.max(ori_time).value
     dt=  config.get("dt")
 
+    #Coordinate system
+    psichi_coo=config.get("coo_sys")
 
     #Prepare the input ymal
     yaml_path = odir/yaml_name
@@ -114,7 +114,7 @@ def cosi_bindata(argv=None):
     write_yaml(str(data_path),str(ori_path),str(resp_path),dt,tmin,tmax,str(yaml_path))
 
     #Apply optional time selection:
-    if config.get("tmin") is not None and config.get("tmax") is not None:
+    if tmin > is not None and tmax is not None:
         #
         print("Applying time selection %f-%f to the unbinned data" % (tmin,tmax))
         #
