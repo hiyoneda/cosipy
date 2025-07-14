@@ -568,7 +568,7 @@ class SpacecraftHistory:
                        coordsys = 'galactic',
                        r_earth = 6378.0,
                        earth_occ = True
-                       ):
+                       ) -> SpacecraftAttitudeMap:
 
         """
         Bin the spacecraft attitude history into a 4D histogram that 

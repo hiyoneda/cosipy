@@ -1,17 +1,22 @@
+from astropy.coordinates import SkyCoord
+from astropy.units import Quantity
+
 from cosipy.polarization.polarization_axis import PolarizationAxis
 from cosipy.threeml.util import to_linear_polarization
 from mhealpy import HealpixMap
 from cosipy.interfaces import BinnedInstrumentResponseInterface
-from cosipy.polarization import PolarizationAngle
 from histpy import Histogram, Axis, Axes  # , Axes, Axis
 
 import numpy as np
 import astropy.units as u
-from scoords import SpacecraftFrame, Attitude
+from scoords import Attitude
 
 from .functions import get_integrated_spectral_model
 
 import logging
+
+from cosipy.spacecraftfile import SpacecraftAttitudeMap
+
 logger = logging.getLogger(__name__)
 
 class PointSourceResponse(Histogram):
@@ -151,13 +156,53 @@ class PointSourceResponse(Histogram):
 
     @classmethod
     def from_scatt_map(cls,
+                        coord: SkyCoord,
                         measured_axes:Axes,
                         response: BinnedInstrumentResponseInterface,
-                        scatt_map: HealpixMap,
+                        scatt_map: SpacecraftAttitudeMap,
                         energy_axis: Axis,
                         polarization_axis: PolarizationAxis = None
                         ):
+        """
 
-        raise NotImplementedError("WiP")
-        #self._psr = self._dr.get_point_source_response(coord=coord, scatt_map=scatt_map)
+        Parameters
+        ----------
+        measured_axes
+        response
+        scatt_map
+        energy_axis
+        polarization_axis
+
+        Returns
+        -------
+
+        """
+
+        axes = [energy_axis]
+
+        if polarization_axis is not None:
+            axes += [polarization_axis]
+
+        axes += list(measured_axes)
+
+        psr = Quantity(np.empty(shape=axes.shape), unit = u.cm * u.cm * u.s)
+
+        for i, (pixels, exposure) in \
+                enumerate(zip(scatt_map.contents.coords.transpose(),
+                              scatt_map.contents.data * scatt_map.unit)):
+
+            att = Attitude.from_axes(x=scatt_map.axes['x'].pix2skycoord(pixels[0]),
+                                     y=scatt_map.axes['y'].pix2skycoord(pixels[1]))
+
+
+            response.differential_effective_area(measured_axes,
+                                                 coord,
+                                                 energy_axis.centers,
+                                                 polarization_axis.centers,
+                                                 attitude = att,
+                                                 weight=exposure,
+                                                 out=psr.contents,
+                                                 add_inplace=True)
+
+        return PointSourceResponse(axes, contents = psr)
 

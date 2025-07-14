@@ -44,7 +44,33 @@ class BinnedThreeMLPointSourceResponse(BinnedThreeMLSourceResponseInterface):
                  direction_axis: HealpixAxis,
                  energy_axis:Axis,
                  polarization_axis:PolarizationAxis = None,
+                 scattmap_nside = None
                  ):
+        """
+
+        Parameters
+        ----------
+        instrument_response:
+            A BinnedInstrumentResponseInterface capable of providing the differential
+            effective area in local coordinates as a function of direction, energy and
+            polarization.
+        sc_history:
+            The SpacecraftHistory describing the SC orbit and attitude vs time.
+        direction_axis:
+            The desired effective binning of the photon direction (aka NuLamda).
+            This also determines the coordinate system. If the coordinate system is
+            inertial, then internally the `instrument_response` will be rotated
+            from local coordinate based on the `sc_history` information vs time.
+        energy_axis:
+            The desired effective binning of the photon energy (aka Ei)
+        polarization_axis:
+            The desired effective binning of the photon polarization angle (aka Pol).
+            This also defined the polarization coordinate system and convention.
+        scattmap_nside:
+            If transformation from local to an inertial system is needed, the spacecraft
+            attitude will be first discretized based on this nside. Default: twice the
+            nside of direction_axis.
+        """
 
         # TODO: FullDetectorResponse -> BinnedInstrumentResponseInterface
 
@@ -73,6 +99,11 @@ class BinnedThreeMLPointSourceResponse(BinnedThreeMLSourceResponseInterface):
         self._direction_axis = direction_axis
         self._energy_axis = energy_axis
         self._polarization_axis = polarization_axis
+
+        if scattmap_nside is None:
+            self._scattmap_nside = 2*self._direction_axis.nside
+        else:
+            self._scattmap_nside = scattmap_nside
 
     @property
     def coordsys(self):
@@ -156,20 +187,26 @@ class BinnedThreeMLPointSourceResponse(BinnedThreeMLSourceResponseInterface):
 
                 dwell_time_map = self._sc_ori.get_dwell_map(coord, base=self._direction_axis)
 
-                self._psr = PointSourceResponse.from_dwell_time_map(data.axes, self._response,
-                                                                    dwell_time_map, self._energy_axis,
+                self._psr = PointSourceResponse.from_dwell_time_map(data.axes,
+                                                                    self._response,
+                                                                    dwell_time_map,
+                                                                    self._energy_axis,
                                                                     self._polarization_axis)
 
             else:
-                # Inertial e/.g. galactic
-                raise NotImplementedError("Only local coordinates are supported for now.")
+                # Inertial e..g. galactic
 
-                # WiP
-                # TODO: Move these lines to inertial version.
-                scatt_map = self._sc_ori.get_scatt_map(nside=self._direction_axis.nside * 2,
+                scatt_map = self._sc_ori.get_scatt_map(nside=self._scattmap_nside,
                                                        target_coord=coord,
                                                        coordsys=self._direction_axis.coordsys,
                                                        earth_occ=True)
+
+                self._psr = PointSourceResponse.from_scatt_map(coord,
+                                                               data.axes,
+                                                               self._response,
+                                                               scatt_map,
+                                                               self._energy_axis,
+                                                               self._polarization_axis)
 
             logger.info(f"--> done (source name : {self._source.name})")
 
