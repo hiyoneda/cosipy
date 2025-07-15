@@ -237,7 +237,7 @@ class BinnedInstrumentResponse(BinnedInstrumentResponseInterface):
             weight = 1
 
         FullDetectorResponse._sum_rot_hist(dr_pix, out, weight,
-                                           axis = 'Psi',
+                                           axis = 'PsiChi',
                                            pol_axis = 'Pol')
 
         return out.contents

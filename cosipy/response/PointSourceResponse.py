@@ -184,6 +184,7 @@ class PointSourceResponse(Histogram):
             axes += [polarization_axis]
 
         axes += list(measured_axes)
+        axes = Axes(axes)
 
         psr = Quantity(np.empty(shape=axes.shape), unit = u.cm * u.cm * u.s)
 
@@ -198,10 +199,10 @@ class PointSourceResponse(Histogram):
             response.differential_effective_area(measured_axes,
                                                  coord,
                                                  energy_axis.centers,
-                                                 polarization_axis.centers,
+                                                 None if polarization_axis is None else polarization_axis.centers,
                                                  attitude = att,
                                                  weight=exposure,
-                                                 out=psr.contents,
+                                                 out=psr,
                                                  add_inplace=True)
 
         return PointSourceResponse(axes, contents = psr)

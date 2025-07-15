@@ -566,7 +566,7 @@ class SpacecraftHistory:
                        target_coord=None,
                        scheme = 'ring',
                        coordsys = 'galactic',
-                       r_earth = 6378.0,
+                       r_earth = None,
                        earth_occ = True
                        ) -> SpacecraftAttitudeMap:
 
@@ -585,7 +585,7 @@ class SpacecraftHistory:
             The scheme of the scatt map (the default is "ring")
         coordsys : str, optional
             The coordinate system used in the scatt map (the default is "galactic).
-        r_earth : float, optional
+        r_earth : Quantity, optional
             Earth radius in km (default is 6378 km).
         earth_occ : bool, optional
             Option to include Earth occultation in scatt map calculation.
@@ -596,7 +596,10 @@ class SpacecraftHistory:
         h_ori : cosipy.spacecraftfile.scatt_map.SpacecraftAttitudeMap
             The spacecraft attitude map.
         """
-        
+
+        if r_earth is None:
+            r_earth = 6378.0 * u.km
+
         # Check if target_coord is needed
         if earth_occ and target_coord is None:
             raise ValueError("target_coord is needed when earth_occ = True")
@@ -619,11 +622,11 @@ class SpacecraftHistory:
         x,y,z = attitudes[:-1].as_axes()
        
         # Get max angle based on altitude:
-        max_angle = np.pi - np.arcsin(r_earth/(r_earth + altitude))
-        max_angle *= (180/np.pi) # angles in degree
+        max_angle = np.pi*u.rad - np.arcsin(r_earth/(r_earth + altitude))
+        max_angle = max_angle.to_value(u.deg) # angles in degree
 
         # Define weights and set to 0 if blocked by Earth:
-        weight = self.livetime*u.s
+        weight = self.livetime
 
         if earth_occ:
             # Calculate angle between source direction and Earth zenith
