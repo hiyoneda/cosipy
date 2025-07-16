@@ -116,7 +116,7 @@ class FreeNormBinnedBackground(BinnedBackgroundInterface):
     def parameters(self) -> Dict[str, u.Quantity]:
         return {l:u.Quantity(n) for l,n in self.norms.items()}
 
-    def expectation(self, data:BinnedDataInterface, copy:bool)->Histogram:
+    def expectation(self, data:BinnedDataInterface, copy:bool = True)->Histogram:
         """
 
         Parameters
