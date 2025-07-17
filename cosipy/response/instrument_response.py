@@ -102,7 +102,7 @@ class BinnedInstrumentResponse(BinnedInstrumentResponseInterface):
         if not isinstance(axes["PsiChi"].coordsys, SpacecraftFrame):
             # Is inertial
             if attitude is None:
-                raise InputError("User need to provide the attitude information in order to transform to spacecraft coordinates")
+                raise RuntimeError("User need to provide the attitude information in order to transform to spacecraft coordinates")
 
             return self._differential_effective_area_inertial(attitude, axes, direction, polarization, weight, out, add_inplace)
 
