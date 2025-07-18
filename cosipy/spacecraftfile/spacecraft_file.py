@@ -404,7 +404,7 @@ class SpacecraftHistory:
         # Center values
         new_obstime = self.obstime[start_points[1]:stop_points[1]]
         new_attitude = self._attitude.as_matrix()[start_points[1]:stop_points[1]]
-        new_location = self._gcrs[start_points[1]:stop_points[1]]
+        new_location = self._gcrs[start_points[1]:stop_points[1]].cartesian.xyz
         new_livetime = self.livetime[start_points[1]:stop_points[0]]
 
         # Left edge
@@ -420,10 +420,8 @@ class SpacecraftHistory:
             start_attitude = self._interp_attitude(start_points, start_weights)
             new_attitude = np.append(start_attitude.as_matrix()[None], new_attitude, axis=0)
 
-            start_location = self._interp_location(start_points, start_weights)[None]
-            new_location = EarthLocation.from_geocentric(np.append(start_location.x, new_location.x),
-                                                         np.append(start_location.y, new_location.y),
-                                                         np.append(start_location.z, new_location.z))
+            start_location = self._interp_location(start_points, start_weights)[None].cartesian.xyz
+            new_location = np.append(start_location, new_location, axis = 1)
 
             first_livetime = self.livetime[start_points[0]] * start_weights[0]
             new_livetime = np.append(first_livetime, new_livetime)
@@ -439,11 +437,11 @@ class SpacecraftHistory:
         new_attitude = np.append(new_attitude, stop_attitude.as_matrix()[None], axis=0)
         new_attitude = Attitude.from_matrix(new_attitude, frame=self._attitude.frame)
 
-        stop_location = self._interp_location(stop_points, stop_weights)[None]
-        new_location = EarthLocation.from_geocentric(np.append(new_location.x, stop_location.x),
-                                                     np.append(new_location.y, stop_location.y),
-                                                     np.append(new_location.z, stop_location.z))
+        stop_location = self._interp_location(stop_points, stop_weights)[None].cartesian.xyz
+        new_location = np.append(new_location, stop_location, axis=1)
 
+        new_location = GCRS(x = new_location[0], y = new_location[1], z = new_location[2],
+                            representation_type='cartesian')
 
         if np.all(start_points == stop_points):
             # This can only happen if the requested interval fell completely
