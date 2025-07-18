@@ -44,107 +44,50 @@ def main():
     # fetch_wasabi_file('COSI-SMEX/DC2/Responses/SMEXv12.Continuum.HEALPixO3_10bins_log_flat.binnedimaging.imagingresponse.nonsparse_nside8.area.good_chunks_unzip.h5.zip', output=str(data_path / 'SMEXv12.Continuum.HEALPixO3_10bins_log_flat.binnedimaging.imagingresponse.nonsparse_nside8.area.good_chunks_unzip.h5.zip'), unzip = True, checksum = 'e8ff763c5d9e63d3797567a4a51d9eda')
 
 
-    case = 'grb'
-    case = 'crab'
+    # Set model to fit
+    l = 93.
+    b = -53.
 
-    if case == 'grb':
+    alpha = -1
+    beta = -3
+    xp = 450. * u.keV
+    piv = 500. * u.keV
+    K = 1 / u.cm / u.cm / u.s / u.keV
 
-        # Set model to fit
-        l = 93.
-        b = -53.
+    spectrum = Band()
+    spectrum.beta.min_value = -15.0
+    spectrum.alpha.value = alpha
+    spectrum.beta.value = beta
+    spectrum.xp.value = xp.value
+    spectrum.K.value = K.value
+    spectrum.piv.value = piv.value
+    spectrum.xp.unit = xp.unit
+    spectrum.K.unit = K.unit
+    spectrum.piv.unit = piv.unit
 
-        alpha = -1
-        beta = -3
-        xp = 450. * u.keV
-        piv = 500. * u.keV
-        K = 1 / u.cm / u.cm / u.s / u.keV
+    source = PointSource("source",  # Name of source (arbitrary, but needs to be unique)
+                         l=l,  # Longitude (deg)
+                         b=b,  # Latitude (deg)
+                         spectral_shape=spectrum)  # Spectral model
 
-        spectrum = Band()
-        spectrum.beta.min_value = -15.0
-        spectrum.alpha.value = alpha
-        spectrum.beta.value = beta
-        spectrum.xp.value = xp.value
-        spectrum.K.value = K.value
-        spectrum.piv.value = piv.value
-        spectrum.xp.unit = xp.unit
-        spectrum.K.unit = K.unit
-        spectrum.piv.unit = piv.unit
+    # Date preparation
+    binned_data = BinnedData(data_path / "grb.yaml")
+    binned_data.load_binned_data_from_hdf5(binned_data=data_path / "grb_bkg_binned_data.hdf5")
 
-        source = PointSource("source",  # Name of source (arbitrary, but needs to be unique)
-                             l=l,  # Longitude (deg)
-                             b=b,  # Latitude (deg)
-                             spectral_shape=spectrum)  # Spectral model
+    bkg = BinnedData(data_path / "background.yaml")
 
-        # Date preparation
-        binned_data = BinnedData(data_path / "grb.yaml")
-        binned_data.load_binned_data_from_hdf5(binned_data=data_path / "grb_bkg_binned_data.hdf5")
+    bkg.load_binned_data_from_hdf5(binned_data=data_path / "bkg_binned_data_1s_local.hdf5")
 
-        bkg = BinnedData(data_path / "background.yaml")
+    bkg_tmin = 1842597310.0
+    bkg_tmax = 1842597550.0
+    bkg_min = np.where(bkg.binned_data.axes['Time'].edges.value == bkg_tmin)[0][0]
+    bkg_max = np.where(bkg.binned_data.axes['Time'].edges.value == bkg_tmax)[0][0]
+    bkg_dist = bkg.binned_data.slice[{'Time': slice(bkg_min, bkg_max)}].project('Em', 'Phi', 'PsiChi')
 
-        bkg.load_binned_data_from_hdf5(binned_data=data_path / "bkg_binned_data_1s_local.hdf5")
-
-        bkg_tmin = 1842597310.0
-        bkg_tmax = 1842597550.0
-        bkg_min = np.where(bkg.binned_data.axes['Time'].edges.value == bkg_tmin)[0][0]
-        bkg_max = np.where(bkg.binned_data.axes['Time'].edges.value == bkg_tmax)[0][0]
-        bkg_dist = bkg.binned_data.slice[{'Time': slice(bkg_min, bkg_max)}].project('Em', 'Phi', 'PsiChi')
-
-        tmin = Time(1842597410.0, format='unix')
-        tmax = Time(1842597450.0, format='unix')
-
-    elif case == 'crab':
-
-        # Set model to fit
-        l = 184.56
-        b = -5.78
-
-        alpha = -1.99
-        beta = -2.32
-        E0 = 531. * (alpha - beta) * u.keV
-        xp = E0 * (alpha + 2) / (alpha - beta)
-        piv = 500. * u.keV
-        K = 3.07e-5 / u.cm / u.cm / u.s / u.keV
-
-        spectrum = Band()
-
-        spectrum.alpha.min_value = -2.14
-        spectrum.alpha.max_value = 3.0
-        spectrum.beta.min_value = -5.0
-        spectrum.beta.max_value = -2.15
-        spectrum.xp.min_value = 1.0
-
-        spectrum.alpha.value = alpha
-        spectrum.beta.value = beta
-        spectrum.xp.value = xp.value
-        spectrum.K.value = K.value
-        spectrum.piv.value = piv.value
-
-        spectrum.xp.unit = xp.unit
-        spectrum.K.unit = K.unit
-        spectrum.piv.unit = piv.unit
-
-        spectrum.alpha.delta = 0.01
-        spectrum.beta.delta = 0.01
-
-        source = PointSource("source",  # Name of source (arbitrary, but needs to be unique)
-                             l=l,  # Longitude (deg)
-                             b=b,  # Latitude (deg)
-                             spectral_shape=spectrum)  # Spectral model
-
-        # Data preparation
-        binned_data = BinnedData(data_path / "crab.yaml")
-        bkg = BinnedData(data_path / "background.yaml")
-
-        binned_data.load_binned_data_from_hdf5(binned_data=data_path / "crab_bkg_binned_data.hdf5")
-        bkg.load_binned_data_from_hdf5(binned_data=data_path / "bkg_binned_data.hdf5")
-
-        bkg_dist = bkg.binned_data.project('Em', 'Phi', 'PsiChi')
-
-        # SC attitude and orbit
-        ori = SpacecraftHistory.open(data_path / "20280301_3_month_with_orbital_info.ori")
-
-    else:
-        raise ValueError(r"Unknown case '{case}'")
+    tmin = Time(1842597410.0, format='unix')
+    tmax = Time(1842597450.0, format='unix')
+    ori = SpacecraftHistory.open(data_path / "20280301_3_month_with_orbital_info.ori", tmin, tmax)
+    ori = ori.select_interval(tmin, tmax) # Function changed name during refactoring
 
     # Prepare instrument response
     dr_path = data_path / "SMEXv12.Continuum.HEALPixO3_10bins_log_flat.binnedimaging.imagingresponse.nonsparse_nside8.area.good_chunks_unzip.h5"
@@ -168,10 +111,10 @@ def main():
     # can provide the response for an arbitrary directions, Ei and Pol values.
     # NOTE: this is currently only implemented for data in local coords
     psr = BinnedThreeMLPointSourceResponse(instrument_response,
-                                               sc_history=ori,
-                                               direction_axis = data.axes['PsiChi'],
-                                               energy_axis = dr.axes['Ei'],
-                                               polarization_axis = dr.axes['Pol'] if 'Pol' in dr.axes.labels else None)
+                                           sc_history=ori,
+                                           direction_axis = data.axes['PsiChi'],
+                                           energy_axis = dr.axes['Ei'],
+                                           polarization_axis = dr.axes['Pol'] if 'Pol' in dr.axes.labels else None)
 
     response = BinnedThreeMLModelFolding(point_source_response = psr)
 
@@ -199,90 +142,6 @@ def main():
     like.fit()
     results = like.results
     print(results.display())
-
-
-    # plot
-    if case == 'crab':
-
-        alpha_inj = -1.99
-        beta_inj = -2.32
-        E0_inj = 531. * (alpha_inj - beta_inj) * u.keV
-        xp_inj = E0_inj * (alpha_inj + 2) / (alpha_inj - beta_inj)
-        piv_inj = 100. * u.keV
-        K_inj = 7.56e-4 / u.cm / u.cm / u.s / u.keV
-
-        spectrum_inj = Band()
-
-        spectrum_inj.alpha.min_value = -2.14
-        spectrum_inj.alpha.max_value = 3.0
-        spectrum_inj.beta.min_value = -5.0
-        spectrum_inj.beta.max_value = -2.15
-        spectrum_inj.xp.min_value = 1.0
-
-        spectrum_inj.alpha.value = alpha_inj
-        spectrum_inj.beta.value = beta_inj
-        spectrum_inj.xp.value = xp_inj.value
-        spectrum_inj.K.value = K_inj.value
-        spectrum_inj.piv.value = piv_inj.value
-
-        spectrum_inj.xp.unit = xp_inj.unit
-        spectrum_inj.K.unit = K_inj.unit
-        spectrum_inj.piv.unit = piv_inj.unit
-
-        results = like.results
-
-        print(results.display())
-
-        parameters = {par.name: results.get_variates(par.path)
-                      for par in results.optimized_model["source"].parameters.values()
-                      if par.free}
-
-        results_err = results.propagate(results.optimized_model["source"].spectrum.main.shape.evaluate_at, **parameters)
-
-        print(results.optimized_model["source"])
-
-        energy = np.geomspace(100 * u.keV, 10 * u.MeV).to_value(u.keV)
-
-        flux_lo = np.zeros_like(energy)
-        flux_median = np.zeros_like(energy)
-        flux_hi = np.zeros_like(energy)
-        flux_inj = np.zeros_like(energy)
-
-        for i, e in enumerate(energy):
-            flux = results_err(e)
-            flux_median[i] = flux.median
-            flux_lo[i], flux_hi[i] = flux.equal_tail_interval(cl=0.68)
-            flux_inj[i] = spectrum_inj.evaluate_at(e)
-
-        binned_energy_edges = binned_data.binned_data.axes['Em'].edges.value
-        binned_energy = np.array([])
-        bin_sizes = np.array([])
-
-        for i in range(len(binned_energy_edges) - 1):
-            binned_energy = np.append(binned_energy, (binned_energy_edges[i + 1] + binned_energy_edges[i]) / 2)
-            bin_sizes = np.append(bin_sizes, binned_energy_edges[i + 1] - binned_energy_edges[i])
-
-        fig, ax = plt.subplots()
-
-        ax.plot(energy, energy * energy * flux_median, label="Best fit")
-        ax.fill_between(energy, energy * energy * flux_lo, energy * energy * flux_hi, alpha=.5,
-                        label="Best fit (errors)")
-        ax.plot(energy, energy * energy * flux_inj, color='black', ls=":", label="Injected")
-
-        ax.set_xscale("log")
-        ax.set_yscale("log")
-
-        ax.set_xlabel("Energy (keV)")
-        ax.set_ylabel(r"$E^2 \frac{dN}{dE}$ (keV cm$^{-2}$ s$^{-1}$)")
-
-        ax.legend()
-
-        plt.show()
-
-        here
-
-    else:
-        raise ValueError(r"Unknown case '{case}'")
 
 
 if __name__ == "__main__":
