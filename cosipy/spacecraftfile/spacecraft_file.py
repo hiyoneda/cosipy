@@ -3,9 +3,10 @@ from pathlib import Path
 import numpy as np
 
 import astropy.units as u
+import astropy.constants as c
 
 from astropy.time import Time
-from astropy.coordinates import SkyCoord, EarthLocation, GCRS, ITRS
+from astropy.coordinates import SkyCoord, EarthLocation, GCRS, SphericalRepresentation, CartesianRepresentation
 from mhealpy import HealpixBase
 from histpy import Histogram, TimeAxis
 from mhealpy import HealpixMap
@@ -28,7 +29,7 @@ class SpacecraftHistory:
     def __init__(self,
                  obstime: Time,
                  attitude: Attitude,
-                 location: Union[EarthLocation, GCRS, ITRS],
+                 location: GCRS,
                  livetime: u.Quantity = None):
         """
         Handles the spacecraft orientation. Calculates the dwell obstime
@@ -42,7 +43,7 @@ class SpacecraftHistory:
         attitude:
             Spacecraft orientation with respect to an inertial system.
         location:
-            Location of the spacecraft at each timestamp.
+            Location of the spacecraft at each timestamp in Earth-centered inertial (ECI) coordinates.
         livetime:
             Time the instrument was live for the corresponding
             obstime bin. Should have one less element than the number of
@@ -65,24 +66,7 @@ class SpacecraftHistory:
 
         self._attitude = attitude
 
-        self._location = self._standardize_location(location)
-
-    def _standardize_location(self, location: Union[EarthLocation, GCRS, ITRS]):
-
-        if isinstance(location, EarthLocation):
-            # Already the standard format
-            return location
-
-        elif isinstance(location, GCRS):
-            # GCRS -> ITRS and call again
-            return self._standardize_location(location.transform_to(ITRS(self.obstime)))
-
-        elif isinstance(location, ITRS):
-            # ITRS -> EarthLocation
-            return location.earth_location
-
-        else:
-            raise TypeError(f"Location type {type(location)} not supported.")
+        self._gcrs = location
 
     @property
     def nintervals(self):
@@ -125,8 +109,16 @@ class SpacecraftHistory:
         return self._attitude
 
     @property
-    def location(self)->EarthLocation:
-        return self._location
+    def location(self)->GCRS:
+        return self._gcrs
+
+    @property
+    def earth_zenith(self) -> SkyCoord:
+        """
+        Pointing of the Earth's zenith at the location of the SC
+        """
+        gcrs_sph = self._gcrs.represent_as(SphericalRepresentation)
+        return SkyCoord(ra=gcrs_sph.lon, dec=gcrs_sph.lat, frame='icrs', copy=False)
 
     @classmethod
     def open(cls, file, tstart:Time = None, tstop:Time = None) -> "SpacecraftHistory":
@@ -229,11 +221,11 @@ class SpacecraftHistory:
         livetime = livetime[:-1]*u.s # The last element is 0.
 
         # Currently, the orbit information is in a weird format.
-        # The altitude it's with respect to the Earth's source, like
+        # The altitude is specified with respect to the Earth's surface, like
         # you would specify it in a geodetic format, while
         # the lon/lat is specified in J2000, like you would in ECI.
         # Eventually everything should be in ECI (GCRS in astropy
-        # for all purposes), but for now let's do the conversion.
+        # for all practical purposes), but for now let's do the conversion.
         # 1. Get the direction in galactic
         # 2. Transform to GCRS, which uses RA/Dec (ICRS-like).
         #    This is represented in the unit sphere
@@ -241,11 +233,12 @@ class SpacecraftHistory:
         #    Should take care of the non-spherical Earth
         # 4. Go back GCRS, now with the correct distance
         #    (from the Earth's center)
-        zenith_gal = SkyCoord(l=earth_lon * u.deg, b=earth_lat * u.deg, frame="galactic")
+        zenith_gal = SkyCoord(l=earth_lon * u.deg, b=earth_lat * u.deg, frame="galactic", copy = False)
         gcrs = zenith_gal.transform_to('gcrs')
         earth_loc = EarthLocation.from_geodetic(lon=gcrs.ra, lat=gcrs.dec, height=altitude*u.km)
+        gcrs2 = GCRS(ra=gcrs.ra, dec=gcrs.dec, distance=earth_loc.itrs.cartesian.norm(), copy=False)
 
-        return cls(time, attitude, earth_loc, livetime)
+        return cls(time, attitude, gcrs2, livetime)
 
     def _interp_attitude(self, points, weights) -> Attitude:
         """
@@ -281,7 +274,7 @@ class SpacecraftHistory:
 
         return self._interp_attitude(points, weights)
 
-    def _interp_location(self, points, weights) -> EarthLocation:
+    def _interp_location(self, points, weights) -> GCRS:
         """
 
         Parameters
@@ -295,18 +288,15 @@ class SpacecraftHistory:
         """
 
         # TODO: we could do a better interpolation using more points and orbital dynamics
-
-        x = self._location.x
-        y = self._location.y
-        z = self._location.z
+        x, y, z = self._gcrs.represent_as('cartesian').xyz
 
         x_interp = x[points[0]] * weights[0] + x[points[1]] * weights[1]
         y_interp = y[points[0]] * weights[0] + y[points[1]] * weights[1]
         z_interp = z[points[0]] * weights[0] + z[points[1]] * weights[1]
 
-        interp_location = EarthLocation.from_geocentric(x=x_interp, y=y_interp, z=z_interp)
+        interp_gcrs = GCRS(x=x_interp, y=y_interp, z=z_interp, representation_type = 'cartesian')
 
-        return interp_location
+        return interp_gcrs
 
     def interp_location(self, time) -> EarthLocation:
         """
@@ -414,7 +404,7 @@ class SpacecraftHistory:
         # Center values
         new_obstime = self.obstime[start_points[1]:stop_points[1]]
         new_attitude = self._attitude.as_matrix()[start_points[1]:stop_points[1]]
-        new_location = self._location[start_points[1]:stop_points[1]]
+        new_location = self._gcrs[start_points[1]:stop_points[1]]
         new_livetime = self.livetime[start_points[1]:stop_points[0]]
 
         # Left edge
@@ -566,7 +556,6 @@ class SpacecraftHistory:
                        target_coord=None,
                        scheme = 'ring',
                        coordsys = 'galactic',
-                       r_earth = None,
                        earth_occ = True
                        ) -> SpacecraftAttitudeMap:
 
@@ -585,8 +574,6 @@ class SpacecraftHistory:
             The scheme of the scatt map (the default is "ring")
         coordsys : str, optional
             The coordinate system used in the scatt map (the default is "galactic).
-        r_earth : Quantity, optional
-            Earth radius in km (default is 6378 km).
         earth_occ : bool, optional
             Option to include Earth occultation in scatt map calculation.
             Default is True. 
@@ -597,22 +584,16 @@ class SpacecraftHistory:
             The spacecraft attitude map.
         """
 
-        if r_earth is None:
-            r_earth = 6378.0 * u.km
-
         # Check if target_coord is needed
         if earth_occ and target_coord is None:
             raise ValueError("target_coord is needed when earth_occ = True")
 
         # Get orientations
-        timestamps = self.obstime
         attitudes = self.attitude
 
         # Altitude at each point in the orbit:
-        altitude = self._location.height
-
-        # Earth zenith at each point in the orbit:
-        earth_zenith = self.location.itrs
+        gcrs_cart = self._gcrs.represent_as(CartesianRepresentation)
+        dist_earth_center = gcrs_cart.norm()
 
         # Fill (only 2 axes needed to fully define the orientation)
         h_ori = SpacecraftAttitudeMap(nside = nside,
@@ -622,8 +603,7 @@ class SpacecraftHistory:
         x,y,z = attitudes[:-1].as_axes()
        
         # Get max angle based on altitude:
-        max_angle = np.pi*u.rad - np.arcsin(r_earth/(r_earth + altitude))
-        max_angle = max_angle.to_value(u.deg) # angles in degree
+        max_angle = np.pi*u.rad - np.arcsin(c.R_earth/dist_earth_center)
 
         # Define weights and set to 0 if blocked by Earth:
         weight = self.livetime
@@ -631,10 +611,10 @@ class SpacecraftHistory:
         if earth_occ:
             # Calculate angle between source direction and Earth zenith
             # for each obstime stamp:
-            src_angle = target_coord.separation(earth_zenith)
+            src_angle = target_coord.separation(self.earth_zenith)
 
             # Get pointings that are occulted by Earth:
-            earth_occ_index = src_angle.value >= max_angle
+            earth_occ_index = src_angle >= max_angle
 
             # Mask
             weight[earth_occ_index[:-1]] = 0
