@@ -6,6 +6,8 @@ import astropy.units as u
 from astropy.units import Quantity
 from scoords import Attitude, SpacecraftFrame
 
+from cosipy.data_io import EmCDSBinnedData
+from cosipy.interfaces import BinnedDataInterface
 from cosipy.interfaces.instrument_response_interface import BinnedInstrumentResponseInterface
 
 from cosipy.polarization import PolarizationAngle, PolarizationAxis
@@ -27,7 +29,7 @@ class BinnedInstrumentResponse(BinnedInstrumentResponseInterface):
         return 'Pol' in self._dr.axes.labels
 
     def differential_effective_area(self,
-                                    axes: Axes,
+                                    data: BinnedDataInterface,
                                     direction: SkyCoord,
                                     energy:u.Quantity,
                                     polarization:PolarizationAngle = None,
@@ -44,8 +46,8 @@ class BinnedInstrumentResponse(BinnedInstrumentResponseInterface):
 
         Parameters
         ----------
-        axes:
-            Measured axes
+        data
+            Binned measurements. We can only handle EmCDSBinnedData
         direction:
             Photon incoming direction in SC coordinates
         energy:
@@ -71,6 +73,11 @@ class BinnedInstrumentResponse(BinnedInstrumentResponseInterface):
         """
 
         # Check if we're getting the expected axes and other limitations
+        if not isinstance(data, EmCDSBinnedData):
+            raise TypeError(f"Wrong data type '{type(data)}', expected {EmCDSBinnedData}.")
+
+        axes = data.axes
+
         if set(axes.labels) != {'Em','PsiChi','Phi'}:
             raise ValueError(f"Unexpected axes labels. Expecting \"{{'Em','PsiChi','Phi'}}\", got {axes.labels}")
 

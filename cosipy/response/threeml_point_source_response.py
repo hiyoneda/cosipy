@@ -202,7 +202,7 @@ class BinnedThreeMLPointSourceResponse(BinnedThreeMLSourceResponseInterface):
                                                        earth_occ=True)
 
                 self._psr = PointSourceResponse.from_scatt_map(coord,
-                                                               data.axes,
+                                                               data,
                                                                self._response,
                                                                scatt_map,
                                                                self._energy_axis,

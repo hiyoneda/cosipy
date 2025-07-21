@@ -4,7 +4,7 @@ from astropy.units import Quantity
 from cosipy.polarization.polarization_axis import PolarizationAxis
 from cosipy.threeml.util import to_linear_polarization
 from mhealpy import HealpixMap
-from cosipy.interfaces import BinnedInstrumentResponseInterface
+from cosipy.interfaces import BinnedInstrumentResponseInterface, BinnedDataInterface
 from histpy import Histogram, Axis, Axes  # , Axes, Axis
 
 import numpy as np
@@ -16,6 +16,7 @@ from .functions import get_integrated_spectral_model
 import logging
 
 from cosipy.spacecraftfile import SpacecraftAttitudeMap
+from ..data_io import EmCDSBinnedData
 
 logger = logging.getLogger(__name__)
 
@@ -157,7 +158,7 @@ class PointSourceResponse(Histogram):
     @classmethod
     def from_scatt_map(cls,
                         coord: SkyCoord,
-                        measured_axes:Axes,
+                        data:BinnedDataInterface,
                         response: BinnedInstrumentResponseInterface,
                         scatt_map: SpacecraftAttitudeMap,
                         energy_axis: Axis,
@@ -178,12 +179,15 @@ class PointSourceResponse(Histogram):
 
         """
 
+        if not isinstance(data, EmCDSBinnedData):
+            raise TypeError(f"Wrong data type '{type(data)}', expected {EmCDSBinnedData}.")
+
         axes = [energy_axis]
 
         if polarization_axis is not None:
             axes += [polarization_axis]
 
-        axes += list(measured_axes)
+        axes += list(data.axes)
         axes = Axes(axes)
 
         psr = Quantity(np.empty(shape=axes.shape), unit = u.cm * u.cm * u.s)
@@ -196,7 +200,7 @@ class PointSourceResponse(Histogram):
                                      y=scatt_map.axes['y'].pix2skycoord(pixels[1]))
 
 
-            response.differential_effective_area(measured_axes,
+            response.differential_effective_area(data,
                                                  coord,
                                                  energy_axis.centers,
                                                  None if polarization_axis is None else polarization_axis.centers,

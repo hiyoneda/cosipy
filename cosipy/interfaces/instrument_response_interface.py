@@ -7,6 +7,7 @@ from histpy import Axes, Histogram
 from astropy import units as u
 from scoords import Attitude
 
+from cosipy.interfaces import BinnedDataInterface
 from cosipy.polarization import PolarizationAngle
 
 __all__ = ["BinnedInstrumentResponseInterface"]
@@ -14,7 +15,7 @@ __all__ = ["BinnedInstrumentResponseInterface"]
 class BinnedInstrumentResponseInterface(Protocol):
 
     def differential_effective_area(self,
-                                    axes: Axes,
+                                    data: BinnedDataInterface,
                                     direction: SkyCoord,
                                     energy:u.Quantity,
                                     polarization:PolarizationAngle,
@@ -26,8 +27,8 @@ class BinnedInstrumentResponseInterface(Protocol):
 
         Parameters
         ----------
-        axes:
-            Measured axes
+        data:
+            Binned data
         direction:
             Photon incoming direction. If not in a SpacecraftFrame, then provide an attitude for the transformation
         energy:
