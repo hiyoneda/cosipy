@@ -41,10 +41,9 @@ class BinnedThreeMLPointSourceResponse(BinnedThreeMLSourceResponseInterface):
     def __init__(self,
                  instrument_response: BinnedInstrumentResponseInterface,
                  sc_history: SpacecraftHistory,
-                 direction_axis: HealpixAxis,
                  energy_axis:Axis,
                  polarization_axis:PolarizationAxis = None,
-                 scattmap_nside = None
+                 nside = None
                  ):
         """
 
@@ -56,20 +55,15 @@ class BinnedThreeMLPointSourceResponse(BinnedThreeMLSourceResponseInterface):
             polarization.
         sc_history:
             The SpacecraftHistory describing the SC orbit and attitude vs time.
-        direction_axis:
-            The desired effective binning of the photon direction (aka NuLamda).
-            This also determines the coordinate system. If the coordinate system is
-            inertial, then internally the `instrument_response` will be rotated
-            from local coordinate based on the `sc_history` information vs time.
         energy_axis:
             The desired effective binning of the photon energy (aka Ei)
         polarization_axis:
             The desired effective binning of the photon polarization angle (aka Pol).
             This also defined the polarization coordinate system and convention.
-        scattmap_nside:
-            If transformation from local to an inertial system is needed, the spacecraft
-            attitude will be first discretized based on this nside. Default: twice the
-            nside of direction_axis.
+        nside:
+            - If transformation from local to an inertial system is needed, the spacecraft
+            attitude will be first discretized based on this nside.
+            - If local, this is the nside of the dwell time map
         """
 
         # TODO: FullDetectorResponse -> BinnedInstrumentResponseInterface
@@ -96,18 +90,10 @@ class BinnedThreeMLPointSourceResponse(BinnedThreeMLSourceResponseInterface):
         self._psr = None
 
         self._response = instrument_response
-        self._direction_axis = direction_axis
         self._energy_axis = energy_axis
         self._polarization_axis = polarization_axis
 
-        if scattmap_nside is None:
-            self._scattmap_nside = 2*self._direction_axis.nside
-        else:
-            self._scattmap_nside = scattmap_nside
-
-    @property
-    def coordsys(self):
-        return self._direction_axis.coordsys
+        self._nside = nside
 
     def clear_cache(self):
 
@@ -177,15 +163,12 @@ class BinnedThreeMLPointSourceResponse(BinnedThreeMLSourceResponseInterface):
 
             coordsys = data.axes["PsiChi"].coordsys
 
-            if coordsys != self.coordsys:
-                raise ValueError(f"Coordinate system mismatch. Data has {coordsys} while this class has {self.coordsys}.")
-
             logger.info("... Calculating point source response ...")
 
-            if isinstance(self.coordsys, SpacecraftFrame):
+            if isinstance(coordsys, SpacecraftFrame):
                 # Local coordinates
 
-                dwell_time_map = self._sc_ori.get_dwell_map(coord, base=self._direction_axis)
+                dwell_time_map = self._sc_ori.get_dwell_map(coord, nside = self._nside)
 
                 self._psr = PointSourceResponse.from_dwell_time_map(data.axes,
                                                                     self._response,
@@ -196,9 +179,9 @@ class BinnedThreeMLPointSourceResponse(BinnedThreeMLSourceResponseInterface):
             else:
                 # Inertial e..g. galactic
 
-                scatt_map = self._sc_ori.get_scatt_map(nside=self._scattmap_nside,
+                scatt_map = self._sc_ori.get_scatt_map(nside=self._nside,
                                                        target_coord=coord,
-                                                       coordsys=self._direction_axis.coordsys,
+                                                       coordsys=coordsys,
                                                        earth_occ=True)
 
                 self._psr = PointSourceResponse.from_scatt_map(coord,
