@@ -5,6 +5,7 @@ from astromodels import LinearPolarization, SpectralComponent, Parameter
 from astromodels.core.polarization import Polarization
 import astropy.units as u
 from cosipy import SpacecraftHistory
+from cosipy.interfaces.data_interface import EventData
 
 from cosipy.statistics import PoissonLikelihood
 
@@ -12,7 +13,7 @@ from cosipy.interfaces import (BinnedDataInterface,
                                BinnedBackgroundInterface,
                                BinnedThreeMLModelFoldingInterface,
                                BinnedThreeMLSourceResponseInterface,
-                               ThreeMLPluginInterface, BackgroundInterface)
+                               ThreeMLPluginInterface, BackgroundInterface, FloatingMeasurement)
 from histpy import Axis, Axes, Histogram
 import numpy as np
 from scipy.stats import norm, uniform
@@ -43,7 +44,7 @@ toy_axis = Axis(np.linspace(-5, 5))
 nevents_signal = 1000
 nevents_bkg = 1000
 
-class ToyData(BinnedDataInterface):
+class ToyData(BinnedDataInterface, EventData):
     # Random data. Normal signal on top of uniform bkg
     # Since the interfaces are Protocols, they don't *have*
     # to derive from the base class, but doing some helps
@@ -53,10 +54,20 @@ class ToyData(BinnedDataInterface):
         self._data = Histogram(toy_axis)
 
         # Signal
-        self._data.fill(norm.rvs(size=nevents_signal))
+        event_data = norm.rvs(size=nevents_signal)
 
         # Bkg
-        self._data.fill(uniform.rvs(toy_axis.lo_lim, toy_axis.hi_lim-toy_axis.lo_lim, size=nevents_bkg))
+        bkg_event_data = uniform.rvs(toy_axis.lo_lim, toy_axis.hi_lim-toy_axis.lo_lim, size=nevents_bkg)
+
+        # Join
+        event_data = np.append(event_data, bkg_event_data)
+
+        # Binned
+        self._data.fill(event_data)
+
+        #Unbinned
+        measurements = FloatingMeasurement(event_data, 'x')
+        EventData.__init__(self, measurements)
 
     @property
     def data(self) -> Histogram:
@@ -65,7 +76,6 @@ class ToyData(BinnedDataInterface):
     @property
     def axes(self) -> Axes:
         return self._data.axes
-
 
 class ToyBkg(BinnedBackgroundInterface):
     """

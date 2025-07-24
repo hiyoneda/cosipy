@@ -5,7 +5,7 @@ __all__ = ['LikelihoodInterface',
            'UnbinnedLikelihoodInterface']
 
 from .expectation_interface import UnbinnedExpectationInterface, BinnedExpectationInterface, ExpectationInterface
-from .data_interface import UnbinnedDataInterface, BinnedDataInterface, DataInterface
+from .data_interface import BinnedDataInterface, DataInterface
 from .background_interface import UnbinnedBackgroundInterface, BinnedBackgroundInterface, BackgroundInterface
 
 @runtime_checkable

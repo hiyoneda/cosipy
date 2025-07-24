@@ -2,9 +2,7 @@ from typing import Protocol, runtime_checkable, Dict, Any
 
 import histpy
 import numpy as np
-from cosipy.interfaces import BinnedDataInterface
-
-from .measurements import Measurements
+from cosipy.interfaces import BinnedDataInterface, EventDataInterface
 
 __all__ = [
            "UnbinnedExpectationInterface",
@@ -36,7 +34,7 @@ class BinnedExpectationInterface(ExpectationInterface, Protocol):
 class UnbinnedExpectationInterface(ExpectationInterface, Protocol):
     @property
     def ncounts(self) -> float:...
-    def probability(self, measurements:Measurements) -> np.ndarray:...
+    def probability(self, data:EventDataInterface) -> np.ndarray:...
 
 
 
