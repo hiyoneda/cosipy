@@ -112,9 +112,9 @@ def main():
     # NOTE: this is currently only implemented for data in local coords
     psr = BinnedThreeMLPointSourceResponse(instrument_response,
                                            sc_history=ori,
-                                           direction_axis = data.axes['PsiChi'],
                                            energy_axis = dr.axes['Ei'],
-                                           polarization_axis = dr.axes['Pol'] if 'Pol' in dr.axes.labels else None)
+                                           polarization_axis = dr.axes['Pol'] if 'Pol' in dr.axes.labels else None,
+                                           nside = 2*data.axes['PsiChi'].nside)
 
     response = BinnedThreeMLModelFolding(point_source_response = psr)
 

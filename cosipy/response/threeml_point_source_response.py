@@ -170,7 +170,7 @@ class BinnedThreeMLPointSourceResponse(BinnedThreeMLSourceResponseInterface):
 
                 dwell_time_map = self._sc_ori.get_dwell_map(coord, nside = self._nside)
 
-                self._psr = PointSourceResponse.from_dwell_time_map(data.axes,
+                self._psr = PointSourceResponse.from_dwell_time_map(data,
                                                                     self._response,
                                                                     dwell_time_map,
                                                                     self._energy_axis,

@@ -128,7 +128,7 @@ class PointSourceResponse(Histogram):
 
     @classmethod
     def from_dwell_time_map(cls,
-                            measured_axes:Axes,
+                            data:BinnedDataInterface,
                             response: BinnedInstrumentResponseInterface,
                             exposure_map: HealpixMap,
                             energy_axis: Axis,
@@ -142,7 +142,7 @@ class PointSourceResponse(Histogram):
             axes += [polarization_axis]
             polarization_centers = polarization_axis.centers
 
-        axes += list(measured_axes)
+        axes += list(data.axes)
 
         psr = PointSourceResponse(axes, unit=u.cm * u.cm * u.s)
 
@@ -151,7 +151,7 @@ class PointSourceResponse(Histogram):
             coord = exposure_map.pix2skycoord(p)
 
             if exposure_map[p] != 0:
-                psr += response.differential_effective_area(measured_axes, coord, energy_axis.centers, polarization_centers) * exposure_map[p]
+                psr += response.differential_effective_area(data, coord, energy_axis.centers, polarization_centers) * exposure_map[p]
 
         return psr
 
