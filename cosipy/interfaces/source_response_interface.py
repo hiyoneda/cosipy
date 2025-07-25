@@ -2,7 +2,7 @@ from typing import Protocol, runtime_checkable
 from astromodels import Model
 from astromodels.sources import Source
 
-from .expectation_interface import BinnedExpectationInterface, UnbinnedExpectationInterface
+from .expectation_interface import BinnedExpectationInterface, ExpectationDensityInterface
 
 from cosipy.spacecraftfile import SpacecraftHistory
 
@@ -23,7 +23,7 @@ class ThreeMLModelFoldingInterface(Protocol):
         """
 
 @runtime_checkable
-class UnbinnedThreeMLModelFoldingInterface(UnbinnedExpectationInterface, ThreeMLModelFoldingInterface, Protocol):
+class UnbinnedThreeMLModelFoldingInterface(ThreeMLModelFoldingInterface, ExpectationDensityInterface, Protocol):
     """
     No new methods. Just the inherited ones.
     """
@@ -59,7 +59,7 @@ class ThreeMLSourceResponseInterface(Protocol):
         """
 
 @runtime_checkable
-class UnbinnedThreeMLSourceResponseInterface(UnbinnedExpectationInterface, ThreeMLSourceResponseInterface, Protocol):
+class UnbinnedThreeMLSourceResponseInterface(ThreeMLSourceResponseInterface, ExpectationDensityInterface, Protocol):
     """
     No new methods. Just the inherited ones.
     """

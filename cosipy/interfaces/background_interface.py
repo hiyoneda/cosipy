@@ -10,12 +10,12 @@ from astromodels import Parameter
 
 logger = logging.getLogger(__name__)
 
-from .expectation_interface import BinnedExpectationInterface, UnbinnedExpectationInterface
+from .expectation_interface import BinnedExpectationInterface, ExpectationDensityInterface
 
 __all__ = [
            "BackgroundInterface",
            "BinnedBackgroundInterface",
-           "UnbinnedBackgroundInterface",
+           "BackgroundDensityInterface",
            ]
 
 @runtime_checkable
@@ -31,7 +31,7 @@ class BinnedBackgroundInterface(BackgroundInterface, BinnedExpectationInterface,
     """
 
 @runtime_checkable
-class UnbinnedBackgroundInterface(BackgroundInterface, UnbinnedExpectationInterface, Protocol):
+class BackgroundDensityInterface(BackgroundInterface, ExpectationDensityInterface, Protocol):
     """
     No new methods, just the inherited one
     """

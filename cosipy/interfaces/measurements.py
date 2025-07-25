@@ -57,6 +57,11 @@ class ArrayLikeMeasurement(Measurement, Generic[T,t]):
     def __iter__(self) -> t:
         return self._data.__iter__()
 
+    @property
+    def data(self) -> T:
+        return self._data
+
+
 class QuantityMeasurement(ArrayLikeMeasurement[Quantity, Quantity]):
     """
     """

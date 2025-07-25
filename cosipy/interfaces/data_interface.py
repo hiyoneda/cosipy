@@ -1,4 +1,4 @@
-from typing import Protocol, runtime_checkable, Dict, Type, Any, Tuple, Iterator
+from typing import Protocol, runtime_checkable, Dict, Type, Any, Tuple, Iterator, Union
 
 from histpy import Histogram, Axes
 
@@ -19,7 +19,12 @@ class DataInterface(Protocol):
 @runtime_checkable
 class EventDataInterface(DataInterface, Protocol):
 
-    def __getitem__(self, item) -> Tuple:...
+    def __getitem__(self, item) -> Union[Tuple, Measurement]:
+        """
+        If item is:
+        - str: the value of specific measurement for all events
+        - int: all measurements for an specific event
+        """
 
     def __iter__(self) -> Iterator[Tuple]:...
 

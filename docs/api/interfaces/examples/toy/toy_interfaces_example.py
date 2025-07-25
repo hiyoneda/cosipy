@@ -5,15 +5,18 @@ from astromodels import LinearPolarization, SpectralComponent, Parameter
 from astromodels.core.polarization import Polarization
 import astropy.units as u
 from cosipy import SpacecraftHistory
-from cosipy.interfaces.data_interface import EventData
+from cosipy.interfaces.background_interface import BackgroundDensityInterface
+from cosipy.interfaces.data_interface import EventData, EventDataInterface
 
-from cosipy.statistics import PoissonLikelihood
+from cosipy.statistics import PoissonLikelihood, UnbinnedLikelihood
+
 
 from cosipy.interfaces import (BinnedDataInterface,
                                BinnedBackgroundInterface,
                                BinnedThreeMLModelFoldingInterface,
                                BinnedThreeMLSourceResponseInterface,
-                               ThreeMLPluginInterface, BackgroundInterface, FloatingMeasurement)
+                               ThreeMLPluginInterface, BackgroundInterface, FloatingMeasurement,
+                               UnbinnedThreeMLSourceResponseInterface, UnbinnedThreeMLModelFoldingInterface)
 from histpy import Axis, Axes, Histogram
 import numpy as np
 from scipy.stats import norm, uniform
@@ -77,7 +80,7 @@ class ToyData(BinnedDataInterface, EventData):
     def axes(self) -> Axes:
         return self._data.axes
 
-class ToyBkg(BinnedBackgroundInterface):
+class ToyBkg(BinnedBackgroundInterface, BackgroundDensityInterface):
     """
     Models a uniform background
     """
@@ -87,8 +90,18 @@ class ToyBkg(BinnedBackgroundInterface):
         self._unit_expectation[:] = 1 / self._unit_expectation.nbins
         self._norm = 1
 
+        # Doesn't need to be normalized
+        self._unit_expectation_density = np.broadcast_to(1/(toy_axis.hi_lim - toy_axis.lo_lim), data.nevents)
+
     def set_parameters(self, **parameters:u.Quantity) -> None:
         self._norm = parameters['norm'].value
+
+    def ncounts(self) -> float:
+        return self._norm
+
+    def expectation_density(self, data: EventDataInterface, copy: bool = True) -> np.ndarray:
+        #Always a copy
+        return self._norm*self._unit_expectation_density
 
     @property
     def parameters(self) -> Dict[str, u.Quantity]:
@@ -105,7 +118,7 @@ class ToyBkg(BinnedBackgroundInterface):
         # Always a copy
         return self._unit_expectation * self._norm
 
-class ToyPointSourceResponse(BinnedThreeMLSourceResponseInterface):
+class ToyPointSourceResponse(BinnedThreeMLSourceResponseInterface, UnbinnedThreeMLSourceResponseInterface):
     """
     This models a Gaussian signal in 1D, centered at 0 and with std = 1.
     The normalization --the "flux"-- is the only free parameters
@@ -115,6 +128,27 @@ class ToyPointSourceResponse(BinnedThreeMLSourceResponseInterface):
         self._source = None
         self._unit_expectation = Histogram(toy_axis,
                                            contents=np.diff(norm.cdf(toy_axis.edges)))
+
+    def ncounts(self) -> float:
+
+        if self._source is None:
+            raise RuntimeError("Set a source first")
+
+        # Get the latest values of the flux
+        # Remember that _model can be modified externally between calls.
+        ns_events = self._source.spectrum.main.shape.k.value
+        return ns_events
+
+    def expectation_density(self, data:EventDataInterface, copy:bool) -> np.ndarray:
+
+        if not isinstance(data, ToyData):
+            raise TypeError(f"This class only support data of type {ToyData}")
+
+        # I expect in the real case it'll be more efficient to compute
+        # (ncounts, ncounts*prob) than (ncounts, prob)
+
+        # Always copies
+        return self.ncounts()*norm.pdf(data['x'].data)
 
     def set_source(self, source: Source):
 
@@ -136,17 +170,17 @@ class ToyPointSourceResponse(BinnedThreeMLSourceResponseInterface):
 
         # Get the latest values of the flux
         # Remember that _model can be modified externally between calls.
-        flux = self._source.spectrum.main.shape.k.value
+        ns_events = self._source.spectrum.main.shape.k.value
 
         # Always copies
-        return self._unit_expectation * flux
+        return self._unit_expectation * ns_events
 
     def copy(self) -> "ToyPointSourceResponse":
         # We are not caching any results, so it's safe to do shallow copy without
         # re-initializing any member.
         return copy.copy(self)
 
-class ToyModelFolding(BinnedThreeMLModelFoldingInterface):
+class ToyModelFolding(BinnedThreeMLModelFoldingInterface, UnbinnedThreeMLModelFoldingInterface):
 
     def __init__(self, psr: BinnedThreeMLSourceResponseInterface):
 
@@ -155,6 +189,28 @@ class ToyModelFolding(BinnedThreeMLModelFoldingInterface):
 
         self._psr = psr
         self._psr_copies = {}
+
+    def ncounts(self) -> float:
+
+        ncounts = 0
+
+        for source_name,psr in self._psr_copies.items():
+            ncounts += psr.ncounts()
+
+        return ncounts
+
+    def expectation_density(self, data: EventDataInterface, copy:bool = True) -> np.ndarray:
+
+        if not isinstance(data, ToyData):
+            raise TypeError(f"This class only support data of type {ToyData}")
+
+        expectation = np.zeros(data.nevents)
+
+        for source_name, psr in self._psr_copies.items():
+            expectation += psr.expectation_density(data, copy=False)
+
+        # Always a copy
+        return expectation
 
     def set_model(self, model: Model):
 
@@ -214,7 +270,10 @@ model = Model(source)
 #model = Model() # Uncomment for bkg-only hypothesis
 
 # Fit
-like_fun = PoissonLikelihood()
+# Uncomment one. Either one works
+#like_fun = PoissonLikelihood()
+like_fun = UnbinnedLikelihood()
+
 like_fun.set_data(data)
 like_fun.set_response(response)
 like_fun.set_background(bkg)
@@ -238,4 +297,20 @@ expectation = response.expectation(data)
 if bkg is not None:
     expectation = expectation + bkg.expectation(data)
 expectation.plot(ax)
+plt.show()
+
+# Grid
+loglike = Histogram([np.linspace(.9*nevents_signal, 1.1*nevents_signal, 30), np.linspace(.9*nevents_bkg, 1.1*nevents_bkg, 31)], labels = ['s', 'b'])
+
+for i,s in enumerate(loglike.axes['s'].centers):
+    for j,b in enumerate(loglike.axes['b'].centers):
+
+        spectrum.k.value = s
+        cosi.bkg_parameter['norm'].value = b
+        cosi._update_bkg_parameters() # Fix the need for this line
+
+        loglike[i,j] = cosi.get_log_like()
+
+loglike.plot()
+
 plt.show()
