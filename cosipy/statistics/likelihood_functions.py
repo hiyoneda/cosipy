@@ -1,4 +1,6 @@
+import itertools
 import logging
+import operator
 
 from cosipy.interfaces.expectation_interface import ExpectationInterface, ExpectationDensityInterface
 
@@ -32,9 +34,19 @@ class UnbinnedLikelihood(UnbinnedLikelihoodInterface):
         super().set_response(response)  # Checks type
         self._response = response
 
+        if self._data is None:
+            raise RuntimeError("Call set_data() before calling set_response()")
+
+        self._response.set_data(self._data)
+
     def set_background(self, bkg: BackgroundInterface):
         super().set_background(bkg)  # Checks type
         self._bkg = bkg
+
+        if self._data is None:
+            raise RuntimeError("Call set_data() before calling set_background()")
+
+        self._bkg.set_data(self._data)
 
     @property
     def data (self) -> EventDataInterface: return self._data
@@ -64,18 +76,26 @@ class UnbinnedLikelihood(UnbinnedLikelihoodInterface):
 
         ntot = self._response.ncounts()
 
-        # If we don't have background, we won't modify the expectation, so
-        # it's safe to use the internal cache.
-        density = self._response.expectation_density(self._data, copy = self.has_bkg)
-
         if self.has_bkg:
 
             ntot += self._bkg.ncounts()
 
-            # We won't modify the bkg expectation, so it's safe to use the internal cache
-            density += self._bkg.expectation_density(self._data, copy = False)
+            # Prevent 2 iteration over data using tee()
+            data_iter_1, data_iter_2 = itertools.tee(self._data, 2)
 
-        # Compute the log-likelihood:
+            signal_density = self._response.expectation_density(data_iter_1)
+            bkg_density = self._bkg.expectation_density(data_iter_2)
+
+            density = np.fromiter(map(operator.add, signal_density, bkg_density), dtype=float)
+
+            # signal_density = np.fromiter(self._response.expectation_density(), dtype=float)
+            # bkg_density = np.fromiter(self._bkg.expectation_density(), dtype=float)
+            #
+            # density = signal_density + bkg_density
+
+        else:
+            density = np.fromiter(self._response.expectation_density(), dtype=float)
+
         log_like = np.sum(np.log(density)) - ntot
 
         return log_like

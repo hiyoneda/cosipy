@@ -1,4 +1,6 @@
 # Imports:
+from abc import ABC
+
 import numpy as np
 from astropy.table import Table
 from astropy.io import fits
@@ -22,6 +24,11 @@ import subprocess
 import gc
 import os
 import time
+
+from cosipy.interfaces import QuantityMeasurement, AngleMeasurement, SkyCoordMeasurement, CachedQuantityMeasurement, \
+    CachedAngleMeasurement, CachedSkyCoordMeasurement, CachedSkyCoordUnitSphericalMeasurement
+from cosipy.interfaces.data_interface import EventData
+
 logger = logging.getLogger(__name__)
 
 
@@ -861,3 +868,55 @@ class UnBinnedData(DataIO):
             self.write_unbinned_output(output_name)
 
         return
+
+
+class MeasuredEnergy(QuantityMeasurement, ABC):
+    """
+
+    """
+
+class CachedMeasuredEnergy(CachedQuantityMeasurement, MeasuredEnergy):
+    """
+
+    """
+
+class MeasuredScatteringAngle(AngleMeasurement, ABC):
+    """
+
+    """
+
+class CachedMeasuredScatteringAngle(CachedAngleMeasurement, MeasuredScatteringAngle):
+    """
+
+    """
+
+
+class MeasuredScatteringDirection(SkyCoordMeasurement, ABC):
+    """
+
+    """
+
+class CachedMeasuredScatteringDirection(CachedSkyCoordUnitSphericalMeasurement, MeasuredScatteringDirection):
+    """
+
+    """
+
+
+class EmCDSEventData(EventData):
+
+    def __init__(self,
+                 energy:MeasuredEnergy,
+                 scattering_angle:MeasuredScatteringAngle,
+                 scattering_direction:MeasuredScatteringDirection):
+
+        if energy.label != "Em":
+            raise ValueError("The measured energy is expected to be labeled 'Em'")
+
+        if scattering_angle.label != "Phi":
+            raise ValueError("The scattering angle is expected to be labeled 'Phi'")
+
+        if scattering_direction.label != "PsiChi":
+            raise ValueError("The scattering direction is expected to be labeled 'PsiChi'")
+
+        super().__init__(energy, scattering_angle, scattering_direction)
+

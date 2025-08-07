@@ -1,4 +1,5 @@
-from typing import Dict, Any
+import itertools
+from typing import Dict, Any, Generator, Iterator, Iterable, Optional, Union
 
 from astromodels.sources import Source
 from astromodels import LinearPolarization, SpectralComponent, Parameter
@@ -46,6 +47,54 @@ on refactoring our current code to this format.
 toy_axis = Axis(np.linspace(-5, 5))
 nevents_signal = 1000
 nevents_bkg = 1000
+nevents_tot = nevents_signal + nevents_bkg
+
+class ToyMeasurementIterator(Iterator):
+    # Random data. Normal signal on top of uniform bkg
+    # Keeps track of initial random seed
+
+    def __init__(self, iterable: 'ToyMeasurement'):
+        self._iter = iterable
+        self._rng = np.random.default_rng()
+
+        # Restart
+        self._rng.__setstate__(self._iter._rng_init)
+        self._pos = 0
+
+    def __next__(self):
+        if self._pos >= nevents_tot:
+            raise StopIteration
+
+        self._pos += 1
+
+        if self._rng.uniform(0, nevents_tot) < nevents_signal:
+            return self._rng.normal()
+        else:
+            return self._rng.uniform(toy_axis.lo_lim, toy_axis.hi_lim)
+
+
+class ToyMeasurement(FloatingMeasurement):
+
+    def __init__(self, label):
+
+        super().__init__(label)
+
+        # Keep track of init seed to allow iterator
+        self._rng_init = np.random.default_rng().__getstate__()
+
+    def __iter__(self):
+        return ToyMeasurementIterator(self)
+
+    def __getitem__(self, item):
+        # This is inefficient unless the implementation caches the values
+        with iter(self) as i:
+            for _ in range(item):
+                next(i)
+
+            return next(i)
+
+    def __len__(self):
+        return nevents_tot
 
 class ToyData(BinnedDataInterface, EventData):
     # Random data. Normal signal on top of uniform bkg
@@ -54,23 +103,13 @@ class ToyData(BinnedDataInterface, EventData):
     # code readability, especially if you use an IDE.
 
     def __init__(self):
-        self._data = Histogram(toy_axis)
-
-        # Signal
-        event_data = norm.rvs(size=nevents_signal)
-
-        # Bkg
-        bkg_event_data = uniform.rvs(toy_axis.lo_lim, toy_axis.hi_lim-toy_axis.lo_lim, size=nevents_bkg)
-
-        # Join
-        event_data = np.append(event_data, bkg_event_data)
+        # Unbinned
+        measurements = ToyMeasurement('x')
+        EventData.__init__(self, measurements)
 
         # Binned
-        self._data.fill(event_data)
-
-        #Unbinned
-        measurements = FloatingMeasurement(event_data, 'x')
-        EventData.__init__(self, measurements)
+        self._data = Histogram(toy_axis)
+        self._data.fill(np.asarray(measurements))
 
     @property
     def data(self) -> Histogram:
@@ -90,8 +129,10 @@ class ToyBkg(BinnedBackgroundInterface, BackgroundDensityInterface):
         self._unit_expectation[:] = 1 / self._unit_expectation.nbins
         self._norm = 1
 
+        self._event_data = None
+
         # Doesn't need to be normalized
-        self._unit_expectation_density = np.broadcast_to(1/(toy_axis.hi_lim - toy_axis.lo_lim), data.nevents)
+        self._unit_expectation_density = 1/(toy_axis.hi_lim - toy_axis.lo_lim)
 
     def set_parameters(self, **parameters:u.Quantity) -> None:
         self._norm = parameters['norm'].value
@@ -99,9 +140,29 @@ class ToyBkg(BinnedBackgroundInterface, BackgroundDensityInterface):
     def ncounts(self) -> float:
         return self._norm
 
-    def expectation_density(self, data: EventDataInterface, copy: bool = True) -> np.ndarray:
-        #Always a copy
-        return self._norm*self._unit_expectation_density
+    def set_data(self, data: EventDataInterface) -> None:
+        if not isinstance(data, ToyData):
+            raise TypeError(f"This class only support data of type {ToyData}")
+
+        self._event_data = data
+
+    def expectation_density(self, data: Optional[Union['EventDataInterface', Iterator]] = None) -> Iterable[float]:
+        if data is None:
+
+            if self._event_data is None:
+                raise RuntimeError("You need to either provide the data or call set_data() first.")
+
+            data = self._event_data
+
+        elif isinstance(data, EventDataInterface):
+
+            # Runs some checks
+            self.set_data(data)
+
+        density = self._norm * self._unit_expectation_density
+
+        for _ in data:
+            yield density
 
     @property
     def parameters(self) -> Dict[str, u.Quantity]:
@@ -139,16 +200,33 @@ class ToyPointSourceResponse(BinnedThreeMLSourceResponseInterface, UnbinnedThree
         ns_events = self._source.spectrum.main.shape.k.value
         return ns_events
 
-    def expectation_density(self, data:EventDataInterface, copy:bool) -> np.ndarray:
-
+    def set_data(self, data:EventDataInterface):
         if not isinstance(data, ToyData):
             raise TypeError(f"This class only support data of type {ToyData}")
+
+        self._event_data = data
+
+    def expectation_density(self, data:Optional[Union[EventDataInterface, Iterator]] = None) -> Iterable[float]:
+
+        if data is None:
+
+            if self._event_data is None:
+                raise RuntimeError("You need to either provide the data or call set_data() first.")
+
+            data = self._event_data
+
+        elif isinstance(data, EventDataInterface):
+
+            # Runs some checks
+            self.set_data(data)
 
         # I expect in the real case it'll be more efficient to compute
         # (ncounts, ncounts*prob) than (ncounts, prob)
 
-        # Always copies
-        return self.ncounts()*norm.pdf(data['x'].data)
+        cache = self.ncounts()*norm.pdf([x for x, in data])
+
+        for n in cache:
+            yield n
 
     def set_source(self, source: Source):
 
@@ -199,18 +277,28 @@ class ToyModelFolding(BinnedThreeMLModelFoldingInterface, UnbinnedThreeMLModelFo
 
         return ncounts
 
-    def expectation_density(self, data: EventDataInterface, copy:bool = True) -> np.ndarray:
-
+    def set_data(self, data:EventDataInterface):
         if not isinstance(data, ToyData):
             raise TypeError(f"This class only support data of type {ToyData}")
 
-        expectation = np.zeros(data.nevents)
+        self._event_data = data
 
-        for source_name, psr in self._psr_copies.items():
-            expectation += psr.expectation_density(data, copy=False)
+    def expectation_density(self, data: EventDataInterface = None) -> Iterable[float]:
 
-        # Always a copy
-        return expectation
+        if data is None:
+
+            if self._event_data is None:
+                raise RuntimeError("You need to either provide the data or call set_data() first.")
+
+            data = self._event_data
+
+        elif isinstance(data, EventDataInterface):
+
+            # Runs some checks
+            self.set_data(data)
+
+        for expectations in zip(*[p.expectation_density(d) for p,d in zip(self._psr_copies.values(), itertools.tee(data))]):
+            yield np.sum(expectations)
 
     def set_model(self, model: Model):
 
@@ -278,13 +366,14 @@ like_fun.set_data(data)
 like_fun.set_response(response)
 like_fun.set_background(bkg)
 cosi = ThreeMLPluginInterface('cosi', like_fun)
-plugins = DataList(cosi)
-like = JointLikelihood(model, plugins)
 
 # Before the fit, you can set the parameters initial values, bounds, etc.
 # This is passed to the minimizer.
 # In addition to model. Nuisance.
 cosi.bkg_parameter['norm'].value = 1
+
+plugins = DataList(cosi)
+like = JointLikelihood(model, plugins)
 
 # Run minimizer
 like.fit()

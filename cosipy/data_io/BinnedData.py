@@ -13,8 +13,7 @@ import logging
 import astropy.units as u
 from astropy.coordinates import SkyCoord
 
-from cosipy.interfaces import BinnedDataInterface, QuantityMeasurement, AngleMeasurement, SkyCoordMeasurement
-from cosipy.interfaces.data_interface import EventData
+from cosipy.interfaces import BinnedDataInterface
 
 logger = logging.getLogger(__name__)
 
@@ -537,21 +536,4 @@ class EmCDSBinnedData(BinnedDataInterface):
     def axes(self) -> Axes:
         return self._data.axes
 
-class EmCDSEventData(EventData):
-
-    def __init__(self,
-                 energy:QuantityMeasurement,
-                 scattering_angle:AngleMeasurement,
-                 scattering_direction:SkyCoordMeasurement):
-
-        if energy.label != "Em":
-            raise ValueError("The measured energy is expected to be labeled 'Em'")
-
-        if scattering_angle.label != "Phi":
-            raise ValueError("The scattering angle is expected to be labeled 'Phi'")
-
-        if scattering_direction.label != "PsiChi":
-            raise ValueError("The scattering direction is expected to be labeled 'PsiChi'")
-
-        super().__init__(energy, scattering_angle, scattering_direction)
 

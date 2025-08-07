@@ -1,5 +1,7 @@
 from typing import Protocol, runtime_checkable, Dict, Type, Any, Tuple, Iterator, Union
 
+import numpy as np
+from .event_selection import EventSelectorInterface
 from histpy import Histogram, Axes
 
 from .measurements import Measurement
@@ -8,7 +10,8 @@ import histpy
 
 __all__ = ["DataInterface",
            "EventDataInterface",
-           "BinnedDataInterface"]
+           "BinnedDataInterface",
+           "EventData"]
 
 @runtime_checkable
 class DataInterface(Protocol):
@@ -19,14 +22,17 @@ class DataInterface(Protocol):
 @runtime_checkable
 class EventDataInterface(DataInterface, Protocol):
 
-    def __getitem__(self, item) -> Union[Tuple, Measurement]:
+    def __getitem__(self, item:Union[str, int]) -> Union[Tuple, Measurement]:
         """
         If item is:
         - str: the value of specific measurement for all events
-        - int: all measurements for an specific event
+        - int: all measurements for an specific event (whether masked or unmasked)
         """
 
-    def __iter__(self) -> Iterator[Tuple]:...
+    def __iter__(self) -> Iterator[Tuple]:
+        """
+        Only loops through unmasked values
+        """
 
     @property
     def nevents(self) -> int:...
@@ -35,14 +41,31 @@ class EventDataInterface(DataInterface, Protocol):
     def labels(self) -> Tuple[str]:...
 
     @property
-    def types(self) -> Tuple[type]:...
+    def nmeasurements(self) -> int:
+        """
+        Number of Measurements. Each measurement can potentially have more tha one value
+        --e.g. RA,Dec can be considered a single measurement
+        """
+
+    def set_selection(self, selection: Union[EventSelectorInterface, None]) -> None:
+        """
+        None would drop the selection. Implementation might not implement the ability to drop
+        a selection when the underlying data was discarded for efficiency reasons.
+        """
 
     @property
-    def nvars(self) -> int:...
+    def selection(self) -> Union[EventSelectorInterface, None]:
+        """
+        The current selection set
+        """
+
+    @property
+    def nselected(self) -> int:...
+
 
 class EventData(EventDataInterface):
     """
-    Generic event data from measurement
+    Generic event data from measurement set
     """
 
     def __init__(self, *data:Measurement):
@@ -59,12 +82,12 @@ class EventData(EventDataInterface):
                     raise ValueError("All measurement arrays must have the same size")
 
         self._nevents = size
+        self._nselected = size
         self._events = data
         self._labels = tuple([d.label for d in data])
-        self._types = tuple([type(d) for d in data])
-        self._value_types = tuple([d.value_type for d in data])
+        self._selection = None
 
-    def __getitem__(self, item):
+    def __getitem__(self, item:[Union[str, int]]) -> Union[Tuple, Measurement]:
 
         if isinstance(item, str):
             return self._events[self._labels.index(item)]
@@ -73,8 +96,8 @@ class EventData(EventDataInterface):
         else:
             raise TypeError("Index must be either a measurement label or an entry position.")
 
-    def __iter__(self):
-        return zip(self._events)
+    def __iter__(self) -> Iterator[Tuple]:
+        return zip(*self._events)
 
     @property
     def nevents(self):
@@ -85,16 +108,34 @@ class EventData(EventDataInterface):
         return self._labels
 
     @property
-    def types(self):
-        return self._types
-
-    @property
-    def value_types(self):
-        return self._value_types
-
-    @property
-    def nvars(self) -> int:
+    def nmeasurements(self) -> int:
         return len(self._events)
+
+    def set_selection(self, selection:EventSelectorInterface) -> None:
+
+        if selection is None:
+            self._selection = None
+            self._nselected = self._nevents
+        else:
+
+            self._selection = selection
+
+            # Signals the need to recompute this number
+            self._nselected = -1
+
+    @property
+    def selection(self) -> EventSelectorInterface:
+        return self._selection
+
+    def nselected(self) -> int:
+
+        if self._nselected == -1:
+            # Not yet cached since last set selection
+            self._nselected = sum(self._selection.select(self))
+
+        return self._nselected
+
+
 
 @runtime_checkable
 class BinnedDataInterface(DataInterface, Protocol):
