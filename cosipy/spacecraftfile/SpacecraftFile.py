@@ -35,7 +35,6 @@ class SpacecraftFile():
                  earth_zenith = None,
                  altitude = None,
                  livetime = None,
-                 instrument = "COSI", # FIXME: not used
                  frame = "galactic"):
 
         """
@@ -82,8 +81,6 @@ class SpacecraftFile():
             Time in seconds the instrument is live for the corresponding
             energy bin (using left endpoints so that the last entry in
             the ori file is 0).
-        instrument : str, optional
-            The instrument name (the default is "COSI").
         frame : str, optional
             Coordinate frame for stored pointing directions and
             Attitudes (default: "galactic")
@@ -607,8 +604,7 @@ class SpacecraftFile():
     def get_scatt_map(self,
                       nside,
                       target_coord = None,
-                      earth_occ = True,
-                      r_earth = 6378.0):
+                      earth_occ = True):
 
         """
         Bin the spacecraft attitude history into a list of discretized
@@ -631,8 +627,6 @@ class SpacecraftFile():
         earth_occ : bool, optional
             Option to include Earth occultation in scatt map calculation.
             Default is True.
-        r_earth : float, optional
-            Earth radius in km (default is 6378 km).
 
         Returns
         -------
@@ -645,6 +639,9 @@ class SpacecraftFile():
 
         if earth_occ:
 
+            # earth radius
+            r_earth = 6378.0
+            
             # Need a source location to compute earth occultation
             if source is None:
                 raise ValueError("target_coord is needed when earth_occ is True")
@@ -1019,7 +1016,7 @@ class SpacecraftFile():
             arf_file = f'{self.out_name}.arf'
 
         if dts is not None:
-            dts = self.__str_or_array(dts) # FIXME: does not exist???
+            dts = self.__str_or_array(dts) # FIXME: function does not exist???
             exposure_time = dts.sum()
 
         channel_number = len(src_counts)
