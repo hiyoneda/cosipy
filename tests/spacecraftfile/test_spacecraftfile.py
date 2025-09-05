@@ -31,6 +31,13 @@ def test_get_time_delta():
 
     assert np.allclose(time_delta.value, np.ones(10))
 
+def test_altitude():
+
+    ori_path = test_data.path / "20280301_first_10sec.ori"
+    ori = SpacecraftFile.parse_from_file(ori_path)
+    altitude = ori.get_altitude()
+    
+    assert np.allclose(altitude, np.zeros(11))
 
 def test_get_attitude():
 
@@ -130,6 +137,20 @@ def test_get_dwell_map():
                        np.array([ 0., 10.,  0.,  0.,  0., 0.,
                                   0.,  0.,  0.,  0.,  0.,  0.]))
 
+def test_get_scatt_map():
+
+    response_path =test_data.path / "test_full_detector_response.h5"
+    ori_path = test_data.path / "20280301_first_10sec.ori"
+    ori = SpacecraftFile.parse_from_file(ori_path)
+
+    target_name = "Crab"
+    target_coord = SkyCoord(l=184.5551, b = -05.7877, unit = (u.deg, u.deg), frame = "galactic")
+
+    # test without earth occultation, as Crab is entirely occluded;
+    # TODO: use a better .ori file for testing
+    scatt_map = ori.get_scatt_map(nside=16, earth_occ=False)
+    ax_map = scatt_map.get_axes_map(nside=16)
+    
 def test_get_psr_rsp():
 
     response_path = test_data.path / "test_full_detector_response.h5"
