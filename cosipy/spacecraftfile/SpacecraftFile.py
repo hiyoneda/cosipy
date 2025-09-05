@@ -266,20 +266,12 @@ class SpacecraftFile():
 
         Returns
         -------
-        lon, colat : float or np.ndarray(float) [N]
+        lon, colat : np.ndarray(float) [N]
           longitude and co-latitude corresponding to v in radians
         """
 
-        scalar = (v.ndim == 1)
-        if scalar:
-            v = np.atleast_2d(v)
-
         lon   = np.arctan2(v[:,1], v[:,0])
         colat = np.arccos(v[:,2])
-
-        if scalar:
-            lon = lon[0]
-            colat = colat[0]
 
         return (lon, colat)
 
