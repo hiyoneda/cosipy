@@ -76,14 +76,10 @@ class CoordsysConversionMatrix(Histogram):
                 l, b = hp.pix2ang(nside_model, ipix, nest=is_nest_model, lonlat=True)
                 pixel_coord = SkyCoord(l, b, unit = "deg", frame = 'galactic')
 
-                pixel_movement = filtered_orientation.get_target_in_sc_frame(target_name = f"pixel_{ipix}_{i_time}",
-                                                                             target_coord = pixel_coord,
-                                                                             quiet = True,
-                                                                             save = False)
+                pixel_movement = filtered_orientation.get_target_in_sc_frame(target_coord = pixel_coord)
 
                 dwell_time_map = filtered_orientation.get_dwell_map(response = full_detector_response.filename,
-                                                                    src_path = pixel_movement,
-                                                                    save = False)
+                                                                    src_path = pixel_movement)
 
                 ccm_thispix[ipix] = dwell_time_map.data
                 # (HealpixMap).data returns the numpy array without its unit. dwell_time_map.unit is u.s.

@@ -186,7 +186,7 @@ class PolarizationASAD():
 
         if isinstance(self._convention.frame, SpacecraftFrame):
             
-            target_in_sc_frame = self._ori.get_target_in_sc_frame(target_name='source', target_coord=self._source_vector.transform_to('galactic'))
+            target_in_sc_frame = self._ori.get_target_in_sc_frame(self._source_vector.transform_to('galactic'))
             dwell_time_map = self._ori.get_dwell_map(response=self._response_file, src_path=target_in_sc_frame, pa_convention=self._response_convention)
             psr = self._response.get_point_source_response(exposure_map=dwell_time_map, coord=self._source_vector.transform_to('galactic'))
             expectation = psr.get_expectation(spectrum, LinearPolarization(polarization_level * 100., polarization_angle.angle.deg))
@@ -200,7 +200,7 @@ class PolarizationASAD():
         
         else:
             
-            scatt_map = self._ori.get_scatt_map(nside=self._response.nside*2, target_coord=self._source_vector, coordsys='galactic')
+            scatt_map = self._ori.get_scatt_map(nside=self._response.nside*2, target_coord=self._source_vector)
             psr = self._response.get_point_source_response(coord=self._source_vector, scatt_map=scatt_map)
             expectation = psr.get_expectation(spectrum, LinearPolarization(polarization_level * 100., polarization_angle.angle.deg))
 

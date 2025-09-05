@@ -513,28 +513,26 @@ class FullDetectorResponse(HealpixBase):
             sf_psrs = tuple( np.zeros(psr_axes.shape, dtype=self.dtype)
                              for i in range(source.size) )
 
-            if scatt_map.contents.nnz > 0:
-                dirs_x, dirs_y = scatt_map.contents.coords
-                attitudes = Attitude.from_axes(x = scatt_map.axes['x'].pix2skycoord(dirs_x),
-                                               y = scatt_map.axes['y'].pix2skycoord(dirs_y),
-                                               frame = 'icrs')
+            # fixme: does this work if we don't test for > 0?
+            if scatt_map.size() > 0:
+                attitudes = scatt_map.attitudes
+                frame = attitudes.frame
 
-                # rotation from source frame to local spacecraft
-                # frame in ICRS coordinate system
+                # rotation from source frame to local spacecraft frame
                 rots = attitudes.rot.inv().as_matrix()
 
                 # compute cartesian forms of source and PsiChi pixel dirs,
-                # using ICRS coord system to match Attitudes that will be
+                # using coord system matching Attitudes that will be
                 # used to rotate them
-                src_cart = source.transform_to('icrs').cartesian.xyz.value
-                sf_psichi_dirs_cart = sf_psichi_dirs.transform_to('icrs').cartesian.xyz.value
+                src_cart = source.transform_to(frame).cartesian.xyz.value
+                sf_psichi_dirs_cart = sf_psichi_dirs.transform_to(frame).cartesian.xyz.value
 
             else:
                 # scatt_map is empty
                 attitudes = []
                 rots = []
 
-            for att, rot, exposure in zip(attitudes, rots, scatt_map.contents.data):
+            for att, rot, exposure in zip(attitudes, rots, scatt_map.weights):
 
                 # rotate source dir(s) from source frame to local
                 # spacecraft frame
@@ -585,7 +583,7 @@ class FullDetectorResponse(HealpixBase):
 
             results = tuple( PointSourceResponse(psr_axes,
                                                  contents = sf_psr,
-                                                 unit = self._unit * scatt_map.unit,
+                                                 unit = self._unit * scatt_map.weights.unit,
                                                  copy_contents = False)
                              for sf_psr in sf_psrs )
 
@@ -743,8 +741,6 @@ class FullDetectorResponse(HealpixBase):
 
         scatt_map = orientation.get_scatt_map(nside = nside_scatt_map,
                                               target_coord = coord,
-                                              scheme = 'ring',
-                                              coordsys = hpbase.coordsys,
                                               earth_occ = Earth_occ)
 
         psr = self.get_point_source_response(coord = coord,
