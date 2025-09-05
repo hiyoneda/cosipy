@@ -122,6 +122,13 @@ def test_get_dwell_map():
                        np.array([1.895057, 7.615584, 0.244679, 0.244679, 0.000000, 0.000000,
                                 0.000000, 0.000000, 0.000000, 0.000000, 0.000000, 0.000000]))
 
+    dwell_map = ori.get_dwell_map(response = response_path,
+                                  src_path = path_in_sc,
+                                  interp = False)
+
+    assert np.allclose(dwell_map[:].value,
+                       np.array([ 0., 10.,  0.,  0.,  0., 0.,
+                                  0.,  0.,  0.,  0.,  0.,  0.]))
 
 def test_get_psr_rsp():
 

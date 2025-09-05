@@ -586,7 +586,7 @@ class SpacecraftFile():
                 pixels, weights = base.get_interp_weights(theta = src_path[:-1])
                 weighted_duration = weights * durations[None]
             else:
-                pixels = base.find_bin(theta = src_path[:-1])
+                pixels = base.ang2pix(theta = src_path[:-1])
                 weighted_duration = durations
 
             # sum time weights for each pixel
