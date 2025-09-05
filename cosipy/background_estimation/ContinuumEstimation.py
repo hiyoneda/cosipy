@@ -327,7 +327,7 @@ class ContinuumEstimation:
                     plt.close()
 
                     # Plot masked response:
-                    m_dummy[sorted_indices[arm_mask]] = 0
+                    m_dummy[sorted_indices[arm_mask]] = 0 * m_dummy.unit
                     plot,ax = m_dummy.plot('mollview')
                     plt.title("Masked Response")
                     plt.show()
