@@ -55,29 +55,6 @@ class SpacecraftAttitudeMap:
 
         """
 
-        """
-        dir_axis = (HealpixAxis(nside = nside,
-                                scheme = scheme,
-                                coordsys = coordsys))
-        angle_axis = Axis(np.linspace(0., 2*np.pi, num=nside*8+1), unit=u.rad)
-
-        m = Histogram([dir_axis, angle_axis], sparse = True, unit=u.s)
-
-        rot_vecs   = self.attitudes[:-1].as_rotvec()
-        rot_angles = np.linalg.norm(rot_vecs, axis=-1)
-        rot_dirs   = rot_vecs / rot_angles[:,None]
-
-        # discretize rotvecs for input Attitudes
-
-        rd = SkyCoord(rot_dirs[:,0], rot_dirs[:,1], rot_dirs[:,2],
-                      representation_type='cartesian',
-                      frame = 'galactic')
-
-        m.fill(rd, rot_angles, weight=self.weights[:-1])
-        return m
-
-        """
-
         ax_map = SpacecraftAxisMap(nside, scheme, coordsys, axes)
 
         x,y,z = self.attitudes[:-1].as_axes()
