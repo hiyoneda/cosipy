@@ -513,8 +513,7 @@ class FullDetectorResponse(HealpixBase):
             sf_psrs = tuple( np.zeros(psr_axes.shape, dtype=self.dtype)
                              for i in range(source.size) )
 
-            # fixme: does this work if we don't test for > 0?
-            if scatt_map.size() > 0:
+            if len(scatt_map.attitudes) > 0:
                 attitudes = scatt_map.attitudes
                 frame = attitudes.frame
 

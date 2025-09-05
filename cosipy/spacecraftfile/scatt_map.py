@@ -29,9 +29,6 @@ class SpacecraftAttitudeMap:
         self.attitudes = attitudes
         self.weights = weights
 
-    def size(self):
-        return len(self.attitudes)
-
     def get_axes_map(self,
                      nside,
                      scheme = 'ring',
