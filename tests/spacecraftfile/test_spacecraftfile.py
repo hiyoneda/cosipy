@@ -36,7 +36,7 @@ def test_altitude():
     ori_path = test_data.path / "20280301_first_10sec.ori"
     ori = SpacecraftFile.parse_from_file(ori_path)
     altitude = ori.get_altitude()
-    
+
     assert np.allclose(altitude, np.zeros(11))
 
 def test_get_attitude():
@@ -150,7 +150,7 @@ def test_get_scatt_map():
     # TODO: use a better .ori file for testing
     scatt_map = ori.get_scatt_map(nside=16, earth_occ=False)
     ax_map = scatt_map.get_axes_map(nside=16)
-    
+
 def test_get_psr_rsp():
 
     response_path = test_data.path / "test_full_detector_response.h5"
@@ -388,12 +388,15 @@ def test_source_interval():
     assert np.allclose(new_ori.get_time().to_value(format="unix"),
                        np.array([1.835478e+09, 1.835478e+09, 1.835478e+09, 1.835478e+09]))
 
+    assert np.allclose(np.sum(new_ori.livetime), (2.1 - 0.1))
+
+    print(new_ori.z_pointings.b.value)
     assert np.allclose(new_ori.x_pointings.l.value,
-                       np.array([41.86062429, 41.88225011, 41.90629597, 41.7382145]))
+                       np.array([41.86062429, 41.88225011, 41.90629597, 41.90870524]))
     assert np.allclose(new_ori.x_pointings.b.value,
-                       np.array([73.14368765, 73.09517927, 73.0412838 , 73.41314871]))
+                       np.array([73.14368765, 73.09517927, 73.0412838, 73.03589454]))
 
     assert np.allclose(new_ori.z_pointings.l.value,
-                       np.array([221.86062062, 221.88225011, 221.90629597, 221.74046899]))
+                       np.array([221.86062062, 221.88225011, 221.90629597, 221.90870159]))
     assert np.allclose(new_ori.z_pointings.b.value,
-                       np.array([16.85631235, 16.90482073, 16.9587162 , 16.58685128]))
+                       np.array([16.85631235, 16.90482073, 16.9587162,  16.96410546]))

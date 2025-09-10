@@ -430,7 +430,7 @@ class SpacecraftFile():
         new_altitude     = self._altitude[start_idx : stop_idx + 1]
         new_livetime     = self.livetime[start_idx : stop_idx]
 
-        if start_time > self._raw_time[0] or stop_time < self._raw_time[-1]:
+        if start_time > self._raw_time[start_idx] or stop_time < self._raw_time[stop_idx]:
 
             # need to modify first and/or last entries -- make a copy
             new_raw_time     = new_raw_time.copy()
@@ -439,13 +439,13 @@ class SpacecraftFile():
             new_altitude     = new_altitude.copy()
             new_livetime     = new_livetime.copy()
 
-            if start_time > self._raw_time[0]:
+            if start_time > self._raw_time[start_idx]:
 
                 new_raw_time[0] = start_time
 
                 start_frac = \
-                    (start_time - self._raw_time[0]) / \
-                    (self._raw_time[1] - self._raw_time[0])
+                    (start_time - self._raw_time[start_idx]) / \
+                    (self._raw_time[start_idx + 1] - self._raw_time[start_idx])
 
                 new_attitude[0] = interp_attitude(start_frac,
                                                   self._attitude[start_idx],
@@ -463,16 +463,15 @@ class SpacecraftFile():
                 # SAA livetime
                 new_livetime[0] = \
                     0 if self.livetime[start_idx] == 0 \
-                    else start_time - self._raw_time[0]
+                    else start_time - self._raw_time[start_idx]
 
-
-            if stop_time < self._raw_time[-1]:
+            if stop_time < self._raw_time[stop_idx]:
 
                 new_raw_time[-1] = stop_time
 
                 stop_frac = \
-                    (stop_time - self._raw_time[-2]) / \
-                    (self._raw_time[-1] - self._raw_time[-2])
+                    (stop_time - self._raw_time[stop_idx - 1]) / \
+                    (self._raw_time[stop_idx] - self._raw_time[stop_idx - 1])
 
                 new_attitude[-1] = interp_attitude(stop_frac,
                                                    self._attitude[stop_idx - 1],
@@ -490,8 +489,7 @@ class SpacecraftFile():
                 # SAA livetime
                 new_livetime[-1] = \
                     0 if self.livetime[stop_idx - 1] == 0 \
-                    else self._raw_time[-1] - stop_time
-
+                    else self._raw_time[stop_idx] - stop_time
 
         new_time = Time(new_raw_time, format = "unix")
 
@@ -633,7 +631,7 @@ class SpacecraftFile():
 
             # earth radius
             r_earth = 6378.0
-            
+
             # Need a source location to compute earth occultation
             if source is None:
                 raise ValueError("target_coord is needed when earth_occ is True")
@@ -654,7 +652,6 @@ class SpacecraftFile():
         else:
             source = None # occultation of search was not applied
             time_weights = self.livetime
-
 
         # Get orientations as rotation vectors (center dir, angle around center)
 
