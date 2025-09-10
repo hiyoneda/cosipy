@@ -437,7 +437,6 @@ class SpacecraftFile():
             new_attitude     = new_attitude.copy()
             new_earth_zenith = new_earth_zenith.copy()
             new_altitude     = new_altitude.copy()
-            new_livetime     = new_livetime.copy()
 
             if start_time > self._raw_time[start_idx]:
 
@@ -460,11 +459,6 @@ class SpacecraftFile():
                                                 self._altitude[start_idx],
                                                 self._altitude[start_idx + 1])
 
-                # SAA livetime
-                new_livetime[0] = \
-                    0 if self.livetime[start_idx] == 0 \
-                    else start_time - self._raw_time[start_idx]
-
             if stop_time < self._raw_time[stop_idx]:
 
                 new_raw_time[-1] = stop_time
@@ -486,10 +480,16 @@ class SpacecraftFile():
                                                  self._altitude[stop_idx - 1],
                                                  self._altitude[stop_idx])
 
-                # SAA livetime
-                new_livetime[-1] = \
-                    0 if self.livetime[stop_idx - 1] == 0 \
-                    else self._raw_time[stop_idx] - stop_time
+            # SAA livetime
+            new_livetime = new_livetime.copy()
+
+            new_livetime[0] = \
+                0 if self.livetime[start_idx] == 0 \
+                else new_raw_time[1] - new_raw_time[0]
+
+            new_livetime[-1] = \
+                0 if self.livetime[stop_idx - 1] == 0 \
+                else new_raw_time[-1] - new_raw_time[-2]
 
         new_time = Time(new_raw_time, format = "unix")
 

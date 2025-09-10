@@ -400,3 +400,8 @@ def test_source_interval():
                        np.array([221.86062062, 221.88225011, 221.90629597, 221.90870159]))
     assert np.allclose(new_ori.z_pointings.b.value,
                        np.array([16.85631235, 16.90482073, 16.9587162,  16.96410546]))
+
+    new_ori = ori.source_interval(Time(times[0]+0.1, format = "unix"),
+                                  Time(times[0]+0.8, format = "unix"))
+
+    assert np.allclose(np.sum(new_ori.livetime), (0.8 - 0.1))

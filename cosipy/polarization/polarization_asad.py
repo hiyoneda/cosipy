@@ -78,11 +78,11 @@ class PolarizationASAD():
         self._reference_vector = self._convention.get_basis(source_vector)[0] #px
 
         self._source_vector_cartesian = [self._source_vector.cartesian.x.value,
-                                         self._source_vector.cartesian.y.value, 
+                                         self._source_vector.cartesian.y.value,
                                          self._source_vector.cartesian.z.value]
 
         self._reference_vector_cartesian = [self._reference_vector.cartesian.x.value,
-                                            self._reference_vector.cartesian.y.value, 
+                                            self._reference_vector.cartesian.y.value,
                                             self._reference_vector.cartesian.z.value]
 
         self._response_file = response_file
@@ -134,7 +134,7 @@ class PolarizationASAD():
     def calculate_azimuthal_scattering_angles(self, unbinned_data):
         """
         Calculate the azimuthal scattering angles for all events in a dataset.
-        
+
         Parameters
         ----------
         unbinned_data : dict
@@ -185,25 +185,25 @@ class PolarizationASAD():
         """
 
         if isinstance(self._convention.frame, SpacecraftFrame):
-            
+
             target_in_sc_frame = self._ori.get_target_in_sc_frame(self._source_vector.transform_to('galactic'))
             dwell_time_map = self._ori.get_dwell_map(response=self._response_file, src_path=target_in_sc_frame, pa_convention=self._response_convention)
             psr = self._response.get_point_source_response(exposure_map=dwell_time_map, coord=self._source_vector.transform_to('galactic'))
             expectation = psr.get_expectation(spectrum, LinearPolarization(polarization_level * 100., polarization_angle.angle.deg))
-            
+            print("DWELL: ", np.sum(dwell_time_map))
             azimuthal_angle_bins = []
 
             for i in range(expectation.axes['PsiChi'].nbins):
                 psichi = SkyCoord(lat=(np.pi/2) - expectation.axes['PsiChi'].pix2ang(i)[0], lon=expectation.axes['PsiChi'].pix2ang(i)[1], unit=u.rad, frame=self._convention.frame)
                 azimuthal_angle = PolarizationAngle.from_scattering_direction(psichi, self._source_vector, self._convention)
                 azimuthal_angle_bins.append(azimuthal_angle.angle)
-        
+
         else:
-            
+
             scatt_map = self._ori.get_scatt_map(nside=self._response.nside*2, target_coord=self._source_vector)
             psr = self._response.get_point_source_response(coord=self._source_vector, scatt_map=scatt_map)
             expectation = psr.get_expectation(spectrum, LinearPolarization(polarization_level * 100., polarization_angle.angle.deg))
-
+            print("SCATT: ", np.sum(scatt_map.weights))
             azimuthal_angle_bins = []
 
             for i in range(expectation.axes['PsiChi'].nbins):
@@ -232,7 +232,7 @@ class PolarizationASAD():
     def bin_asad(self, azimuthal_angles, bins=20):
         """
         Bin list of azimuthal scattering angles into ASAD.
-        
+
         Parameters
         ----------
         azimuthal_angles : list
@@ -262,7 +262,7 @@ class PolarizationASAD():
     def create_asad_from_binned_data(self, data, bins=20):
         """
         Create ASAD from binned data.
-        
+
         Parameters
         ----------
         data : cosipy.data_io.BinnedData
@@ -342,7 +342,7 @@ class PolarizationASAD():
     def create_polarized_asads(self, bins=None):
         """
         Create 100% polarized ASADs for each polarization angle bin of response.
-        
+
         Parameters
         ----------
         bins : int or astropy.units.quantity.Quantity, optional
@@ -361,7 +361,7 @@ class PolarizationASAD():
                 bin_edges = bins
         else:
             bin_edges = self._bin_edges
-        
+
         polarized_asads = {}
         for k in range(self._response.axes['Pol'].nbins):
             polarized_asads[k] = self.create_asad_from_response(self._spectrum, 1, PolarizationAngle(Angle(self._response.axes['Pol'].centers.to_value(u.deg)[k] * u.deg), self._source_vector, convention=self._convention), bins)
@@ -439,7 +439,7 @@ class PolarizationASAD():
     def asad_sinusoid(self, x, a, b, c):
         """
         Sinusoid to fit to ASAD.
-        
+
         Parameters
         ----------
         x : float
@@ -450,7 +450,7 @@ class PolarizationASAD():
             Second parameter
         c : float
             Third parameter
-            
+
         Returns
         -------
         asad_function : float
@@ -458,13 +458,13 @@ class PolarizationASAD():
         """
 
         asad_function = a - (b * np.cos(2 * (x - c)))
-    
+
         return asad_function
-    
+
     def fit_asad(self, counts, p0, bounds, sigma):
         """
         Fit the ASAD with a sinusoid.
-        
+
         Parameters
         ----------
         counts : list
@@ -475,7 +475,7 @@ class PolarizationASAD():
             Lower & upper bounds on parameters
         sigma : float, list, or np.array
             Uncertainties in y data
-            
+
         Returns
         -------
         popt : np.ndarray
@@ -485,16 +485,16 @@ class PolarizationASAD():
         """
 
         popt, pcov = curve_fit(self.asad_sinusoid, Angle(self._bins).rad, counts, p0=p0, bounds=bounds, sigma=sigma)
-        uncertainties = [] 
+        uncertainties = []
         for i in range(len(pcov)):
             uncertainties.append(np.sqrt(pcov[i][i]))
 
         return popt, uncertainties
-    
+
     def plot_asad(self, counts, title, error=None, coefficients=[]):
         """
         Plot the ASAD.
-        
+
         Parameters
         ----------
         counts : list
@@ -512,7 +512,7 @@ class PolarizationASAD():
             plt.errorbar(Angle(self._bins).degree, counts, yerr=error, linewidth=0, elinewidth=1)
         plt.title(title)
         plt.xlabel('Azimuthal Scattering Angle (degrees)')
-        
+
         if len(coefficients) == 3:
             x = np.linspace(-np.pi, np.pi, 1000)
             y = []
@@ -525,20 +525,20 @@ class PolarizationASAD():
     def correct_asad(self, data_asad, unpolarized_asad, data_asad_uncertainties=None):
         """
         Correct the ASAD using the ASAD of an unpolarized source.
-        
+
         Parameters
         ----------
         data_asad : dict
             Counts and uncertainties in each azimuthal scattering angle bin of data
         unpolarized_asad : dict
             Counts and uncertainties in each azimuthal scattering angle bin of unpolarized source
-            
+
         Returns
         -------
         asad : histpy.Histogram
             Normalized counts in each azimuthal scattering angle bin
         """
-    
+
         corrected = []
         uncertainties = []
         for i in range(len(self._bins)):
@@ -556,7 +556,7 @@ class PolarizationASAD():
     def calculate_mu(self, counts_corrected, p0=None, bounds=None, sigma=None):
         """
         Calculate the modulation (mu).
-        
+
         Parameters
         ----------
         counts_corrected : list
@@ -567,7 +567,7 @@ class PolarizationASAD():
             Lower & upper bounds on parameters
         sigma : float, list, or np.array
             Uncertainties for each azimuthal scattering angle bin
-            
+
         Returns
         -------
         modulation : dict
@@ -577,27 +577,27 @@ class PolarizationASAD():
         """
 
         parameter_values, uncertainties = self.fit_asad(counts_corrected, p0, bounds, sigma)
-    
+
         mu = parameter_values[1] / parameter_values[0]
         mu_uncertainty = mu * np.sqrt((uncertainties[0]/parameter_values[0])**2 + (uncertainties[1]/parameter_values[1])**2)
 
         modulation = {'mu': mu, 'uncertainty': mu_uncertainty}
 
         logger.info('Modulation: ' + str(round(mu, 3)) + ' +/- ' + str(round(mu_uncertainty, 3)))
-    
+
         return modulation, parameter_values
-    
+
     def constant(self, x, a):
         """
         Constant function to fit to mu_100 values.
-        
+
         Parameters
         ----------
         x : float
             Mu_100
         a : float
             Parameter
-            
+
         Returns
         -------
         a : float
@@ -605,11 +605,11 @@ class PolarizationASAD():
         """
 
         return a
-    
+
     def calculate_mu100(self, polarized_asads, unpolarized_asad, show_plots=False):
         """
         Calculate the modulation (mu) of an 100% polarized source.
-        
+
         Parameters
         ----------
         polarized_asads : list
@@ -660,7 +660,7 @@ class PolarizationASAD():
     def fit(self, p0=None, bounds=None, show_plots=False):
         """
         Fit the polarization fraction and angle.
-        
+
         Parameters
         ----------
         p0 : list or np.array, optional
@@ -669,7 +669,7 @@ class PolarizationASAD():
             Lower & upper bounds on parameters. Default is ([0, 0, 0], [np.inf,np.inf,np.pi])
         show_plots : bool, optional
             Option to show plots. Default is False
-            
+
         Returns
         -------
         polarization : dict
@@ -692,7 +692,7 @@ class PolarizationASAD():
         polarization_angle_uncertainty = Angle(uncertainties[2], unit=u.rad)
 
         polarization = {'fraction': polarization_fraction, 'angle': polarization_angle, 'fraction uncertainty': polarization_fraction_uncertainty, 'angle uncertainty': polarization_angle_uncertainty, 'best fit parameter values': parameter_values, 'best fit parameter uncertainties': uncertainties}
-    
+
         logger.info('Best fit polarization fraction: ' + str(round(polarization_fraction, 3)) + ' +/- ' + str(round(polarization_fraction_uncertainty, 3)))
         logger.info('Best fit polarization angle (IAU convention): ' + str(round(polarization_angle.angle.degree, 3)) + ' +/- ' + str(round(polarization_angle_uncertainty.degree, 3)))
 
@@ -701,5 +701,5 @@ class PolarizationASAD():
 
         if show_plots == True:
             self.plot_asad(self._asads['source (corrected)'].contents.data, 'Corrected Source ASAD', self._sigma, coefficients=polarization['best fit parameter values'])
-        
+
         return polarization
