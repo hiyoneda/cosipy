@@ -55,7 +55,7 @@ def test_get_item():
         drmu = response.get_pixel(0, weight=1.0 * u.s)
 
         assert drmu.unit.is_equivalent('m2 s')
-                
+
         drm2 = response[0] # shorthand for get_pixel with unit weight
 
         assert drm == drm2
@@ -85,7 +85,7 @@ def test_get_extended_source_response():
                                                                          coordsys = 'galactic',
                                                                          nside_image = None,
                                                                          nside_scatt_map = None,
-                                                                         Earth_occ = True)
+                                                                         earth_occ = True)
 
         assert extended_source_response.ndim == 5
 
@@ -106,7 +106,7 @@ def test_merge_psr_to_extended_source_response(tmp_path):
                                                                      coordsys='galactic',
                                                                      nside_image=None,
                                                                      nside_scatt_map=None,
-                                                                     Earth_occ=True)
+                                                                     earth_occ=True)
 
             psr.write(tmp_path / f"psr_{ipix_image:08}.h5")
 
