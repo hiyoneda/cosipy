@@ -194,17 +194,16 @@ class PolarizationASAD():
         asad_background_scaled = (asad_background * source_duration / background_duration).astype(int)
         asad_source = asad_sb - asad_background_scaled
 
+        asad_unpolarized, asads_polarized = self.create_simulated_asads(bin_edges)
+                
         axis = Axis(bin_edges)
-
-        unpolarized_asad, polarized_asads = self.create_simulated_asads(bin_edges)
-
         asads = {
             'source' : Histogram(axis, contents=asad_source, copy_contents=False),
             'background' : Histogram(axis, contents=asad_background, copy_contents=False),
             'background_scaled' : Histogram(axis, contents=asad_background_scaled, copy_contents=False),
             'source_and_background' : Histogram(axis, contents=asad_sb, copy_contents=False),
-            'unpolarized' : Histogram(axis, contents=unpolarized_asad, copy_contents=False),
-            'polarized' : [ Histogram(axis, contents=asad, copy_contents=False) for asad in polarized_asads ]
+            'unpolarized' : Histogram(axis, contents=asad_unpolarized, copy_contents=False),
+            'polarized' : [ Histogram(axis, contents=asad, copy_contents=False) for asad in asads_polarized ]
         }
 
         return asads, source_duration, background_duration
