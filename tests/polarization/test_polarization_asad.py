@@ -37,7 +37,14 @@ source_direction = SkyCoord(0, 70, representation_type='spherical', frame=Spacec
 
 bin_edges = Angle(np.linspace(-np.pi, np.pi, 10), unit=u.rad)
 
-background = {'Psi local': [0, 0], 'Chi local': [0, 0], 'Psi galactic': [0, 0], 'Chi galactic': [0, 0], 'Energies': [300., 300.], 'TimeTags': [1., 2.]}
+background = {
+    'Psi local': np.array([0, 0]),
+    'Chi local': np.array([0, 0]),
+    'Psi galactic': np.array([0, 0]),
+    'Chi galactic': np.array([0, 0]),
+    'Energies': np.array([300., 300.]),
+    'TimeTags': np.array([1., 2.])
+}
 
 def test_spacecraft_fit():
 
