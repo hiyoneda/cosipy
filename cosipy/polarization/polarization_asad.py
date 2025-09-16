@@ -363,8 +363,8 @@ class PolarizationASAD():
 
         # unpolarized first, then all polarized
         pol_axis = self._response.axes['Pol']
-        pol_fractions = np.concat(([0.], np.ones(pol_axis.nbins)))
-        pol_angles =    np.concat(([0.], pol_axis.centers.to_value(u.deg)))
+        pol_fractions = np.hstack(([0.], np.ones(pol_axis.nbins)))
+        pol_angles =    np.hstack(([0.], pol_axis.centers.to_value(u.deg)))
 
         scattering_dirs, weights = self.scattering_dirs_from_response(self._spectral_flux,
                                                                       pol_fractions,
