@@ -5,7 +5,6 @@ from scipy.optimize import curve_fit
 import matplotlib.pyplot as plt
 
 import astropy.units as u
-from astropy.time import Time
 from astropy.coordinates import Angle, SkyCoord
 
 from scoords import SpacecraftFrame
@@ -195,7 +194,7 @@ class PolarizationASAD():
         asad_source = asad_sb - asad_background_scaled
 
         asad_unpolarized, asads_polarized = self.create_simulated_asads(bin_edges)
-                
+
         axis = Axis(bin_edges)
         asads = {
             'source' : Histogram(axis, contents=asad_source, copy_contents=False),
@@ -284,14 +283,17 @@ class PolarizationASAD():
                                       polarization_levels,
                                       polarization_angles):
         """
-        Convolve source spectrum with response and extract
-        weighted scattering directions from the result.
+        Convolve source spectrum with response and extract weighted
+        scattering directions from the result.  Weightings are
+        computed assuming a certain polarization fraction and angle;
+        the function computes them for a whole list of these at once,
+        since they are all computed from the same response slice.
 
         Parameters
         ----------
         spectral_flux : np.ndarray
              Integrated spectral flux in each Ei bin of self._response
-        polarization_levels : array-like float
+        polarization_levels : array-like of float
             Polarization levels (between 0 and 1).
         polarization_angles : array-like of float
             Polarization angles in degrees. If in the spacecraft
@@ -398,9 +400,9 @@ class PolarizationASAD():
 
         azimuthal_angles = PolarizationAngle.from_scattering_direction(directions,
                                                                        self._source,
-                                                                       self._convention).angle
+                                                                       self._convention)
 
-        asad, _ = np.histogram(azimuthal_angles, bins=bin_edges, weights=weights)
+        asad, _ = np.histogram(azimuthal_angles.angle, bins=bin_edges, weights=weights)
 
         return asad
 
@@ -498,6 +500,12 @@ class PolarizationASAD():
             bins
 
         """
+
+        def constant(x, a):
+            # constant approximation a to
+            # mu_100 values x.
+            return a
+
         pol_axis = self._response.axes['Pol']
         pol_angles = pol_axis.centers.to_value(u.deg)
 
@@ -523,7 +531,7 @@ class PolarizationASAD():
 
         mu_100s               = [ m['mu']          for m in mu_100_vals ]
         mu_100_uncertainties  = [ m['uncertainty'] for m in mu_100_vals ]
-        popt, pcov = curve_fit(self.constant,
+        popt, pcov = curve_fit(constant,
                                pol_angles, mu_100s,
                                sigma = mu_100_uncertainties)
         result = {'mu': popt[0], 'uncertainty': pcov[0][0]}
@@ -577,26 +585,6 @@ class PolarizationASAD():
         modulation = {'mu': mu, 'uncertainty': mu_uncertainty}
 
         return modulation, params
-
-    @staticmethod
-    def constant(x, a):
-        """
-        Constant function to fit to mu_100 values.
-
-        Parameters
-        ----------
-        x : float
-            Mu_100
-        a : float
-            Parameter
-
-        Returns
-        -------
-        a : float
-            Constant value
-        """
-
-        return a
 
     @staticmethod
     def calculate_mdp(source_asad, background_scaled_asad, mu_100):
@@ -658,24 +646,23 @@ class PolarizationASAD():
 
         # polarization fraction
         pf = params[1] / (params[0] * self._mu_100['mu'])
-        pf_uncertainty = pf * np.sqrt((uncertainties[0]/params[0])**2 +
-                                      (uncertainties[1]/params[1])**2 +
-                                      (self._mu_100['uncertainty']/self._mu_100['mu'])**2)
+        pf_uncertainty = pf * np.sqrt((uncertainties[0] / params[0])**2 +
+                                      (uncertainties[1] / params[1])**2 +
+                                      (self._mu_100['uncertainty'] /
+                                       self._mu_100['mu'])**2)
 
         # polarization angle
         pa = Angle(params[2], unit=u.rad)
         pa.wrap_at(180 * u.deg, inplace=True)
         pa = np.where(pa < 0, pa + 180*u.deg, pa)
 
-        pa = PolarizationAngle(pa, self._source,
-                               convention=self._convention).transform_to(IAUPolarizationConvention())
         pa_uncertainty = Angle(uncertainties[2], unit=u.rad)
 
         logger.info('Best fit polarization fraction: '
                     f'{pf:.3f} +/- {pf_uncertainty:.3f}')
 
         logger.info('Best fit polarization angle (IAU convention): '
-                    f'{pa.angle.deg:.3f} +/- {pa_uncertainty.deg:.3f}')
+                    f'{pa.deg:.3f} +/- {pa_uncertainty.deg:.3f}')
 
         if self._mdp > pf:
             logger.info('Polarization fraction is below MDP!',
@@ -686,6 +673,11 @@ class PolarizationASAD():
                            'Corrected Source ASAD',
                            self._sigma,
                            coefficients = params)
+
+        # return angle as PolarizationAngle
+        pa = PolarizationAngle(pa, self._source,
+                               convention=self._convention)
+        pa = pa.transform_to(IAUPolarizationConvention())
 
         return {
             'fraction': pf,
@@ -720,34 +712,18 @@ class PolarizationASAD():
             Uncertainty on each parameter value
         """
 
-        popt, pcov = curve_fit(PolarizationASAD.asad_sinusoid,
+        def asad_sinusoid(x, a, b, c):
+            # Sinusoid to fit scattering angles x
+            # (radians) with shift and scaling parameters
+            return a - b * np.cos(2 * (x - c))
+
+        popt, pcov = curve_fit(asad_sinusoid,
                                asad.axis.centers,
                                asad.contents,
-                               p0=p0, bounds=bounds, sigma=sigma)
+                               p0=p0,
+                               bounds=bounds,
+                               sigma=sigma)
+
         uncertainties = np.sqrt(np.diagonal(pcov))
 
         return popt, uncertainties
-
-    @staticmethod
-    def asad_sinusoid(x, a, b, c):
-        """
-        Sinusoid to fit to ASAD.
-
-        Parameters
-        ----------
-        x : float
-            Azimuthal scattering angle (radians)
-        a : float
-            First parameter
-        b : float
-            Second parameter
-        c : float
-            Third parameter
-
-        Returns
-        -------
-        float: Y-value of ASAD
-
-        """
-
-        return a - b * np.cos(2 * (x - c))
