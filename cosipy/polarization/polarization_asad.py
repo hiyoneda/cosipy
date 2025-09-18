@@ -190,7 +190,10 @@ class PolarizationASAD():
 
         asad_background, background_duration = compute_asad_from_datasets(background, bin_edges)
 
-        # FIXME: why do we truncate to int here?
+        # FIXME: why do we truncate to int here? Seems to be a relic
+        # of old impl where computed ASAD arrays were integers.
+        # Removing truncation changes output slightly, so leaving
+        # as-is for now.
         asad_background_scaled = (asad_background * source_duration / background_duration).astype(int)
         asad_source = asad_sb - asad_background_scaled
 
