@@ -712,12 +712,7 @@ class PolarizationASAD():
             Uncertainty on each parameter value
         """
 
-        def asad_sinusoid(x, a, b, c):
-            # Sinusoid to fit scattering angles x
-            # (radians) with shift and scaling parameters
-            return a - b * np.cos(2 * (x - c))
-
-        popt, pcov = curve_fit(asad_sinusoid,
+        popt, pcov = curve_fit(PolarizationASAD.asad_sinusoid,
                                asad.axis.centers,
                                asad.contents,
                                p0=p0,
@@ -727,3 +722,9 @@ class PolarizationASAD():
         uncertainties = np.sqrt(np.diagonal(pcov))
 
         return popt, uncertainties
+
+    @staticmethod
+    def asad_sinusoid(x, a, b, c):
+        # Sinusoid to fit scattering angles x
+        # (radians) with shift and scaling parameters
+        return a - b * np.cos(2 * (x - c))
