@@ -182,7 +182,7 @@ class PolarizationASAD():
                     times = s.binned_data.axes['Time'].edges.value
 
                 asad += self.scattering_dirs_to_asad(scattering_dirs, bin_edges, weights)
-                duration += times[-1] - times[0] # max - min of sorted array
+                duration += np.ptp(times) # max - min
 
             return asad, duration
 
@@ -190,6 +190,7 @@ class PolarizationASAD():
 
         asad_background, background_duration = compute_asad_from_datasets(background, bin_edges)
 
+        # FIXME: why do we truncate to int here?
         asad_background_scaled = (asad_background * source_duration / background_duration).astype(int)
         asad_source = asad_sb - asad_background_scaled
 
@@ -235,7 +236,7 @@ class PolarizationASAD():
                                        lat=np.pi/2 - unbinned_data['Psi local'][emask],
                                        unit=u.rad, frame=self._convention.frame)
         else:
-            # source is in insertial frame frame
+            # source is in inertial frame
             scattering_dirs = SkyCoord(l=unbinned_data['Chi galactic'][emask],
                                        b=unbinned_data['Psi galactic'][emask],
                                        unit=u.deg, frame='galactic').transform_to('icrs')
