@@ -38,11 +38,11 @@ class PolarizationASAD():
         Spectrum of source
     asad_bin_edges : astropy.coordinates.angles.core.Angle
         Bin edges for azimuthal scattering angle distribution
-    data : dict or cosipy.data_io.BinnedData
-        Binned or unbinned data, or list of binned/unbinned data if
+    data : dict or Histogram, or list of same
+        Unbinned or binned data, or list of binned/unbinned data if
         separated in time
-    background : dict or cosipy.data_io.BinnedData
-        Binned or unbinned background model, or list of backgrounds if
+    background : dict or Histogram, or list of same
+        Unbinned or binned background model, or list of backgrounds if
         separated in time
     sc_orientation : cosipy.spacecraftfile.SpacecraftFile.SpacecraftFile
         Spacecraft orientation
@@ -173,13 +173,13 @@ class PolarizationASAD():
             duration = 0.
 
             for s in datasets:
-                if isinstance(s, dict):
+                if isinstance(s, dict): # unbinned
                     scattering_dirs = self.scattering_dirs_from_unbinned_data(s)
                     weights = None
                     times = s['TimeTags']
-                else:
-                    scattering_dirs, weights = self.scattering_dirs_from_binned_data(s.binned_data)
-                    times = s.binned_data.axes['Time'].edges.value
+                else: # binned
+                    scattering_dirs, weights = self.scattering_dirs_from_binned_data(s)
+                    times = s.axes['Time'].edges.value
 
                 asad += self.scattering_dirs_to_asad(scattering_dirs, bin_edges, weights)
                 duration += np.ptp(times) # max - min
@@ -252,7 +252,7 @@ class PolarizationASAD():
 
         Parameters
         ----------
-        binned_data : cosipy.data_io.BinnedData
+        binned_data : Histogram
             Data binned in Compton data space
         bin_edges : astropy.units.Quantity
             edges of azimuthal scattering angle bins
@@ -264,7 +264,6 @@ class PolarizationASAD():
         weights : array of float
            Weights for each scattering direction
 
-        NB: THIS CODE IS NEVER EXERCISED
         """
 
         psichi_axis = binned_data.axes['PsiChi']
@@ -279,7 +278,10 @@ class PolarizationASAD():
             # source is in inertial frame
             scattering_dirs = psichi_axis.pix2skycoord(pix).transform_to('icrs')
 
-        weights = s.binned_data.project('PsiChi').contents
+        assert binned_data.is_sparse
+
+        # sparse contents has no unit
+        weights = binned_data.project('PsiChi').todense().contents
 
         return scattering_dirs, weights
 
