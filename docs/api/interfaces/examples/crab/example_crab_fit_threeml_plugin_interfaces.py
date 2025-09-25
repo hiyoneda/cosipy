@@ -194,7 +194,6 @@ def main():
     # matching the behavior of v0.3. This is all the current BinnedInstrumentResponse can do.
     # In principle, this can be decoupled, and a BinnedInstrumentResponseInterface implementation
     # can provide the response for an arbitrary directions, Ei and Pol values.
-    # NOTE: this is currently only implemented for data in local coords
     psr = BinnedThreeMLPointSourceResponse(instrument_response,
                                            sc_history=sc_orientation,
                                            energy_axis = dr.axes['Ei'],
@@ -332,7 +331,8 @@ def main():
                              spectral_shape=spectrum_inj)  # Spectral model
 
     psr.set_source(source_inj)
-    expectation_inj = psr.expectation(data, copy=True)
+    psr.set_data(data)
+    expectation_inj = psr.expectation(copy=True)
 
 
     # The summary of the results above tell you the optimal values of the parameters, as well as the errors. Propogate the errors to the "evaluate_at" method of the spectrum

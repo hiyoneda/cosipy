@@ -143,14 +143,19 @@ class PoissonLikelihood(BinnedLikelihoodInterface):
         if self._data is None or self._response is None:
             raise RuntimeError("Set data and response before calling this function.")
 
+        self._response.set_data(self._data)
+
+        if self.has_bkg:
+           self._bkg.set_data(self._data)
+
         # Compute expectation including background
         # If we don't have background, we won't modify the expectation, so
         # it's safe to use the internal cache.
-        expectation = self._response.expectation(self._data, copy = self.has_bkg)
+        expectation = self._response.expectation(copy = self.has_bkg)
 
         if self.has_bkg:
             # We won't modify the bkg expectation, so it's safe to use the internal cache
-            expectation += self._bkg.expectation(self._data, copy = False)
+            expectation += self._bkg.expectation(copy = False)
 
         # Get the arrays
         expectation = expectation.contents

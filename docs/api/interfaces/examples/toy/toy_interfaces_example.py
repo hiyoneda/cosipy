@@ -7,7 +7,7 @@ from astromodels.core.polarization import Polarization
 import astropy.units as u
 from cosipy import SpacecraftHistory
 from cosipy.interfaces.background_interface import BackgroundDensityInterface
-from cosipy.interfaces.data_interface import EventData, EventDataInterface
+from cosipy.interfaces.data_interface import EventData, EventDataInterface, DataInterface
 
 from cosipy.statistics import PoissonLikelihood, UnbinnedLikelihood
 
@@ -129,6 +129,7 @@ class ToyBkg(BinnedBackgroundInterface, BackgroundDensityInterface):
         self._unit_expectation[:] = 1 / self._unit_expectation.nbins
         self._norm = 1
 
+        self._binned_data = None
         self._event_data = None
 
         # Doesn't need to be normalized
@@ -140,11 +141,20 @@ class ToyBkg(BinnedBackgroundInterface, BackgroundDensityInterface):
     def ncounts(self) -> float:
         return self._norm
 
-    def set_data(self, data: EventDataInterface) -> None:
+    def set_data(self, data: DataInterface) -> None:
+
         if not isinstance(data, ToyData):
             raise TypeError(f"This class only support data of type {ToyData}")
 
-        self._event_data = data
+        if isinstance(data, BinnedDataInterface):
+
+            if data.axes != self._unit_expectation.axes:
+                raise ValueError("Wrong axes. I have fixed axes.")
+
+            self._binned_data = data
+
+        if isinstance(data, EventDataInterface):
+            self._event_data = data
 
     def expectation_density(self, data: Optional[Union['EventDataInterface', Iterator]] = None) -> Iterable[float]:
         if data is None:
@@ -168,13 +178,7 @@ class ToyBkg(BinnedBackgroundInterface, BackgroundDensityInterface):
     def parameters(self) -> Dict[str, u.Quantity]:
         return {'norm': u.Quantity(self._norm)}
 
-    def expectation(self, data: BinnedDataInterface, copy = True) -> Histogram:
-
-        if not isinstance(data, ToyData):
-            raise TypeError(f"Wrong data type '{type(data)}', expected {ToyData}.")
-
-        if data.axes != self._unit_expectation.axes:
-            raise ValueError("Wrong axes. I have fixed axes.")
+    def expectation(self, copy = True) -> Histogram:
 
         # Always a copy
         return self._unit_expectation * self._norm
@@ -190,6 +194,9 @@ class ToyPointSourceResponse(BinnedThreeMLSourceResponseInterface, UnbinnedThree
         self._unit_expectation = Histogram(toy_axis,
                                            contents=np.diff(norm.cdf(toy_axis.edges)))
 
+        self._binned_data = None
+        self._event_data = None
+
     def ncounts(self) -> float:
 
         if self._source is None:
@@ -200,11 +207,20 @@ class ToyPointSourceResponse(BinnedThreeMLSourceResponseInterface, UnbinnedThree
         ns_events = self._source.spectrum.main.shape.k.value
         return ns_events
 
-    def set_data(self, data:EventDataInterface):
+    def set_data(self, data: DataInterface) -> None:
+
         if not isinstance(data, ToyData):
             raise TypeError(f"This class only support data of type {ToyData}")
 
-        self._event_data = data
+        if isinstance(data, BinnedDataInterface):
+
+            if data.axes != self._unit_expectation.axes:
+                raise ValueError("Wrong axes. I have fixed axes.")
+
+            self._binned_data = data
+
+        if isinstance(data, EventDataInterface):
+            self._event_data = data
 
     def expectation_density(self, data:Optional[Union[EventDataInterface, Iterator]] = None) -> Iterable[float]:
 
@@ -235,13 +251,7 @@ class ToyPointSourceResponse(BinnedThreeMLSourceResponseInterface, UnbinnedThree
 
         self._source = source
 
-    def expectation(self, data: BinnedDataInterface, copy = True) -> Histogram:
-
-        if not isinstance(data, ToyData):
-            raise TypeError(f"Wrong data type '{type(data)}', expected {ToyData}.")
-
-        if data.axes != self._unit_expectation.axes:
-            raise ValueError("Wrong axes. I have fixed axes.")
+    def expectation(self, copy = True) -> Histogram:
 
         if self._source is None:
             raise RuntimeError("Set a source first")
@@ -265,8 +275,13 @@ class ToyModelFolding(BinnedThreeMLModelFoldingInterface, UnbinnedThreeMLModelFo
         if not isinstance(psr, ToyPointSourceResponse):
             raise TypeError(f"Wrong psr type '{type(psr)}', expected {ToyPointSourceResponse}.")
 
+        self._model = None
+
         self._psr = psr
         self._psr_copies = {}
+
+        self._binned_data = None
+        self._event_data = None
 
     def ncounts(self) -> float:
 
@@ -277,13 +292,21 @@ class ToyModelFolding(BinnedThreeMLModelFoldingInterface, UnbinnedThreeMLModelFo
 
         return ncounts
 
-    def set_data(self, data:EventDataInterface):
+    def set_data(self, data: DataInterface) -> None:
+
         if not isinstance(data, ToyData):
             raise TypeError(f"This class only support data of type {ToyData}")
 
-        self._event_data = data
+        if isinstance(data, BinnedDataInterface):
+
+            self._binned_data = data
+
+        if isinstance(data, EventDataInterface):
+            self._event_data = data
 
     def expectation_density(self, data: EventDataInterface = None) -> Iterable[float]:
+
+        self._cache_psr_copies()
 
         if data is None:
 
@@ -302,21 +325,39 @@ class ToyModelFolding(BinnedThreeMLModelFoldingInterface, UnbinnedThreeMLModelFo
 
     def set_model(self, model: Model):
 
-        self._psr_copies = {}
+        self._model = None
+
+    def _cache_psr_copies(self):
+
+        new_psr_copies = {}
+
         for name,source in model.sources.items():
+
+            if name in self._psr_copies:
+                # Use cache
+                new_psr_copies[name] = self._psr_copies[name]
+
             psr_copy = self._psr.copy()
             psr_copy.set_source(source)
-            self._psr_copies[name] = psr_copy
 
-    def expectation(self, data: BinnedDataInterface, copy = True) -> Histogram:
+            if isinstance(psr_copy, BinnedThreeMLSourceResponseInterface):
+                psr_copy.set_data(self._binned_data)
 
-        if not isinstance(data, ToyData):
-            raise TypeError(f"Wrong data type '{type(data)}', expected {ToyData}.")
+            if isinstance(psr_copy, UnbinnedThreeMLSourceResponseInterface):
+                psr_copy.set_data(self._event_data)
 
-        expectation = Histogram(data.axes)
+            new_psr_copies[name] = psr_copy
+
+        self._psr_copies = new_psr_copies
+
+    def expectation(self, copy = True) -> Histogram:
+
+        self._cache_psr_copies()
+
+        expectation = Histogram(self._binned_data.axes)
 
         for source_name,psr in self._psr_copies.items():
-            expectation += psr.expectation(data, copy = False)
+            expectation += psr.expectation(copy = False)
 
         # Always a copy
         return expectation
@@ -362,6 +403,7 @@ model = Model(source)
 #like_fun = PoissonLikelihood()
 like_fun = UnbinnedLikelihood()
 
+# Call set_data() before set_response() and set_background()
 like_fun.set_data(data)
 like_fun.set_response(response)
 like_fun.set_background(bkg)
@@ -396,7 +438,6 @@ for i,s in enumerate(loglike.axes['s'].centers):
 
         spectrum.k.value = s
         cosi.bkg_parameter['norm'].value = b
-        cosi._update_bkg_parameters() # Fix the need for this line
 
         loglike[i,j] = cosi.get_log_like()
 

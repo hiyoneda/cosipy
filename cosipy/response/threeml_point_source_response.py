@@ -16,7 +16,7 @@ import copy
 from astromodels.sources import Source, PointSource
 from scoords import SpacecraftFrame
 from histpy import Axes, Histogram, Axis, HealpixAxis
-from cosipy.interfaces import BinnedThreeMLSourceResponseInterface, BinnedDataInterface
+from cosipy.interfaces import BinnedThreeMLSourceResponseInterface, BinnedDataInterface, DataInterface
 
 from cosipy.response import FullDetectorResponse, PointSourceResponse
 from cosipy.spacecraftfile import SpacecraftHistory, SpacecraftAttitudeMap
@@ -68,11 +68,19 @@ class BinnedThreeMLPointSourceResponse(BinnedThreeMLSourceResponseInterface):
 
         # TODO: FullDetectorResponse -> BinnedInstrumentResponseInterface
 
-        self._sc_ori = sc_history
 
-        # Use setters for these
+        # Interface inputs
+        self._data = None
         self._source = None
 
+        # Other implementation inputs
+        self._sc_ori = sc_history
+        self._response = instrument_response
+        self._energy_axis = energy_axis
+        self._polarization_axis = polarization_axis
+        self._nside = nside
+
+        # Cache
         # Prevent unnecessary calculations and new memory allocations
 
         # See this issue for the caveats of comparing models
@@ -88,12 +96,6 @@ class BinnedThreeMLPointSourceResponse(BinnedThreeMLSourceResponseInterface):
         self._last_convolved_source_skycoord = None
 
         self._psr = None
-
-        self._response = instrument_response
-        self._energy_axis = energy_axis
-        self._polarization_axis = polarization_axis
-
-        self._nside = nside
 
     def clear_cache(self):
 
@@ -129,18 +131,22 @@ class BinnedThreeMLPointSourceResponse(BinnedThreeMLSourceResponseInterface):
 
         self._source = source
 
-    def expectation(self, data:BinnedDataInterface, copy = True)-> Histogram:
-        # TODO: check coordsys from axis
-        # TODO: Earth occ always true in this case
+    def set_data(self, data: DataInterface):
 
         if not isinstance(data, EmCDSBinnedData):
             raise TypeError(f"Wrong data type '{type(data)}', expected {EmCDSBinnedData}.")
 
-        if self._source is None:
+        self._data = data
+
+    def expectation(self, copy = True)-> Histogram:
+        # TODO: check coordsys from axis
+        # TODO: Earth occ always true in this case
+
+        if self._data is None:
             raise RuntimeError("Call set_source() first.")
 
-        if self._sc_ori is None:
-            raise RuntimeError("Call set_spacecraft_history() first.")
+        if self._source is None:
+            raise RuntimeError("Call set_source() first.")
 
         # See this issue for the caveats of comparing models
         # https://github.com/threeML/threeML/issues/645
@@ -161,7 +167,7 @@ class BinnedThreeMLPointSourceResponse(BinnedThreeMLSourceResponseInterface):
         # are expensive
         if self._psr is None or coord != self._last_convolved_source_skycoord:
 
-            coordsys = data.axes["PsiChi"].coordsys
+            coordsys = self._data.axes["PsiChi"].coordsys
 
             logger.info("... Calculating point source response ...")
 
@@ -170,7 +176,7 @@ class BinnedThreeMLPointSourceResponse(BinnedThreeMLSourceResponseInterface):
 
                 dwell_time_map = self._sc_ori.get_dwell_map(coord, nside = self._nside)
 
-                self._psr = PointSourceResponse.from_dwell_time_map(data,
+                self._psr = PointSourceResponse.from_dwell_time_map(self._data,
                                                                     self._response,
                                                                     dwell_time_map,
                                                                     self._energy_axis,
@@ -185,7 +191,7 @@ class BinnedThreeMLPointSourceResponse(BinnedThreeMLSourceResponseInterface):
                                                        earth_occ=True)
 
                 self._psr = PointSourceResponse.from_scatt_map(coord,
-                                                               data,
+                                                               self._data,
                                                                self._response,
                                                                scatt_map,
                                                                self._energy_axis,
@@ -198,7 +204,7 @@ class BinnedThreeMLPointSourceResponse(BinnedThreeMLSourceResponseInterface):
                                                       self._source.spectrum.main.polarization)
 
         # Check if axes match
-        if data.axes != self._expectation.axes:
+        if self._data.axes != self._expectation.axes:
             raise ValueError(
                 "Currently, the expectation axes must exactly match the detector response measurement axes")
 

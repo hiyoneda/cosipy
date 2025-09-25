@@ -2,7 +2,7 @@ from typing import Protocol, runtime_checkable, Dict, Any, Generator, Iterable, 
 
 import histpy
 import numpy as np
-from cosipy.interfaces import BinnedDataInterface, EventDataInterface
+from cosipy.interfaces import BinnedDataInterface, EventDataInterface, DataInterface
 
 __all__ = [
     "ExpectationDensityInterface",
@@ -10,18 +10,18 @@ __all__ = [
            ]
 
 @runtime_checkable
-class ExpectationInterface(Protocol):...
+class ExpectationInterface(Protocol):
+    def set_data(self, data: DataInterface):...
 
 @runtime_checkable
 class BinnedExpectationInterface(ExpectationInterface, Protocol):
-    def expectation(self, data:BinnedDataInterface, copy:bool)->histpy.Histogram:
+    def expectation(self, copy: Optional[bool])->histpy.Histogram:
         """
 
         Parameters
         ----------
-        data
         copy:
-            If True, it will return an array that the user if free to modify.
+            If True (default), it will return an array that the user if free to modify.
             Otherwise, it will result a reference, possible to the cache, that
             the user should not modify
 
@@ -55,7 +55,6 @@ class ExpectationDensityInterface(ExpectationInterface, Protocol):
     of the iterator or itertools.tee.
     """
 
-    def set_data(self, data:EventDataInterface):...
     def ncounts(self) -> float:...
     def expectation_density(self, data: Optional[Union['EventDataInterface', Iterator]]) -> Iterable[float]:
         """

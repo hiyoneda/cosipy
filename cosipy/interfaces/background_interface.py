@@ -10,7 +10,7 @@ from astromodels import Parameter
 
 logger = logging.getLogger(__name__)
 
-from .expectation_interface import BinnedExpectationInterface, ExpectationDensityInterface
+from .expectation_interface import BinnedExpectationInterface, ExpectationDensityInterface, ExpectationInterface
 
 __all__ = [
            "BackgroundInterface",
@@ -19,7 +19,7 @@ __all__ = [
            ]
 
 @runtime_checkable
-class BackgroundInterface(Protocol):
+class BackgroundInterface(ExpectationInterface, Protocol):
     def set_parameters(self, **parameters:Dict[str, u.Quantity]) -> None:...
     @property
     def parameters(self) -> Dict[str, u.Quantity]:...

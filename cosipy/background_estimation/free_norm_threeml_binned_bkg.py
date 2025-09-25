@@ -7,7 +7,7 @@ from histpy import Axes
 
 from astropy import units as u
 
-from cosipy.interfaces import BinnedBackgroundInterface, BinnedDataInterface
+from cosipy.interfaces import BinnedBackgroundInterface, BinnedDataInterface, DataInterface
 
 __all__ = ["FreeNormBinnedBackground"]
 
@@ -116,12 +116,16 @@ class FreeNormBinnedBackground(BinnedBackgroundInterface):
     def parameters(self) -> Dict[str, u.Quantity]:
         return {l:u.Quantity(n) for l,n in self.norms.items()}
 
-    def expectation(self, data:BinnedDataInterface, copy:bool = True)->Histogram:
+    def set_data(self, data: DataInterface):
+
+        if data.axes != self.meausured_axes:
+            raise ValueError("Requested axes do not match the background component axes")
+
+    def expectation(self, copy:bool = True)->Histogram:
         """
 
         Parameters
         ----------
-        data
         copy:
             If True, it will return an array that the user if free to modify.
             Otherwise, it will result a reference, possible to the cache, that
@@ -132,8 +136,6 @@ class FreeNormBinnedBackground(BinnedBackgroundInterface):
 
         """
 
-        if data.axes != self.meausured_axes:
-            raise ValueError("Requested axes do not match the background component axes")
 
         # Check if we can use the cache
         if self._expectation is None:
