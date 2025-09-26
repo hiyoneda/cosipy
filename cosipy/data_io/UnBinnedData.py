@@ -732,7 +732,7 @@ class UnBinnedData(DataIO):
 
     def select_data_COseq(self, seqmin, seqmax, output_name=None, unbinned_data=None):
 
-        """Applies CO sequence cuts to unbinnned data dictionary. 
+        """Applies CO sequence cuts [seqmin,seqmax) to unbinnned data dictionary. 
         
         Parameters
         ----------
