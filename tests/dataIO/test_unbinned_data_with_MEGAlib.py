@@ -51,7 +51,7 @@ def test_unbinned_data_with_MEGAlib(tmp_path):
     psi_loc_old = dict_old['Psi local'][:ntestsamples]
     chi_gal_old = dict_old['Chi galactic'][:ntestsamples]
     psi_gal_old = dict_old['Psi galactic'][:ntestsamples]
-    CO_seq_old = dict_old['CO seq'][:ntestsamples]
+    CO_seq_old = dict_old['Compton Seq'][:ntestsamples]
     
     # For comparing chi_loc, psi_loc=0 values are arbitrary,
     # so we exclude them from the comparison.
@@ -79,7 +79,7 @@ def test_unbinned_data_with_MEGAlib(tmp_path):
     psi_loc_dict = {"old":psi_loc_old,"new":analysis.psi_loc_test,"name":"psi_loc","units":"rad"}
     chi_gal_dict = {"old":chi_gal_old[~chi_gal_bad_index],"new":analysis.chi_gal_test[~chi_gal_bad_index],"name":"chi_gal","units":"rad"}
     psi_gal_dict = {"old":psi_gal_old,"new":analysis.psi_gal_test,"name":"psi_gal","units":"rad"}
-    CO_seq_dict = {"old":CO_seq_old,"new":analysis.cosi_dataset["CO seq"],"name":"CO seq","units":""}
+    CO_seq_dict = {"old":CO_seq_old,"new":analysis.cosi_dataset["Compton Seq"],"name":"Compton Seq","units":""}
 
     # Make comparison:
     print("Comparing to MEGAlib calculation:")
