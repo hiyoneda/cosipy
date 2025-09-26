@@ -55,7 +55,7 @@ class ReadTraTest(UnBinnedData):
                         'Distance':dist,\
                         'Chi galactic':chi_gal,\
                         'Psi galactic':psi_gal,\
-                        'CO seq':CO_seq}
+                        'Compton Seq':CO_seq}
         
         Note
         ----
