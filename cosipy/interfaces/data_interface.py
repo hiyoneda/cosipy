@@ -6,6 +6,8 @@ from histpy import Histogram, Axes
 
 from .measurements import Measurement
 
+from astropy.time import Time
+
 import histpy
 
 __all__ = ["DataInterface",
@@ -15,9 +17,21 @@ __all__ = ["DataInterface",
 
 @runtime_checkable
 class DataInterface(Protocol):
-    """
-    Not much...
-    """
+
+    @property
+    def tstart(self) -> Union[Time, None]:
+        """
+        Start time of data taking
+        """
+        return None
+
+    @property
+    def tstop(self) -> Union[Time, None]:
+        """
+        Start time of data taking
+        """
+        return None
+
 
 @runtime_checkable
 class EventDataInterface(DataInterface, Protocol):
