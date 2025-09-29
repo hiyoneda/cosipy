@@ -45,11 +45,14 @@ class EventDataInterface(DataInterface, Protocol):
 
     def __iter__(self) -> Iterator[Tuple]:
         """
-        Only loops through unmasked values
+        Only loops through selected values
         """
 
     @property
-    def nevents(self) -> int:...
+    def nevents(self) -> int:
+        """
+        After selection
+        """
 
     @property
     def labels(self) -> Tuple[str]:...
@@ -63,8 +66,8 @@ class EventDataInterface(DataInterface, Protocol):
 
     def set_selection(self, selection: Union[EventSelectorInterface, None]) -> None:
         """
-        None would drop the selection. Implementation might not implement the ability to drop
-        a selection when the underlying data was discarded for efficiency reasons.
+        None would drop the selection. Implementation might not implement the ability to change or drop
+        a selection --e.g. the underlying data was discarded for efficiency reasons.
         """
 
     @property
@@ -72,10 +75,6 @@ class EventDataInterface(DataInterface, Protocol):
         """
         The current selection set
         """
-
-    @property
-    def nselected(self) -> int:...
-
 
 class EventData(EventDataInterface):
     """
@@ -95,8 +94,8 @@ class EventData(EventDataInterface):
                 if size != data_i.size:
                     raise ValueError("All measurement arrays must have the same size")
 
+        self._nevents_total = size
         self._nevents = size
-        self._nselected = size
         self._events = data
         self._labels = tuple([d.label for d in data])
         self._selection = None
@@ -115,6 +114,11 @@ class EventData(EventDataInterface):
 
     @property
     def nevents(self):
+
+        if self._nevents == -1:
+            # Not yet cached since last set selection
+            self._nevents = sum(self._selection.select(self))
+
         return self._nevents
 
     @property
@@ -129,26 +133,25 @@ class EventData(EventDataInterface):
 
         if selection is None:
             self._selection = None
-            self._nselected = self._nevents
+            self._nevents = self._nevents_total
         else:
 
             self._selection = selection
 
             # Signals the need to recompute this number
-            self._nselected = -1
+            self._nevents = -1
 
     @property
     def selection(self) -> EventSelectorInterface:
         return self._selection
 
-    def nselected(self) -> int:
+    @property
+    def nevents_total(self) -> int:
+        """
+        Before selection
+        """
 
-        if self._nselected == -1:
-            # Not yet cached since last set selection
-            self._nselected = sum(self._selection.select(self))
-
-        return self._nselected
-
+        return self._nevents_total
 
 
 @runtime_checkable
