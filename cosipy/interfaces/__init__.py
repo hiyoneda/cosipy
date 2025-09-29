@@ -1,4 +1,4 @@
-from .measurements import *
+from .event import *
 from .data_interface import *
 from .background_interface import *
 from .likelihood_interface import *

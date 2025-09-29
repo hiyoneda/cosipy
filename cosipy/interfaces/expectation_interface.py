@@ -2,12 +2,15 @@ from typing import Protocol, runtime_checkable, Dict, Any, Generator, Iterable, 
 
 import histpy
 import numpy as np
-from cosipy.interfaces import BinnedDataInterface, EventDataInterface, DataInterface
+from cosipy.interfaces import BinnedDataInterface, EventDataInterface, DataInterface, Event
 
 __all__ = [
     "ExpectationDensityInterface",
            "BinnedExpectationInterface"
            ]
+
+from cosipy.interfaces.event_data_processor_interface import EventDataProcessorInterface
+
 
 @runtime_checkable
 class ExpectationInterface(Protocol):
@@ -31,41 +34,17 @@ class BinnedExpectationInterface(ExpectationInterface, Protocol):
         """
 
 @runtime_checkable
-class ExpectationDensityInterface(ExpectationInterface, Protocol):
-    """
-    3 calling mechanisms
+class ExpectationDensityInterface(ExpectationInterface, EventDataProcessorInterface, Protocol):
 
-    1.
-    expectation.set_data(data)
-    expectation.expectation_density()
-
-    In this case expectation_density() will call iter(data)
-
-    2.
-    expectation.expectation_density(data)
-
-    In this case expectation_density() will first call set_data(data) (if needed), and then iter(data).
-
-    3.
-    expectation.set_data(data)
-    expectation.expectation_density(iterator)
-
-    This prevents expectation_density() from calling iter(data). However, it is assumed that
-    iterator is equivalent to iter(data). This allows to use cached versions
-    of the iterator or itertools.tee.
-    """
-
-    def ncounts(self) -> float:...
-    def expectation_density(self, data: Optional[Union['EventDataInterface', Iterator]]) -> Iterable[float]:
+    def ncounts(self) -> float:
         """
-        Parameters
-        ----------
-        data
-
-        Returns
-        -------
-
+        Total expected counts
         """
 
+    def expectation_density(self, data: Iterable[Event]) -> Iterable[float]:
+        return self.process(data)
+
+    def get_binned_expectation(self, *args, **kwargs):
+        raise NotImplementedError
 
 

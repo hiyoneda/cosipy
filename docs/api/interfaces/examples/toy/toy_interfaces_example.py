@@ -1,5 +1,5 @@
 import itertools
-from typing import Dict, Any, Generator, Iterator, Iterable, Optional, Union
+from typing import Dict, Any, Generator, Iterator, Iterable, Optional, Union, Type
 
 from astromodels.sources import Source
 from astromodels import LinearPolarization, SpectralComponent, Parameter
@@ -7,7 +7,7 @@ from astromodels.core.polarization import Polarization
 import astropy.units as u
 from cosipy import SpacecraftHistory
 from cosipy.interfaces.background_interface import BackgroundDensityInterface
-from cosipy.interfaces.data_interface import EventData, EventDataInterface, DataInterface
+from cosipy.interfaces.data_interface import EventDataInterface, DataInterface
 
 from cosipy.statistics import PoissonLikelihood, UnbinnedLikelihood
 
@@ -16,8 +16,8 @@ from cosipy.interfaces import (BinnedDataInterface,
                                BinnedBackgroundInterface,
                                BinnedThreeMLModelFoldingInterface,
                                BinnedThreeMLSourceResponseInterface,
-                               ThreeMLPluginInterface, BackgroundInterface, FloatingMeasurement,
-                               UnbinnedThreeMLSourceResponseInterface, UnbinnedThreeMLModelFoldingInterface)
+                               ThreeMLPluginInterface,
+                               UnbinnedThreeMLSourceResponseInterface, UnbinnedThreeMLModelFoldingInterface, Event)
 from histpy import Axis, Axes, Histogram
 import numpy as np
 from scipy.stats import norm, uniform
@@ -37,79 +37,86 @@ uniform background. You can execute it until the end
 to see a plot on how it looks like.
 
 It looks nothing like COSI data, but
-shows how generic the interfaces can be. I'm still working
-on refactoring our current code to this format.
+shows how generic the interfaces can be. 
 """
 
 # ======== Create toy interfaces for this model ===========
 
 # Simple 1D axes. Hardcoded.
-toy_axis = Axis(np.linspace(-5, 5))
+toy_axis = Axis(np.linspace(-5, 5), label = 'x')
 nevents_signal = 1000
 nevents_bkg = 1000
 nevents_tot = nevents_signal + nevents_bkg
 
-class ToyMeasurementIterator(Iterator):
-    # Random data. Normal signal on top of uniform bkg
-    # Keeps track of initial random seed
+class ToyEvent(Event):
+    """
+    Unit-less 1D data of a measurement called "x" (could be anything)
+    """
 
-    def __init__(self, iterable: 'ToyMeasurement'):
-        self._iter = iterable
-        self._rng = np.random.default_rng()
+    def __init__(self, x):
+        self._x = x
 
-        # Restart
-        self._rng.__setstate__(self._iter._rng_init)
-        self._pos = 0
+    @classmethod
+    def size(cls):
+        return 1
 
-    def __next__(self):
-        if self._pos >= nevents_tot:
-            raise StopIteration
-
-        self._pos += 1
-
-        if self._rng.uniform(0, nevents_tot) < nevents_signal:
-            return self._rng.normal()
-        else:
-            return self._rng.uniform(toy_axis.lo_lim, toy_axis.hi_lim)
-
-
-class ToyMeasurement(FloatingMeasurement):
-
-    def __init__(self, label):
-
-        super().__init__(label)
-
-        # Keep track of init seed to allow iterator
-        self._rng_init = np.random.default_rng().__getstate__()
-
-    def __iter__(self):
-        return ToyMeasurementIterator(self)
+    @property
+    def x(self):
+        return self._x
 
     def __getitem__(self, item):
-        # This is inefficient unless the implementation caches the values
-        with iter(self) as i:
-            for _ in range(item):
-                next(i)
+        if item is 0:
+            return self._x
+        else:
+            raise IndexError("Out of bounds. This Event type has a single value.")
 
-            return next(i)
+class ToyData(DataInterface):
 
-    def __len__(self):
-        return nevents_tot
+    @property
+    def event_type(self) -> Type[Event]:
+        return ToyEvent
 
-class ToyData(BinnedDataInterface, EventData):
+class ToyEventData(EventDataInterface, ToyData):
     # Random data. Normal signal on top of uniform bkg
-    # Since the interfaces are Protocols, they don't *have*
-    # to derive from the base class, but doing some helps
-    # code readability, especially if you use an IDE.
 
     def __init__(self):
-        # Unbinned
-        measurements = ToyMeasurement('x')
-        EventData.__init__(self, measurements)
 
-        # Binned
-        self._data = Histogram(toy_axis)
-        self._data.fill(np.asarray(measurements))
+        rng = np.random.default_rng()
+
+        self._events = np.append(rng.normal(size = nevents_signal), rng.uniform(toy_axis.lo_lim, toy_axis.hi_lim, size = nevents_bkg))
+
+        np.random.shuffle(self._events)
+
+        self._nevents = nevents_tot
+
+    def __getitem__(self, item):
+        return ToyEvent(self._events[item])
+
+    def __iter__(self) -> Iterator[ToyEvent]:
+        return iter(ToyEvent(x) for x in self._events)
+
+    @property
+    def nevents(self) -> int:
+        return self._nevents
+
+    def get_binned_data(self) -> "ToyBinnedData":
+
+        binned_data = Histogram(toy_axis)
+        binned_data.fill(self._events)
+
+        return ToyBinnedData(binned_data)
+
+class ToyBinnedData(BinnedDataInterface, ToyData):
+
+    def __init__(self, data:Histogram):
+
+        if data.ndim != 1:
+            raise ValueError("ToyBinnedData only take a 1D histogram")
+
+        if data.axis.label != 'x':
+            raise ValueError("ToyBinnedData requires an axis labeled 'x'")
+
+        self._data = data
 
     @property
     def data(self) -> Histogram:
@@ -119,9 +126,15 @@ class ToyData(BinnedDataInterface, EventData):
     def axes(self) -> Axes:
         return self._data.axes
 
+
+
 class ToyBkg(BinnedBackgroundInterface, BackgroundDensityInterface):
     """
     Models a uniform background
+
+    # Since the interfaces are Protocols, they don't *have*
+    # to derive from the base class, but doing some helps
+    # code readability, especially if you use an IDE.
     """
 
     def __init__(self):
@@ -156,18 +169,13 @@ class ToyBkg(BinnedBackgroundInterface, BackgroundDensityInterface):
         if isinstance(data, EventDataInterface):
             self._event_data = data
 
-    def expectation_density(self, data: Optional[Union['EventDataInterface', Iterator]] = None) -> Iterable[float]:
+    def expectation_density(self, data: Optional[Iterable[ToyEvent]] = None) -> Iterable[float]:
         if data is None:
 
-            if self._event_data is None:
+            if self._event_data:
                 raise RuntimeError("You need to either provide the data or call set_data() first.")
 
             data = self._event_data
-
-        elif isinstance(data, EventDataInterface):
-
-            # Runs some checks
-            self.set_data(data)
 
         density = self._norm * self._unit_expectation_density
 
@@ -222,7 +230,7 @@ class ToyPointSourceResponse(BinnedThreeMLSourceResponseInterface, UnbinnedThree
         if isinstance(data, EventDataInterface):
             self._event_data = data
 
-    def expectation_density(self, data:Optional[Union[EventDataInterface, Iterator]] = None) -> Iterable[float]:
+    def expectation_density(self, data:Optional[Iterable[ToyEvent]] = None) -> Iterable[float]:
 
         if data is None:
 
@@ -231,15 +239,10 @@ class ToyPointSourceResponse(BinnedThreeMLSourceResponseInterface, UnbinnedThree
 
             data = self._event_data
 
-        elif isinstance(data, EventDataInterface):
-
-            # Runs some checks
-            self.set_data(data)
-
         # I expect in the real case it'll be more efficient to compute
         # (ncounts, ncounts*prob) than (ncounts, prob)
 
-        cache = self.ncounts()*norm.pdf([x for x, in data])
+        cache = self.ncounts()*norm.pdf([event.x for event in data])
 
         for n in cache:
             yield n
@@ -298,13 +301,15 @@ class ToyModelFolding(BinnedThreeMLModelFoldingInterface, UnbinnedThreeMLModelFo
             raise TypeError(f"This class only support data of type {ToyData}")
 
         if isinstance(data, BinnedDataInterface):
-
             self._binned_data = data
 
         if isinstance(data, EventDataInterface):
             self._event_data = data
 
-    def expectation_density(self, data: EventDataInterface = None) -> Iterable[float]:
+    def expectation_density(self, data: Optional[Iterable[ToyEvent]] = None) -> Iterable[float]:
+
+        if self._event_data is None:
+            raise RuntimeError("Set data first")
 
         self._cache_psr_copies()
 
@@ -315,11 +320,8 @@ class ToyModelFolding(BinnedThreeMLModelFoldingInterface, UnbinnedThreeMLModelFo
 
             data = self._event_data
 
-        elif isinstance(data, EventDataInterface):
 
-            # Runs some checks
-            self.set_data(data)
-
+        # One by one in this example, but they can also be done in chunks (e.g. with itertools batched or islice)
         for expectations in zip(*[p.expectation_density(d) for p,d in zip(self._psr_copies.values(), itertools.tee(data))]):
             yield np.sum(expectations)
 
@@ -340,10 +342,10 @@ class ToyModelFolding(BinnedThreeMLModelFoldingInterface, UnbinnedThreeMLModelFo
             psr_copy = self._psr.copy()
             psr_copy.set_source(source)
 
-            if isinstance(psr_copy, BinnedThreeMLSourceResponseInterface):
+            if isinstance(psr_copy, BinnedThreeMLSourceResponseInterface) and self._binned_data is not None:
                 psr_copy.set_data(self._binned_data)
 
-            if isinstance(psr_copy, UnbinnedThreeMLSourceResponseInterface):
+            if isinstance(psr_copy, UnbinnedThreeMLSourceResponseInterface) and self._event_data is not None:
                 psr_copy.set_data(self._event_data)
 
             new_psr_copies[name] = psr_copy
@@ -351,6 +353,9 @@ class ToyModelFolding(BinnedThreeMLModelFoldingInterface, UnbinnedThreeMLModelFo
         self._psr_copies = new_psr_copies
 
     def expectation(self, copy = True) -> Histogram:
+
+        if self._binned_data is None:
+            raise RuntimeError("Set data first")
 
         self._cache_psr_copies()
 
@@ -364,10 +369,14 @@ class ToyModelFolding(BinnedThreeMLModelFoldingInterface, UnbinnedThreeMLModelFo
 
 # ======= Actual code. This is how the "tutorial" will look like ================
 
+# Binned or unbinned
+unbinned = True
+
 # Set the inputs. These will eventually open file or set specific parameters,
 # but since we are generating the data and models on the fly, and most parameter
 # are hardcoded above withing the classes, then it's not necessary here.
-data = ToyData()
+event_data = ToyEventData()
+binned_data = event_data.get_binned_data()
 psr = ToyPointSourceResponse()
 response = ToyModelFolding(psr)
 bkg = ToyBkg()
@@ -399,12 +408,13 @@ model = Model(source)
 #model = Model() # Uncomment for bkg-only hypothesis
 
 # Fit
-# Uncomment one. Either one works
-#like_fun = PoissonLikelihood()
-like_fun = UnbinnedLikelihood()
+if unbinned:
+    like_fun = UnbinnedLikelihood()
+    like_fun.set_data(event_data)
+else:
+    like_fun = PoissonLikelihood()
+    like_fun.set_data(binned_data)
 
-# Call set_data() before set_response() and set_background()
-like_fun.set_data(data)
 like_fun.set_response(response)
 like_fun.set_background(bkg)
 cosi = ThreeMLPluginInterface('cosi', like_fun)
@@ -423,10 +433,12 @@ print(like.minimizer)
 
 # Plot results
 fig, ax = plt.subplots()
-data.data.plot(ax)
-expectation = response.expectation(data)
+binned_data.data.plot(ax)
+response.set_data(binned_data)
+bkg.set_data(binned_data)
+expectation = response.expectation(binned_data)
 if bkg is not None:
-    expectation = expectation + bkg.expectation(data)
+    expectation = expectation + bkg.expectation(binned_data)
 expectation.plot(ax)
 plt.show()
 
