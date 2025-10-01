@@ -6,7 +6,7 @@ import numpy as np
 from astropy.units import Unit
 
 from . import EventWithEnergy
-from .event import Event, FancyEnergyDataMixin, FancyTimeDataMixin, TimetaggedEvent
+from .event import Event, FancyEnergyDataMixin, FancyTimeDataMixin, TimeTagEvent
 from histpy import Histogram, Axes
 
 from astropy.time import Time
@@ -26,23 +26,9 @@ __all__ = ["DataInterface",
 class DataInterface:
 
     @property
-    def tstart(self) -> Union[Time, None]:
-        """
-        Start time of data taking
-        """
-        return None
-
-    @property
-    def tstop(self) -> Union[Time, None]:
-        """
-        Start time of data taking
-        """
-        return None
-
-    @property
     def event_type(self) -> Type[Event]:
         """
-        Type returned by __getitem__
+        Type returned by __iter__ in the event data case
         """
 
 class BinnedDataInterface(DataInterface):
@@ -88,12 +74,12 @@ class EventDataInterface(DataInterface, Iterable):
         The current selection set
         """
 
-    def get_binned_data(self, *args, **kwargs) -> BinnedDataInterface:
+    def get_binned_data(self, axes:Axes, *args, **kwargs) -> BinnedDataInterface:
         raise NotImplementedError
 
-class TimeTagEventDataInterface(FancyTimeDataMixin, EventDataInterface):
+class TimeTagEventData(FancyTimeDataMixin, EventDataInterface):
 
-    def __getitem__(self, item: int) -> TimetaggedEvent:...
+    def __iter__(self) -> Iterator[TimeTagEvent]:...
 
     @property
     @abstractmethod
@@ -103,9 +89,9 @@ class TimeTagEventDataInterface(FancyTimeDataMixin, EventDataInterface):
     @abstractmethod
     def jd2(self) -> Iterable[float]: ...
 
-class EventDataWithEnergyInterface(FancyEnergyDataMixin, EventDataInterface):
+class EventDataWithEnergy(FancyEnergyDataMixin, EventDataInterface):
 
-    def __getitem__(self, item: int) -> EventWithEnergy:...
+    def __iter__(self) -> Iterator[EventWithEnergy]:...
 
     @property
     @abstractmethod

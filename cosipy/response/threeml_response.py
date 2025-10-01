@@ -13,6 +13,7 @@ __all__ = ["BinnedThreeMLModelFolding"]
 class BinnedThreeMLModelFolding(BinnedThreeMLModelFoldingInterface):
 
     def __init__(self,
+                 data: BinnedDataInterface,
                  point_source_response:BinnedThreeMLSourceResponseInterface = None,
                  extended_source_response: BinnedThreeMLSourceResponseInterface = None):
         """
@@ -28,7 +29,6 @@ class BinnedThreeMLModelFolding(BinnedThreeMLModelFoldingInterface):
         """
 
         # Interface inputs
-        self._data = None
         self._model = None
 
         # Implementation inputs
@@ -41,15 +41,7 @@ class BinnedThreeMLModelFolding(BinnedThreeMLModelFoldingInterface):
         # https://github.com/threeML/threeML/issues/645
         self._cached_model_dict = None
         self._source_responses = {}
-        self._expectation = None
-
-    def set_data(self, data: BinnedDataInterface):
-
-        if self._expectation is None or self._expectation.axes != data.axes:
-            # Needs new memory allocation, and recompute everything
-            self._expectation = Histogram(data.axes)
-
-        self._data = data
+        self._expectation = Histogram(data.axes)
 
     def set_model(self, model: Model):
         """
@@ -92,7 +84,6 @@ class BinnedThreeMLModelFolding(BinnedThreeMLModelFoldingInterface):
 
                 psr_copy = self._psr.copy()
                 psr_copy.set_source(source)
-                psr_copy.set_data(self._data)
                 new_source_responses[name] = psr_copy
             elif isinstance(source, ExtendedSource):
 
@@ -101,7 +92,6 @@ class BinnedThreeMLModelFolding(BinnedThreeMLModelFoldingInterface):
 
                 esr_copy = self._esr.copy()
                 esr_copy.set_source(source)
-                esr_copy.set_data(self._data)
                 new_source_responses[name] = esr_copy
             else:
                 raise RuntimeError(f"The model contains the source {name} "
@@ -110,7 +100,7 @@ class BinnedThreeMLModelFolding(BinnedThreeMLModelFoldingInterface):
 
         self._source_responses = new_source_responses
 
-    def expectation(self, copy:bool = True)->Histogram:
+    def expectation(self, axes:Axes, copy:bool = True)->Histogram:
         """
 
         Parameters
@@ -123,7 +113,7 @@ class BinnedThreeMLModelFolding(BinnedThreeMLModelFoldingInterface):
 
         """
 
-        if self._data is None or self._model is None:
+        if self._model is None:
             raise RuntimeError("Call set_data() and set_model() first")
 
         # See this issue for the caveats of comparing models
@@ -151,7 +141,7 @@ class BinnedThreeMLModelFolding(BinnedThreeMLModelFoldingInterface):
 
         # Convolve all sources with the response
         for source_name,psr in self._source_responses.items():
-            self._expectation += psr.expectation()
+            self._expectation += psr.expectation(axes)
 
         # See this issue for the caveats of comparing models
         # https://github.com/threeML/threeML/issues/645

@@ -6,24 +6,14 @@ from astropy.units import Quantity, Unit
 
 __all__ = [
     "Event",
-    "TimetaggedEvent",
+    "TimeTagEvent",
     "EventWithEnergy",
 ]
 
-class Event(Sequence, ABC):
+class Event(ABC):
     """
-    Need to implement __getitem__
+    Derived classes implement all accessors
     """
-
-    @classmethod
-    @abstractmethod
-    def size(cls) -> int:
-        """
-        Number of values
-        """
-
-    def __len__(self):
-        return self.size
 
 class FancyTimeDataMixin(ABC):
 
@@ -42,7 +32,7 @@ class FancyTimeDataMixin(ABC):
         """
         return Time(self.jd1, self.jd2, format = 'jd')
 
-class TimetaggedEvent(FancyTimeDataMixin, Sequence):
+class TimeTagEvent(FancyTimeDataMixin):
 
     @property
     @abstractmethod
@@ -71,7 +61,7 @@ class FancyEnergyDataMixin(ABC):
         return Quantity(self.energy_value, self.energy_unit)
 
 
-class EventWithEnergy(FancyEnergyDataMixin, Sequence):
+class EventWithEnergy(FancyEnergyDataMixin):
 
     @property
     @abstractmethod

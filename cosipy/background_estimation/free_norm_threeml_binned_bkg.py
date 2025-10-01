@@ -116,16 +116,12 @@ class FreeNormBinnedBackground(BinnedBackgroundInterface):
     def parameters(self) -> Dict[str, u.Quantity]:
         return {l:u.Quantity(n) for l,n in self.norms.items()}
 
-    def set_data(self, data: DataInterface):
-
-        if data.axes != self.meausured_axes:
-            raise ValueError("Requested axes do not match the background component axes")
-
-    def expectation(self, copy:bool = True)->Histogram:
+    def expectation(self, axes:Axes, copy:bool = True)->Histogram:
         """
 
         Parameters
         ----------
+        axes
         copy:
             If True, it will return an array that the user if free to modify.
             Otherwise, it will result a reference, possible to the cache, that
@@ -136,6 +132,8 @@ class FreeNormBinnedBackground(BinnedBackgroundInterface):
 
         """
 
+        if axes != self.meausured_axes:
+            raise ValueError("Requested axes do not match the background component axes")
 
         # Check if we can use the cache
         if self._expectation is None:

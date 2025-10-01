@@ -110,13 +110,14 @@ def main():
     # In principle, this can be decoupled, and a BinnedInstrumentResponseInterface implementation
     # can provide the response for an arbitrary directions, Ei and Pol values.
     # NOTE: this is currently only implemented for data in local coords
-    psr = BinnedThreeMLPointSourceResponse(instrument_response,
+    psr = BinnedThreeMLPointSourceResponse(data = data,
+                                           instrument_response = instrument_response,
                                            sc_history=ori,
                                            energy_axis = dr.axes['Ei'],
                                            polarization_axis = dr.axes['Pol'] if 'Pol' in dr.axes.labels else None,
                                            nside = 2*data.axes['PsiChi'].nside)
 
-    response = BinnedThreeMLModelFolding(point_source_response = psr)
+    response = BinnedThreeMLModelFolding(data = data, point_source_response = psr)
 
     like_fun = PoissonLikelihood()
     like_fun.set_data(data)

@@ -17,7 +17,8 @@ from cosipy.interfaces import (BinnedDataInterface,
                                BinnedThreeMLModelFoldingInterface,
                                BinnedThreeMLSourceResponseInterface,
                                ThreeMLPluginInterface,
-                               UnbinnedThreeMLSourceResponseInterface, UnbinnedThreeMLModelFoldingInterface, Event)
+                               UnbinnedThreeMLSourceResponseInterface, UnbinnedThreeMLModelFoldingInterface, Event,
+                               ThreeMLSourceResponseInterface)
 from histpy import Axis, Axes, Histogram
 import numpy as np
 from scipy.stats import norm, uniform
@@ -56,19 +57,9 @@ class ToyEvent(Event):
     def __init__(self, x):
         self._x = x
 
-    @classmethod
-    def size(cls):
-        return 1
-
     @property
     def x(self):
         return self._x
-
-    def __getitem__(self, item):
-        if item is 0:
-            return self._x
-        else:
-            raise IndexError("Out of bounds. This Event type has a single value.")
 
 class ToyData(DataInterface):
 
@@ -89,9 +80,6 @@ class ToyEventData(EventDataInterface, ToyData):
 
         self._nevents = nevents_tot
 
-    def __getitem__(self, item):
-        return ToyEvent(self._events[item])
-
     def __iter__(self) -> Iterator[ToyEvent]:
         return iter(ToyEvent(x) for x in self._events)
 
@@ -99,9 +87,9 @@ class ToyEventData(EventDataInterface, ToyData):
     def nevents(self) -> int:
         return self._nevents
 
-    def get_binned_data(self) -> "ToyBinnedData":
+    def get_binned_data(self, axes:Axes, *args, **kwargs) -> "ToyBinnedData":
 
-        binned_data = Histogram(toy_axis)
+        binned_data = Histogram(axes)
         binned_data.fill(self._events)
 
         return ToyBinnedData(binned_data)
@@ -126,8 +114,6 @@ class ToyBinnedData(BinnedDataInterface, ToyData):
     def axes(self) -> Axes:
         return self._data.axes
 
-
-
 class ToyBkg(BinnedBackgroundInterface, BackgroundDensityInterface):
     """
     Models a uniform background
@@ -142,9 +128,6 @@ class ToyBkg(BinnedBackgroundInterface, BackgroundDensityInterface):
         self._unit_expectation[:] = 1 / self._unit_expectation.nbins
         self._norm = 1
 
-        self._binned_data = None
-        self._event_data = None
-
         # Doesn't need to be normalized
         self._unit_expectation_density = 1/(toy_axis.hi_lim - toy_axis.lo_lim)
 
@@ -154,28 +137,7 @@ class ToyBkg(BinnedBackgroundInterface, BackgroundDensityInterface):
     def ncounts(self) -> float:
         return self._norm
 
-    def set_data(self, data: DataInterface) -> None:
-
-        if not isinstance(data, ToyData):
-            raise TypeError(f"This class only support data of type {ToyData}")
-
-        if isinstance(data, BinnedDataInterface):
-
-            if data.axes != self._unit_expectation.axes:
-                raise ValueError("Wrong axes. I have fixed axes.")
-
-            self._binned_data = data
-
-        if isinstance(data, EventDataInterface):
-            self._event_data = data
-
     def expectation_density(self, data: Optional[Iterable[ToyEvent]] = None) -> Iterable[float]:
-        if data is None:
-
-            if self._event_data:
-                raise RuntimeError("You need to either provide the data or call set_data() first.")
-
-            data = self._event_data
 
         density = self._norm * self._unit_expectation_density
 
@@ -186,7 +148,10 @@ class ToyBkg(BinnedBackgroundInterface, BackgroundDensityInterface):
     def parameters(self) -> Dict[str, u.Quantity]:
         return {'norm': u.Quantity(self._norm)}
 
-    def expectation(self, copy = True) -> Histogram:
+    def expectation(self, axes:Axes, copy = True) -> Histogram:
+
+        if axes != self._unit_expectation.axes:
+            raise ValueError("Wrong axes. I have fixed axes.")
 
         # Always a copy
         return self._unit_expectation * self._norm
@@ -202,9 +167,6 @@ class ToyPointSourceResponse(BinnedThreeMLSourceResponseInterface, UnbinnedThree
         self._unit_expectation = Histogram(toy_axis,
                                            contents=np.diff(norm.cdf(toy_axis.edges)))
 
-        self._binned_data = None
-        self._event_data = None
-
     def ncounts(self) -> float:
 
         if self._source is None:
@@ -215,29 +177,7 @@ class ToyPointSourceResponse(BinnedThreeMLSourceResponseInterface, UnbinnedThree
         ns_events = self._source.spectrum.main.shape.k.value
         return ns_events
 
-    def set_data(self, data: DataInterface) -> None:
-
-        if not isinstance(data, ToyData):
-            raise TypeError(f"This class only support data of type {ToyData}")
-
-        if isinstance(data, BinnedDataInterface):
-
-            if data.axes != self._unit_expectation.axes:
-                raise ValueError("Wrong axes. I have fixed axes.")
-
-            self._binned_data = data
-
-        if isinstance(data, EventDataInterface):
-            self._event_data = data
-
     def expectation_density(self, data:Optional[Iterable[ToyEvent]] = None) -> Iterable[float]:
-
-        if data is None:
-
-            if self._event_data is None:
-                raise RuntimeError("You need to either provide the data or call set_data() first.")
-
-            data = self._event_data
 
         # I expect in the real case it'll be more efficient to compute
         # (ncounts, ncounts*prob) than (ncounts, prob)
@@ -254,7 +194,10 @@ class ToyPointSourceResponse(BinnedThreeMLSourceResponseInterface, UnbinnedThree
 
         self._source = source
 
-    def expectation(self, copy = True) -> Histogram:
+    def expectation(self, axes:Axes, copy = True) -> Histogram:
+
+        if axes != self._unit_expectation.axes:
+            raise ValueError("Wrong axes. I have fixed axes.")
 
         if self._source is None:
             raise RuntimeError("Set a source first")
@@ -273,18 +216,12 @@ class ToyPointSourceResponse(BinnedThreeMLSourceResponseInterface, UnbinnedThree
 
 class ToyModelFolding(BinnedThreeMLModelFoldingInterface, UnbinnedThreeMLModelFoldingInterface):
 
-    def __init__(self, psr: BinnedThreeMLSourceResponseInterface):
-
-        if not isinstance(psr, ToyPointSourceResponse):
-            raise TypeError(f"Wrong psr type '{type(psr)}', expected {ToyPointSourceResponse}.")
+    def __init__(self, psr: ToyPointSourceResponse):
 
         self._model = None
 
         self._psr = psr
         self._psr_copies = {}
-
-        self._binned_data = None
-        self._event_data = None
 
     def ncounts(self) -> float:
 
@@ -295,31 +232,9 @@ class ToyModelFolding(BinnedThreeMLModelFoldingInterface, UnbinnedThreeMLModelFo
 
         return ncounts
 
-    def set_data(self, data: DataInterface) -> None:
-
-        if not isinstance(data, ToyData):
-            raise TypeError(f"This class only support data of type {ToyData}")
-
-        if isinstance(data, BinnedDataInterface):
-            self._binned_data = data
-
-        if isinstance(data, EventDataInterface):
-            self._event_data = data
-
     def expectation_density(self, data: Optional[Iterable[ToyEvent]] = None) -> Iterable[float]:
 
-        if self._event_data is None:
-            raise RuntimeError("Set data first")
-
         self._cache_psr_copies()
-
-        if data is None:
-
-            if self._event_data is None:
-                raise RuntimeError("You need to either provide the data or call set_data() first.")
-
-            data = self._event_data
-
 
         # One by one in this example, but they can also be done in chunks (e.g. with itertools batched or islice)
         for expectations in zip(*[p.expectation_density(d) for p,d in zip(self._psr_copies.values(), itertools.tee(data))]):
@@ -342,27 +257,18 @@ class ToyModelFolding(BinnedThreeMLModelFoldingInterface, UnbinnedThreeMLModelFo
             psr_copy = self._psr.copy()
             psr_copy.set_source(source)
 
-            if isinstance(psr_copy, BinnedThreeMLSourceResponseInterface) and self._binned_data is not None:
-                psr_copy.set_data(self._binned_data)
-
-            if isinstance(psr_copy, UnbinnedThreeMLSourceResponseInterface) and self._event_data is not None:
-                psr_copy.set_data(self._event_data)
-
             new_psr_copies[name] = psr_copy
 
         self._psr_copies = new_psr_copies
 
-    def expectation(self, copy = True) -> Histogram:
-
-        if self._binned_data is None:
-            raise RuntimeError("Set data first")
+    def expectation(self, axes:Axes, copy = True) -> Histogram:
 
         self._cache_psr_copies()
 
-        expectation = Histogram(self._binned_data.axes)
+        expectation = Histogram(axes)
 
         for source_name,psr in self._psr_copies.items():
-            expectation += psr.expectation(copy = False)
+            expectation += psr.expectation(Axes(toy_axis), copy = False)
 
         # Always a copy
         return expectation
@@ -370,13 +276,13 @@ class ToyModelFolding(BinnedThreeMLModelFoldingInterface, UnbinnedThreeMLModelFo
 # ======= Actual code. This is how the "tutorial" will look like ================
 
 # Binned or unbinned
-unbinned = True
+unbinned = False
 
 # Set the inputs. These will eventually open file or set specific parameters,
 # but since we are generating the data and models on the fly, and most parameter
 # are hardcoded above withing the classes, then it's not necessary here.
 event_data = ToyEventData()
-binned_data = event_data.get_binned_data()
+binned_data = event_data.get_binned_data(Axes(toy_axis))
 psr = ToyPointSourceResponse()
 response = ToyModelFolding(psr)
 bkg = ToyBkg()
@@ -434,11 +340,9 @@ print(like.minimizer)
 # Plot results
 fig, ax = plt.subplots()
 binned_data.data.plot(ax)
-response.set_data(binned_data)
-bkg.set_data(binned_data)
-expectation = response.expectation(binned_data)
+expectation = response.expectation(binned_data.axes)
 if bkg is not None:
-    expectation = expectation + bkg.expectation(binned_data)
+    expectation = expectation + bkg.expectation(binned_data.axes)
 expectation.plot(ax)
 plt.show()
 

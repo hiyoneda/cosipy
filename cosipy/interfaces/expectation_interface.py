@@ -2,6 +2,8 @@ from typing import Protocol, runtime_checkable, Dict, Any, Generator, Iterable, 
 
 import histpy
 import numpy as np
+from histpy import Axes
+
 from cosipy.interfaces import BinnedDataInterface, EventDataInterface, DataInterface, Event
 
 __all__ = [
@@ -9,20 +11,20 @@ __all__ = [
            "BinnedExpectationInterface"
            ]
 
-from cosipy.interfaces.event_data_processor_interface import EventDataProcessorInterface
-
 
 @runtime_checkable
 class ExpectationInterface(Protocol):
-    def set_data(self, data: DataInterface):...
+    pass
 
 @runtime_checkable
 class BinnedExpectationInterface(ExpectationInterface, Protocol):
-    def expectation(self, copy: Optional[bool])->histpy.Histogram:
+    def expectation(self, axes:Axes, copy: Optional[bool])->histpy.Histogram:
         """
 
         Parameters
         ----------
+        axes:
+            Axes to bin the expectation into
         copy:
             If True (default), it will return an array that the user if free to modify.
             Otherwise, it will result a reference, possible to the cache, that
@@ -34,7 +36,7 @@ class BinnedExpectationInterface(ExpectationInterface, Protocol):
         """
 
 @runtime_checkable
-class ExpectationDensityInterface(ExpectationInterface, EventDataProcessorInterface, Protocol):
+class ExpectationDensityInterface(ExpectationInterface, Protocol):
 
     def ncounts(self) -> float:
         """
@@ -42,9 +44,10 @@ class ExpectationDensityInterface(ExpectationInterface, EventDataProcessorInterf
         """
 
     def expectation_density(self, data: Iterable[Event]) -> Iterable[float]:
-        return self.process(data)
+        """
+        """
 
-    def get_binned_expectation(self, *args, **kwargs):
+    def get_binned_expectation(self, axes:Axes, *args, **kwargs):
         raise NotImplementedError
 
 

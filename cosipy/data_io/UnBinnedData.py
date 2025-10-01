@@ -9,7 +9,7 @@ import h5py
 import time
 import cosipy
 from cosipy.data_io import DataIO
-from cosipy.interfaces.data_interface import TimeTagEventDataInterface, EventDataWithEnergyInterface
+from cosipy.interfaces.data_interface import TimeTagEventData, EventDataWithEnergy
 from cosipy.spacecraftfile import SpacecraftHistory
 import gzip
 import astropy.coordinates as astro_co

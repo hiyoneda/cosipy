@@ -34,19 +34,9 @@ class UnbinnedLikelihood(UnbinnedLikelihoodInterface):
         super().set_response(response)  # Checks type
         self._response = response
 
-        if self._data is None:
-            raise RuntimeError("Call set_data() before calling set_response()")
-
-        self._response.set_data(self._data)
-
     def set_background(self, bkg: BackgroundInterface):
         super().set_background(bkg)  # Checks type
         self._bkg = bkg
-
-        if self._data is None:
-            raise RuntimeError("Call set_data() before calling set_background()")
-
-        self._bkg.set_data(self._data)
 
     @property
     def data (self) -> EventDataInterface: return self._data
@@ -143,19 +133,14 @@ class PoissonLikelihood(BinnedLikelihoodInterface):
         if self._data is None or self._response is None:
             raise RuntimeError("Set data and response before calling this function.")
 
-        self._response.set_data(self._data)
-
-        if self.has_bkg:
-           self._bkg.set_data(self._data)
-
         # Compute expectation including background
         # If we don't have background, we won't modify the expectation, so
         # it's safe to use the internal cache.
-        expectation = self._response.expectation(copy = self.has_bkg)
+        expectation = self._response.expectation(self._data.axes, copy = self.has_bkg)
 
         if self.has_bkg:
             # We won't modify the bkg expectation, so it's safe to use the internal cache
-            expectation += self._bkg.expectation(copy = False)
+            expectation += self._bkg.expectation(self._data.axes, copy = False)
 
         # Get the arrays
         expectation = expectation.contents

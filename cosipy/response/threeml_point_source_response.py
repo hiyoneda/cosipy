@@ -39,6 +39,7 @@ class BinnedThreeMLPointSourceResponse(BinnedThreeMLSourceResponseInterface):
     """
 
     def __init__(self,
+                 data:EmCDSBinnedData,
                  instrument_response: BinnedInstrumentResponseInterface,
                  sc_history: SpacecraftHistory,
                  energy_axis:Axis,
@@ -70,10 +71,11 @@ class BinnedThreeMLPointSourceResponse(BinnedThreeMLSourceResponseInterface):
 
 
         # Interface inputs
-        self._data = None
         self._source = None
 
         # Other implementation inputs
+        self._data = data
+
         self._sc_ori = sc_history
         self._response = instrument_response
         self._energy_axis = energy_axis
@@ -130,13 +132,6 @@ class BinnedThreeMLPointSourceResponse(BinnedThreeMLSourceResponseInterface):
             raise RuntimeError("This response can't handle a polarized source.")
 
         self._source = source
-
-    def set_data(self, data: DataInterface):
-
-        if not isinstance(data, EmCDSBinnedData):
-            raise TypeError(f"Wrong data type '{type(data)}', expected {EmCDSBinnedData}.")
-
-        self._data = data
 
     def expectation(self, copy = True)-> Histogram:
         # TODO: check coordsys from axis
