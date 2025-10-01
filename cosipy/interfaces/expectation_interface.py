@@ -43,8 +43,10 @@ class ExpectationDensityInterface(ExpectationInterface, Protocol):
         Total expected counts
         """
 
-    def expectation_density(self, data: Iterable[Event]) -> Iterable[float]:
+    def expectation_density(self, events: Union[Event, Iterable[Event]]) -> Union[Event, Iterable[float]]:
         """
+        Return a single value for a single Event.
+        As many values for an Iterable of events
         """
 
     def get_binned_expectation(self, axes:Axes, *args, **kwargs):

@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
-from typing import Sequence, Union
+from typing import Sequence, Union, Protocol
+from typing_extensions import runtime_checkable
 
 from astropy.time import Time
 from astropy.units import Quantity, Unit
@@ -10,20 +11,43 @@ __all__ = [
     "EventWithEnergy",
 ]
 
-class Event(ABC):
+class EventMetadata:
+
+    def __init__(self):
+        self._metadata = {}
+
+    def __getitem__(self, key):
+        return self._metadata[key]
+
+    def __setitem__(self, key, value):
+        self._metadata[key] = value
+        setattr(self, key, value)
+
+    def __delitem__(self, key):
+        if key in self._metadata:
+            del self._metadata[key]
+            delattr(self, key)
+
+    def __repr__(self):
+        return f"{self.__class__.__name__}({self._metadata})"
+
+@runtime_checkable
+class Event(Protocol):
     """
     Derived classes implement all accessors
     """
 
-class FancyTimeDataMixin(ABC):
+    @property
+    def metadata(self) -> EventMetadata:...
+
+@runtime_checkable
+class TimeTagEvent(Event, Protocol):
 
     @property
-    @abstractmethod
-    def jd1(self) -> Union[float, Sequence[float]]:...
+    def jd1(self) -> float:...
 
     @property
-    @abstractmethod
-    def jd2(self) -> Union[float, Sequence[float]]:...
+    def jd2(self) -> float:...
 
     @property
     def time(self) -> Time:
@@ -32,25 +56,13 @@ class FancyTimeDataMixin(ABC):
         """
         return Time(self.jd1, self.jd2, format = 'jd')
 
-class TimeTagEvent(FancyTimeDataMixin):
+@runtime_checkable
+class EventWithEnergy(Event, Protocol):
 
     @property
-    @abstractmethod
-    def jd1(self) -> float:...
+    def energy_value(self) -> float:...
 
     @property
-    @abstractmethod
-    def jd2(self) -> float:...
-
-
-class FancyEnergyDataMixin(ABC):
-
-    @property
-    @abstractmethod
-    def energy_value(self) -> Union[float, Sequence[float]]:...
-
-    @property
-    @abstractmethod
     def energy_unit(self) -> Unit:...
 
     @property
@@ -59,15 +71,4 @@ class FancyEnergyDataMixin(ABC):
         Add fancy energy quantity
         """
         return Quantity(self.energy_value, self.energy_unit)
-
-
-class EventWithEnergy(FancyEnergyDataMixin):
-
-    @property
-    @abstractmethod
-    def energy_value(self) -> float:...
-
-    @property
-    @abstractmethod
-    def energy_unit(self) -> Unit:...
 

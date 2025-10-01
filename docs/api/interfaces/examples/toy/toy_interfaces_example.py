@@ -137,12 +137,15 @@ class ToyBkg(BinnedBackgroundInterface, BackgroundDensityInterface):
     def ncounts(self) -> float:
         return self._norm
 
-    def expectation_density(self, data: Optional[Iterable[ToyEvent]] = None) -> Iterable[float]:
+    def expectation_density(self, data: Union[ToyEvent, Iterable[ToyEvent]] = None) -> Iterable[float]:
 
         density = self._norm * self._unit_expectation_density
 
-        for _ in data:
-            yield density
+        if isinstance(data, Event):
+            return density
+        else:
+            for _ in data:
+                yield density
 
     @property
     def parameters(self) -> Dict[str, u.Quantity]:
@@ -177,7 +180,10 @@ class ToyPointSourceResponse(BinnedThreeMLSourceResponseInterface, UnbinnedThree
         ns_events = self._source.spectrum.main.shape.k.value
         return ns_events
 
-    def expectation_density(self, data:Optional[Iterable[ToyEvent]] = None) -> Iterable[float]:
+    def expectation_density(self, data:Union[ToyEvent, Iterable[ToyEvent]] = None) -> Iterable[float]:
+
+        if isinstance(data, Event):
+            return next(iter(self.expectation_density([data])))
 
         # I expect in the real case it'll be more efficient to compute
         # (ncounts, ncounts*prob) than (ncounts, prob)
@@ -232,9 +238,12 @@ class ToyModelFolding(BinnedThreeMLModelFoldingInterface, UnbinnedThreeMLModelFo
 
         return ncounts
 
-    def expectation_density(self, data: Optional[Iterable[ToyEvent]] = None) -> Iterable[float]:
+    def expectation_density(self, data: Union[ToyEvent, Iterable[ToyEvent]] = None) -> Iterable[float]:
 
         self._cache_psr_copies()
+
+        if isinstance(data, Event):
+            return next(iter(self.expectation_density([data])))
 
         # One by one in this example, but they can also be done in chunks (e.g. with itertools batched or islice)
         for expectations in zip(*[p.expectation_density(d) for p,d in zip(self._psr_copies.values(), itertools.tee(data))]):
