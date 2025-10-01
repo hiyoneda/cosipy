@@ -2,6 +2,7 @@ import itertools
 import logging
 import operator
 
+from cosipy import UnBinnedData
 from cosipy.interfaces.expectation_interface import ExpectationInterface, ExpectationDensityInterface
 
 logger = logging.getLogger(__name__)
@@ -20,23 +21,11 @@ __all__ = ['UnbinnedLikelihood',
            'PoissonLikelihood']
 
 class UnbinnedLikelihood(UnbinnedLikelihoodInterface):
-    def __init__(self):
+    def __init__(self, data:EventDataInterface, response:ExpectationDensityInterface, bkg:BackgroundDensityInterface = None):
 
-        self._data = None
-        self._bkg = None
-        self._response = None
-
-    def set_data(self, data: DataInterface):
-        super().set_data(data) # Checks type
         self._data = data
-
-    def set_response(self, response: ExpectationInterface):
-        super().set_response(response)  # Checks type
-        self._response = response
-
-    def set_background(self, bkg: BackgroundInterface):
-        super().set_background(bkg)  # Checks type
         self._bkg = bkg
+        self._response = response
 
     @property
     def data (self) -> EventDataInterface: return self._data
@@ -51,16 +40,9 @@ class UnbinnedLikelihood(UnbinnedLikelihoodInterface):
 
     @property
     def nobservations(self) -> int:
-
-        if self._data is None:
-            raise RuntimeError("Set the data before calling this function.")
-
         return self._data.nevents
 
     def get_log_like(self) -> float:
-
-        if self._data is None or self._response is None:
-            raise RuntimeError("Set data and response before calling this function.")
 
         # Compute expectation including background
 
@@ -78,11 +60,6 @@ class UnbinnedLikelihood(UnbinnedLikelihoodInterface):
 
             density = np.fromiter(map(operator.add, signal_density, bkg_density), dtype=float)
 
-            # signal_density = np.fromiter(self._response.expectation_density(), dtype=float)
-            # bkg_density = np.fromiter(self._bkg.expectation_density(), dtype=float)
-            #
-            # density = signal_density + bkg_density
-
         else:
             density = np.fromiter(self._response.expectation_density(), dtype=float)
 
@@ -92,23 +69,11 @@ class UnbinnedLikelihood(UnbinnedLikelihoodInterface):
 
 
 class PoissonLikelihood(BinnedLikelihoodInterface):
-    def __init__(self):
+    def __init__(self, data:BinnedDataInterface, response:BinnedExpectationInterface, bkg:BinnedBackgroundInterface = None):
 
-        self._data = None
-        self._bkg = None
-        self._response = None
-
-    def set_data(self, data: DataInterface):
-        super().set_data(data) # Checks type
         self._data = data
-
-    def set_response(self, response: ExpectationInterface):
-        super().set_response(response)  # Checks type
-        self._response = response
-
-    def set_background(self, bkg: BackgroundInterface):
-        super().set_background(bkg)  # Checks type
         self._bkg = bkg
+        self._response = response
 
     @property
     def data (self) -> BinnedDataInterface: return self._data
@@ -123,15 +88,9 @@ class PoissonLikelihood(BinnedLikelihoodInterface):
 
     @property
     def nobservations(self) -> int:
-        if self._data is None:
-            raise RuntimeError("Set the data before calling this function.")
-
         return self._data.data.contents.size
 
     def get_log_like(self) -> float:
-
-        if self._data is None or self._response is None:
-            raise RuntimeError("Set data and response before calling this function.")
 
         # Compute expectation including background
         # If we don't have background, we won't modify the expectation, so

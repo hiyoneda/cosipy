@@ -207,10 +207,7 @@ def main():
 
     response = BinnedThreeMLModelFolding(data = data, point_source_response = psr)
 
-    like_fun = PoissonLikelihood()
-    like_fun.set_data(data)
-    like_fun.set_response(response)
-    like_fun.set_background(bkg)
+    like_fun = PoissonLikelihood(data, response, bkg)
 
     cosi = ThreeMLPluginInterface('cosi', like_fun)
 

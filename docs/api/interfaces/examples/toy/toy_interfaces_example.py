@@ -276,7 +276,7 @@ class ToyModelFolding(BinnedThreeMLModelFoldingInterface, UnbinnedThreeMLModelFo
 # ======= Actual code. This is how the "tutorial" will look like ================
 
 # Binned or unbinned
-unbinned = False
+unbinned = True
 
 # Set the inputs. These will eventually open file or set specific parameters,
 # but since we are generating the data and models on the fly, and most parameter
@@ -315,14 +315,10 @@ model = Model(source)
 
 # Fit
 if unbinned:
-    like_fun = UnbinnedLikelihood()
-    like_fun.set_data(event_data)
+    like_fun = UnbinnedLikelihood(event_data, response, bkg)
 else:
-    like_fun = PoissonLikelihood()
-    like_fun.set_data(binned_data)
+    like_fun = PoissonLikelihood(binned_data, response, bkg)
 
-like_fun.set_response(response)
-like_fun.set_background(bkg)
 cosi = ThreeMLPluginInterface('cosi', like_fun)
 
 # Before the fit, you can set the parameters initial values, bounds, etc.
