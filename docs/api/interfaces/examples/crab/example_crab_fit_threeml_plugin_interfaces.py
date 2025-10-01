@@ -74,6 +74,7 @@ from pathlib import Path
 
 import os
 
+
 def main():
 
     # ## Download and read in binned data
@@ -88,44 +89,51 @@ def main():
 
     # Download the orientation file (684.38 MB)
 
+
     # In[ ]:
 
-
-    fetch_wasabi_file('COSI-SMEX/DC2/Data/Orientation/20280301_3_month_with_orbital_info.ori', output=str(data_path / '20280301_3_month_with_orbital_info.ori'), checksum = '416fcc296fc37a056a069378a2d30cb2')
-
+    sc_orientation_path = data_path / "20280301_3_month_with_orbital_info.ori"
+    fetch_wasabi_file('COSI-SMEX/DC2/Data/Orientation/20280301_3_month_with_orbital_info.ori',
+                      output=str(sc_orientation_path), checksum = '416fcc296fc37a056a069378a2d30cb2')
 
     # Download the binned Crab+background data (99.16 MB)
 
     # In[5]:
 
-
-    fetch_wasabi_file('COSI-SMEX/cosipy_tutorials/crab_spectral_fit_galactic_frame/crab_bkg_binned_data.hdf5', output=str(data_path / 'crab_bkg_binned_data.hdf5'), checksum = '85658e102414c4f746e64a7d29c607a4')
-
+    crab_bkg_data_path = data_path / "crab_bkg_binned_data.hdf5"
+    fetch_wasabi_file('COSI-SMEX/cosipy_tutorials/crab_spectral_fit_galactic_frame/crab_bkg_binned_data.hdf5',
+                      output=str(crab_bkg_data_path), checksum = '85658e102414c4f746e64a7d29c607a4')
 
     # Download the binned Crab data (13.16 MB)
 
     # In[7]:
 
-
-    fetch_wasabi_file('COSI-SMEX/cosipy_tutorials/crab_spectral_fit_galactic_frame/crab_binned_data.hdf5', output=str(data_path / 'crab_binned_data.hdf5'), checksum = '6e5bccb48556bdbd259519c52dec9dcb')
+    crab_data_path = data_path / "crab_binned_data.hdf5"
+    fetch_wasabi_file('COSI-SMEX/cosipy_tutorials/crab_spectral_fit_galactic_frame/crab_binned_data.hdf5',
+                      output=str(crab_data_path), checksum = '6e5bccb48556bdbd259519c52dec9dcb')
 
 
     # Download the binned background data (89.10 MB)
 
     # In[9]:
 
-
-    fetch_wasabi_file('COSI-SMEX/cosipy_tutorials/crab_spectral_fit_galactic_frame/bkg_binned_data.hdf5', output=str(data_path / 'bkg_binned_data.hdf5'), checksum = '54221d8556eb4ef520ef61da8083e7f4')
-
+    bkg_data_path = data_path / "bkg_binned_data.hdf5"
+    fetch_wasabi_file('COSI-SMEX/cosipy_tutorials/crab_spectral_fit_galactic_frame/bkg_binned_data.hdf5',
+                      output=str(bkg_data_path), checksum = '54221d8556eb4ef520ef61da8083e7f4')
 
     # Download the response file (596.06 MB)
 
     # In[10]:
 
-
     # Before and after Jeremy's changes
-    fetch_wasabi_file('COSI-SMEX/DC2/Responses/SMEXv12.Continuum.HEALPixO3_10bins_log_flat.binnedimaging.imagingresponse.nonsparse_nside8.area.good_chunks_unzip.h5.zip', output=str(data_path / 'SMEXv12.Continuum.HEALPixO3_10bins_log_flat.binnedimaging.imagingresponse.nonsparse_nside8.area.good_chunks_unzip.h5.zip'), unzip = True, checksum = 'e8ff763c5d9e63d3797567a4a51d9eda')
-    #fetch_wasabi_file('COSI-SMEX/develop/Data/Responses/SMEXv12.Continuum.HEALPixO3_10bins_log_flat.binnedimaging.imagingresponse.h5', output=str(data_path / 'SMEXv12.Continuum.HEALPixO3_10bins_log_flat.binnedimaging.imagingresponse.h5'), checksum = 'eb72400a1279325e9404110f909c7785')
+    dr_path_zip = data_path / "SMEXv12.Continuum.HEALPixO3_10bins_log_flat.binnedimaging.imagingresponse.nonsparse_nside8.area.good_chunks_unzip.h5.zip"  # path to detector response
+    dr_path =  dr_path_zip.with_suffix('')
+    fetch_wasabi_file('COSI-SMEX/DC2/Responses/SMEXv12.Continuum.HEALPixO3_10bins_log_flat.binnedimaging.imagingresponse.nonsparse_nside8.area.good_chunks_unzip.h5.zip',
+                      output = str(dr_path_zip), unzip = True, checksum = 'e8ff763c5d9e63d3797567a4a51d9eda')
+
+    # dr_path = str(data_path / "SMEXv12.Continuum.HEALPixO3_10bins_log_flat.binnedimaging.imagingresponse.h5") # path to detector response
+    # fetch_wasabi_file('COSI-SMEX/develop/Data/Responses/SMEXv12.Continuum.HEALPixO3_10bins_log_flat.binnedimaging.imagingresponse.h5',
+    #                   output=str(dr_path), checksum = 'eb72400a1279325e9404110f909c7785')
 
 
     # Read in the spacecraft orientation file
@@ -133,7 +141,7 @@ def main():
     # In[4]:
 
 
-    sc_orientation = SpacecraftHistory.open(data_path / "20280301_3_month_with_orbital_info.ori")
+    sc_orientation = SpacecraftHistory.open(sc_orientation_path)
 
 
     # Create BinnedData objects for the Crab only, Crab+background, and background only. The Crab only simulation is not used for the spectral fit, but can be used to compare the fitted spectrum to the source simulation
@@ -150,21 +158,14 @@ def main():
 
     # In[6]:
 
-
-    crab.load_binned_data_from_hdf5(binned_data=data_path / "crab_binned_data.hdf5")
-    crab_bkg.load_binned_data_from_hdf5(binned_data=data_path / "crab_bkg_binned_data.hdf5")
-    bkg.load_binned_data_from_hdf5(binned_data=data_path / "bkg_binned_data.hdf5")
+    crab.load_binned_data_from_hdf5(binned_data=crab_data_path)
+    crab_bkg.load_binned_data_from_hdf5(binned_data=crab_bkg_data_path)
+    bkg.load_binned_data_from_hdf5(binned_data=bkg_data_path)
 
 
     # Define the path to the detector response
 
     # In[7]:
-
-
-    # Before and after Jeremy's changes
-    dr = str(data_path / "SMEXv12.Continuum.HEALPixO3_10bins_log_flat.binnedimaging.imagingresponse.nonsparse_nside8.area.good_chunks_unzip.h5") # path to detector response
-    #dr = str(data_path / "SMEXv12.Continuum.HEALPixO3_10bins_log_flat.binnedimaging.imagingresponse.h5") # path to detector response
-
 
     # ## Perform spectral fit
 
@@ -172,7 +173,7 @@ def main():
 
     output_suffix = 'interfaces'
 
-    dr = FullDetectorResponse.open(dr)
+    dr = FullDetectorResponse.open(dr_path)
     instrument_response = BinnedInstrumentResponse(dr)
 
     # Set background parameter, which is used to fit the amplitude of the background, and instantiate the COSI 3ML plugin
