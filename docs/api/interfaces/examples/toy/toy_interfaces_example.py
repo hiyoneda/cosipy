@@ -298,13 +298,13 @@ class ToyModelFolding(BinnedThreeMLModelFoldingInterface, UnbinnedThreeMLModelFo
 
     def set_model(self, model: Model):
 
-        self._model = None
+        self._model = model
 
     def _cache_psr_copies(self):
 
         new_psr_copies = {}
 
-        for name,source in model.sources.items():
+        for name,source in self._model.sources.items():
 
             if name in self._psr_copies:
                 # Use cache
@@ -360,92 +360,105 @@ class ToyTimeSelector(EventSelectorInterface):
 
 # ======= Actual code. This is how the "tutorial" will look like ================
 
-# Binned or unbinned
-unbinned = False
+def main():
 
-# Set the inputs. These will eventually open file or set specific parameters,
-# but since we are generating the data and models on the fly, and most parameter
-# are hardcoded above withing the classes, then it's not necessary here.
-tstart = Time("2000-01-01T01:00:00")
-tstop = Time("2000-01-01T10:00:00")
-duration = tstop - tstart
-selector = ToyTimeSelector(tstart = tstart, tstop = tstop)
+    # Binned or unbinned
+    unbinned = False
 
-event_data = ToyEventData(selector=selector)
+    # Set the inputs. These will eventually open file or set specific parameters,
+    # but since we are generating the data and models on the fly, and most parameter
+    # are hardcoded above withing the classes, then it's not necessary here.
+    tstart = Time("2000-01-01T01:00:00")
+    tstop = Time("2000-01-01T10:00:00")
+    duration = tstop - tstart
+    selector = ToyTimeSelector(tstart = tstart, tstop = tstop)
 
-print(sum(1 for _ in event_data), nevents_tot)
+    event_data = ToyEventData(selector=selector)
 
-binned_data = get_binned_data(event_data, toy_axis)
-psr = ToyPointSourceResponse(duration = duration)
-response = ToyModelFolding(psr)
-bkg = ToyBkg(duration = duration)
+    print(sum(1 for _ in event_data), nevents_tot)
 
-## Source model
-## We'll just use the K value in u.cm / u.cm / u.s / u.keV
-spectrum = Constant()
-spectrum.k.value = 1
+    binned_data = get_binned_data(event_data, toy_axis)
+    psr = ToyPointSourceResponse(duration = duration)
+    response = ToyModelFolding(psr)
+    bkg = ToyBkg(duration = duration)
 
-polarized = False
+    ## Source model
+    ## We'll just use the K value in u.cm / u.cm / u.s / u.keV
+    spectrum = Constant()
+    spectrum.k.value = 1
 
-if polarized:
-    polarization = LinearPolarization(10, 10)
-    polarization.degree.value = 0.
-    polarization.angle.value = 10
+    polarized = False
 
-    spectral_component = SpectralComponent('arbitrary_spectrum_name', spectrum, polarization)
-    source = PointSource('arbitrary_source_name', 0, 0, components=[spectral_component])
-else:
+    if polarized:
+        polarization = LinearPolarization(10, 10)
+        polarization.degree.value = 0.
+        polarization.angle.value = 10
 
-    source = PointSource("arbitrary_source_name",
-                         l=0, b=0,  # Doesn't matter
-                         spectral_shape=spectrum)
+        spectral_component = SpectralComponent('arbitrary_spectrum_name', spectrum, polarization)
+        source = PointSource('arbitrary_source_name', 0, 0, components=[spectral_component])
+    else:
 
-model = Model(source)
+        source = PointSource("arbitrary_source_name",
+                             l=0, b=0,  # Doesn't matter
+                             spectral_shape=spectrum)
 
-# Optional: Perform a background-only or a null-background fit
-#bkg = None # Uncomment for no bkg
-#model = Model() # Uncomment for bkg-only hypothesis
+    model = Model(source)
 
-# Fit
-if unbinned:
-    like_fun = UnbinnedLikelihood(event_data, response, bkg)
-else:
-    like_fun = PoissonLikelihood(binned_data, response, bkg)
+    # Optional: Perform a background-only or a null-background fit
+    #bkg = None # Uncomment for no bkg
+    #model = Model() # Uncomment for bkg-only hypothesis
 
-cosi = ThreeMLPluginInterface('cosi', like_fun)
+    # Fit
+    if unbinned:
+        like_fun = UnbinnedLikelihood(event_data, response, bkg)
+    else:
+        like_fun = PoissonLikelihood(binned_data, response, bkg)
 
-# Before the fit, you can set the parameters initial values, bounds, etc.
-# This is passed to the minimizer.
-# In addition to model. Nuisance.
-cosi.bkg_parameter['norm'].value = 1
+    cosi = ThreeMLPluginInterface('cosi', like_fun)
 
-plugins = DataList(cosi)
-like = JointLikelihood(model, plugins)
+    # Before the fit, you can set the parameters initial values, bounds, etc.
+    # This is passed to the minimizer.
+    # In addition to model. Nuisance.
+    cosi.bkg_parameter['norm'].value = 1
 
-# Run minimizer
-like.fit()
-print(like.minimizer)
+    plugins = DataList(cosi)
+    like = JointLikelihood(model, plugins)
 
-# Plot results
-fig, ax = plt.subplots()
-binned_data.data.plot(ax)
-expectation = response.expectation(binned_data.axes)
-if bkg is not None:
-    expectation = expectation + bkg.expectation(binned_data.axes)
-expectation.plot(ax)
-plt.show()
+    # Run minimizer
+    like.fit()
+    print(like.minimizer)
 
-# Grid
-loglike = Histogram([np.linspace(.9*nevents_signal, 1.1*nevents_signal, 30), np.linspace(.9*nevents_bkg, 1.1*nevents_bkg, 31)], labels = ['s', 'b'])
+    # Plot results
+    plot = False
+    if plot:
 
-for i,s in enumerate(loglike.axes['s'].centers):
-    for j,b in enumerate(loglike.axes['b'].centers):
+        fig, ax = plt.subplots()
+        binned_data.data.plot(ax)
+        expectation = response.expectation(binned_data.axes)
+        if bkg is not None:
+            expectation = expectation + bkg.expectation(binned_data.axes)
+        expectation.plot(ax)
+        plt.show()
 
-        spectrum.k.value = s
-        cosi.bkg_parameter['norm'].value = b
+        # Grid
+        loglike = Histogram([np.linspace(.9*nevents_signal, 1.1*nevents_signal, 30), np.linspace(.9*nevents_bkg, 1.1*nevents_bkg, 31)], labels = ['s', 'b'])
 
-        loglike[i,j] = cosi.get_log_like()
+        for i,s in enumerate(loglike.axes['s'].centers):
+            for j,b in enumerate(loglike.axes['b'].centers):
 
-loglike.plot()
+                spectrum.k.value = s
+                cosi.bkg_parameter['norm'].value = b
 
-plt.show()
+                loglike[i,j] = cosi.get_log_like()
+
+        loglike.plot()
+
+        plt.show()
+
+if __name__ == "__main__":
+
+    import cProfile
+    cProfile.run('main()', filename = "prof_toy.prof")
+    exit()
+
+    main()
