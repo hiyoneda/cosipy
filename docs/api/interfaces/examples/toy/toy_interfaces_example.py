@@ -7,10 +7,11 @@ from astromodels.core.polarization import Polarization
 import astropy.units as u
 from astropy.time import Time
 from astropy.units import Quantity
+from numpy.ma.core import logical_or
 
 from cosipy import SpacecraftHistory
 from cosipy.interfaces.background_interface import BackgroundDensityInterface
-from cosipy.interfaces.data_interface import EventDataInterface, DataInterface
+from cosipy.interfaces.data_interface import EventDataInterface, DataInterface, TimeTagEventData
 from cosipy.interfaces.event import EventMetadata
 from cosipy.interfaces.event_selection import EventSelectorInterface
 
@@ -85,7 +86,7 @@ class ToyData(DataInterface):
 
     event_type = ToyEvent
 
-class ToyEventData(EventDataInterface, ToyData):
+class ToyEventData(TimeTagEventData, ToyData):
     # Random data. Normal signal on top of uniform bkg
 
     def __init__(self, selector:EventSelectorInterface = None):
@@ -103,7 +104,19 @@ class ToyEventData(EventDataInterface, ToyData):
 
         self._nevents = None # After selection
 
-        self._selector = selector
+        # Filter the events once and for all
+        # It can also be done on the fly if needed
+        new_x = []
+        new_jd1 = []
+        new_jd2 = []
+
+        for event in selector(self):
+            new_x.append(event.x)
+            new_jd1.append(event.jd1)
+            new_jd2.append(event.jd2)
+
+        self._x = np.asarray(new_x)
+        self._timestamps = Time(new_jd1, new_jd2, format = 'jd')
 
     @property
     def tsart(self):
@@ -113,17 +126,11 @@ class ToyEventData(EventDataInterface, ToyData):
     def tstop(self):
         return self._tstop
 
-    def _iter_all(self) -> Iterator[ToyEvent]:
-
-        for x,t in zip(self._x, self._timestamps):
-            yield ToyEvent(x,t)
-
     def __iter__(self) -> Iterator[ToyEvent]:
-
         nselected = 0
-        for event in self._selector(self._iter_all()):
+        for x,t in zip(self._x, self._timestamps):
             nselected += 1
-            yield event
+            yield ToyEvent(x,t)
 
         self._nevents = nselected
 
@@ -137,7 +144,15 @@ class ToyEventData(EventDataInterface, ToyData):
 
     @property
     def x(self):
-        return np.asarray([x for sel,x in zip(self._selector.select(self), self._x) if sel])
+        return self._x
+
+    @property
+    def jd1(self) -> Iterable[float]:
+        return self._timestamps.jd1
+
+    @property
+    def jd2(self) -> Iterable[float]:
+        return self._timestamps.jd2
 
 class ToyBinnedData(BinnedDataInterface, ToyData):
 
@@ -347,16 +362,33 @@ class ToyTimeSelector(EventSelectorInterface):
 
     def _select(self, event:TimeTagEvent) -> bool:
         # Single event
-        return (self._tstart is None or event.time > self._tstart) and  (self._tstop is None or event.time <= self._tstop)
+        return next(iter(self.select([event])))
 
     def select(self, events:Union[TimeTagEvent, Iterable[TimeTagEvent]]) -> Union[bool, Iterable[bool]]:
+
         if isinstance(events, Event):
             # Single event
             return self._select(events)
         else:
             # Multiple
+
+            # Caching results optimizes the result sometimes
+            # The user can pass the iterable in chunks
+            jd1 = []
+            jd2 = []
+
             for event in events:
-                yield self._select(event)
+                jd1.append(event.jd1)
+                jd2.append(event.jd2)
+
+            time = Time(jd1, jd2, format = 'jd')
+
+            selected = np.logical_and(np.logical_or(self._tstart is None, time > self._tstart),
+                                      np.logical_or(self._tstop is None,  time <= self._tstop))
+
+            for sel in selected:
+                yield sel
+
 
 # ======= Actual code. This is how the "tutorial" will look like ================
 
@@ -429,7 +461,7 @@ def main():
     print(like.minimizer)
 
     # Plot results
-    plot = False
+    plot = True
     if plot:
 
         fig, ax = plt.subplots()
