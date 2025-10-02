@@ -11,6 +11,7 @@ from .threeml import COSILike
 from .threeml import Band_Eflux
 
 from .spacecraftfile import SpacecraftFile
+from .good_time_interval import GoodTimeInterval
 
 from .ts_map import FastTSMap, MOCTSMap
 
@@ -18,3 +19,4 @@ from .source_injector import SourceInjector
 
 from .background_estimation import LineBackgroundEstimation
 from .background_estimation import ContinuumEstimation
+
