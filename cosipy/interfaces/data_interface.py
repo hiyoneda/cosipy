@@ -1,5 +1,5 @@
 import itertools
-from typing import Protocol, runtime_checkable, Dict, Type, Any, Tuple, Iterator, Union, Sequence, Iterable
+from typing import Protocol, runtime_checkable, Dict, Type, Any, Tuple, Iterator, Union, Sequence, Iterable, ClassVar
 
 import numpy as np
 from astropy.units import Unit, Quantity
@@ -27,11 +27,8 @@ __all__ = ["DataInterface",
 @runtime_checkable
 class DataInterface(Protocol):
 
-    @property
-    def event_type(self) -> Type[Event]:
-        """
-        Type returned by __iter__ in the event data case
-        """
+    # Type returned by __iter__ in the event data case
+    event_type = ClassVar[Type]
 
 @runtime_checkable
 class BinnedDataInterface(DataInterface, Protocol):
@@ -64,9 +61,6 @@ class EventDataInterface(DataInterface, Protocol):
         the implementations override it
         """
         return sum(1 for _ in iter(self))
-
-    def get_binned_data(self, axes:Axes, *args, **kwargs) -> BinnedDataInterface:
-        raise NotImplementedError
 
 @runtime_checkable
 class TimeTagEventData(EventDataInterface, Protocol):

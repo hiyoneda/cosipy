@@ -49,7 +49,4 @@ class ExpectationDensityInterface(ExpectationInterface, Protocol):
         As many values for an Iterable of events
         """
 
-    def get_binned_expectation(self, axes:Axes, *args, **kwargs):
-        raise NotImplementedError
-
 

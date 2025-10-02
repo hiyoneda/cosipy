@@ -32,3 +32,5 @@ class EventSelectorInterface(Protocol):
         for selected,event in self.mask(events):
             if selected:
                 yield event
+
+
