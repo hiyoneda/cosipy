@@ -172,7 +172,7 @@ class SpacecraftAttitudeExposureTable(pd.DataFrame):
         idx_z = hp.ang2pix(nside, l_z, b_z, nest=nest, lonlat=True)
         
         delta_time = (ori_time[1:] - ori_time[:-1]).to('s').value
-        altitude = orientation.get_altitude()
+        altitude = 0.5 * (orientation.get_altitude()[1:] + orientation.get_altitude()[:-1])
         
         for i in tqdm(range(n_pointing - 1)):
             
