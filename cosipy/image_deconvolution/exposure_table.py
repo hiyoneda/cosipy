@@ -21,6 +21,8 @@ class SpacecraftAttitudeExposureTable(pd.DataFrame):
     - xpointing: np.array of [l, b] in degrees. Array of x-pointings assigned to each scatt bin.
     - zpointing_averaged: [l, b] in degrees. Averaged z-pointing in each scatt bin.
     - xpointing_averaged: [l, b] in degrees. Averaged x-pointing in each scatt bin.
+    - earth_zenith: np.array of [l, b] in degrees. Array of earth zenith assigned to each scatt bin.
+    - altitude: float in km. The satellite altitude assigned to each scatt bin.
     - delta_time: np.array of float in second. Exposure times for pointings assigned to each scatt bin.
     - exposure: float in second. total exposure for each scatt bin.
     - num_pointings: number of pointings assigned to each scatt bin.
@@ -53,7 +55,7 @@ class SpacecraftAttitudeExposureTable(pd.DataFrame):
             if not np.all(self[name] == other[name]):
                 return False
         
-        for name in ['delta_time', 'zpointing', 'xpointing', 'zpointing_averaged', 'xpointing_averaged']:
+        for name in ['delta_time', 'zpointing', 'xpointing', 'zpointing_averaged', 'xpointing_averaged', 'earth_zenith', 'altitude']:
             for self_, other_ in zip(self[name], other[name]):
                 if not np.all(self_ == other_):
                     return False
@@ -121,12 +123,14 @@ class SpacecraftAttitudeExposureTable(pd.DataFrame):
         :py:class:`pd.DataFrame`
         """
 
-        logger.info("angular resolution: ", hp.nside2resol(nside) * 180 / np.pi, "deg.")    
+        logger.info(f'angular resolution: {hp.nside2resol(nside) * 180 / np.pi} deg.')    
     
         indices_healpix = [] # (idx_z, idx_x)
         delta_times = []
         xpointings = [] # [l_x, b_x]
         zpointings = [] # [l_z, b_z]
+        earth_zenith = [] # [earth_zenith_l, earth_zenith_b]
+        altitude_list = []
                 
         if start is not None and stop is not None:
             orientation = orientation.source_interval(start, stop)
@@ -139,7 +143,7 @@ class SpacecraftAttitudeExposureTable(pd.DataFrame):
         
         ori_time = orientation.get_time()
             
-        logger.info("duration: ", (ori_time[-1] - ori_time[0]).to("day"))
+        logger.info(f'duration: {(ori_time[-1] - ori_time[0]).to("day")}')
         
         attitude = orientation.get_attitude()
         
@@ -147,11 +151,14 @@ class SpacecraftAttitudeExposureTable(pd.DataFrame):
 
         n_pointing = len(pointing_list[0])
         
-        x_1, x_2 = pointing_list[0][:-1], pointing_list[0][1:]
-        l_x, b_x =  0.5 * (x_1.l.degree + x_2.l.degree), 0.5 * (x_1.b.degree + x_2.b.degree)
+        l_x = 0.5 * (orientation.x_pointings.l.value[:-1] + orientation.x_pointings.l.value[1:])
+        b_x = 0.5 * (orientation.x_pointings.b.value[:-1] + orientation.x_pointings.b.value[1:])
 
-        z_1, z_2 = pointing_list[2][:-1], pointing_list[2][1:]
-        l_z, b_z =  0.5 * (z_1.l.degree + z_2.l.degree), 0.5 * (z_1.b.degree + z_2.b.degree)
+        l_z = 0.5 * (orientation.z_pointings.l.value[:-1] + orientation.z_pointings.l.value[1:])
+        b_z = 0.5 * (orientation.z_pointings.b.value[:-1] + orientation.z_pointings.b.value[1:])
+
+        earth_zenith_l = 0.5 * (orientation.earth_zenith.l.value[:-1] + orientation.earth_zenith.l.value[1:])
+        earth_zenith_b = 0.5 * (orientation.earth_zenith.b.value[:-1] + orientation.earth_zenith.b.value[1:])
 
         if scheme == 'ring':
             nest = False
@@ -165,6 +172,7 @@ class SpacecraftAttitudeExposureTable(pd.DataFrame):
         idx_z = hp.ang2pix(nside, l_z, b_z, nest=nest, lonlat=True)
         
         delta_time = (ori_time[1:] - ori_time[:-1]).to('s').value
+        altitude = orientation.get_altitude()
         
         for i in tqdm(range(n_pointing - 1)):
             
@@ -173,18 +181,22 @@ class SpacecraftAttitudeExposureTable(pd.DataFrame):
                 delta_times[idx].append(delta_time[i])
                 xpointings[idx].append([l_x[i], b_x[i]])
                 zpointings[idx].append([l_z[i], b_z[i]])            
-                
+                earth_zenith[idx].append([earth_zenith_l[i], earth_zenith_b[i]])
+                altitude_list[idx].append(altitude[i])
             else:
                 indices_healpix.append((idx_z[i], idx_x[i]))
                 delta_times.append([delta_time[i]])
                 xpointings.append([[l_x[i], b_x[i]]])
                 zpointings.append([[l_z[i], b_z[i]]])
+                earth_zenith.append([[earth_zenith_l[i], earth_zenith_b[i]]])
+                altitude_list.append([altitude[i]])
         
         indices_scatt_binning = [i for i in range(len(indices_healpix))] 
         
         # to numpy
         zpointings = [ np.array(_) for _ in zpointings]
         xpointings = [ np.array(_) for _ in xpointings]
+        earth_zenith = [ np.array(_) for _ in earth_zenith]
 
         zpointings_averaged = [ cls._get_averaged_pointing(z, dt) for (z, dt) in zip(zpointings, delta_times) ]
         xpointings_averaged = [ cls._get_averaged_pointing(x, dt) for (x, dt) in zip(xpointings, delta_times) ]
@@ -198,6 +210,8 @@ class SpacecraftAttitudeExposureTable(pd.DataFrame):
                                   'xpointing': xpointings,
                                   'zpointing_averaged': zpointings_averaged,
                                   'xpointing_averaged': xpointings_averaged,
+                                  'earth_zenith': earth_zenith,
+                                  'altitude': altitude_list, 
                                   'delta_time': delta_times, 
                                   'exposure': exposures,
                                   'num_pointings': num_pointings,
@@ -245,9 +259,14 @@ class SpacecraftAttitudeExposureTable(pd.DataFrame):
         xpointings = [ [ [l, b] for (l, b) in zip(x_l, x_b) ] for (x_l, x_b) in zip(hdu.data['xpointing_l'], hdu.data['xpointing_b']) ]
         xpointings = [ np.array(_) for _ in xpointings]
 
+        earth_zeniths = [ [ [l, b] for (l, b) in zip(x_l, x_b) ] for (x_l, x_b) in zip(hdu.data['earth_zenith_l'], hdu.data['earth_zenith_b']) ]
+        earth_zeniths = [ np.array(_) for _ in earth_zeniths]
+
         zpointings_averaged = [ np.array([z_ave_l, z_ave_b]) for (z_ave_l, z_ave_b)  in zip(hdu.data['zpointing_averaged_l'], hdu.data['zpointing_averaged_b']) ]
 
         xpointings_averaged = [ np.array([x_ave_l, x_ave_b]) for (x_ave_l, x_ave_b)  in zip(hdu.data['xpointing_averaged_l'], hdu.data['xpointing_averaged_b']) ]
+
+        altitudes = np.array(hdu.data['altitude'])
 
         delta_times = np.array(hdu.data['delta_time'])
 
@@ -262,6 +281,8 @@ class SpacecraftAttitudeExposureTable(pd.DataFrame):
                                   'xpointing': xpointings,
                                   'zpointing_averaged': zpointings_averaged,
                                   'xpointing_averaged': xpointings_averaged,
+                                  'earth_zenith': earth_zeniths,
+                                  'altitude': altitudes, 
                                   'delta_time': delta_times, 
                                   'exposure': exposures,
                                   'num_pointings': num_pointings,
@@ -303,6 +324,10 @@ class SpacecraftAttitudeExposureTable(pd.DataFrame):
         
         columns.append(column_healpix_index_z_pointing)
         columns.append(column_healpix_index_x_pointing)
+
+        column_altitude = fits.Column(name='altitude', format='PD()', unit = 'km',
+                                        array=np.array(self['altitude'].array, dtype=np.object_))
+        columns.append(column_altitude)    
     
         column_delta_time = fits.Column(name='delta_time', format='PD()', unit = 's',
                                         array=np.array(self['delta_time'].array, dtype=np.object_))
@@ -339,6 +364,14 @@ class SpacecraftAttitudeExposureTable(pd.DataFrame):
         column_xpointing_averaged_b = fits.Column(name='xpointing_averaged_b', format='D', unit = 'degree',
                                                   array=np.array([_[1] for _ in self['xpointing_averaged']]))
         columns.append(column_xpointing_averaged_b)    
+    
+        column_earth_zenith_l = fits.Column(name='earth_zenith_l', format='PD()', unit = 'degree',
+                                        array=np.array([[pointing[0] for pointing in pointings] for pointings in self['earth_zenith']], dtype=np.object_))
+        columns.append(column_earth_zenith_l)    
+    
+        column_earth_zenith_b = fits.Column(name='earth_zenith_b', format='PD()', unit = 'degree',
+                                        array=np.array([[pointing[1] for pointing in pointings] for pointings in self['earth_zenith']], dtype=np.object_))
+        columns.append(column_earth_zenith_b)  
         
         table_hdu = fits.BinTableHDU.from_columns(columns) 
         table_hdu.name = 'exposuretable'
