@@ -548,8 +548,7 @@ class SpacecraftFile():
                        scheme = 'ring',
                        coordsys = 'galactic',
                        r_earth = 6378.0,
-                       earth_occ = True,
-                       gti = None
+                       earth_occ = True
                        ):
 
         """
@@ -572,8 +571,6 @@ class SpacecraftFile():
         earth_occ : bool, optional
             Option to include Earth occultation in scatt map calculation.
             Default is True. 
-        gti: :py:class:`cosipy.event_selection.GoodTimeInterval`, optional
-            Good time intervals
 
         Returns
         -------
@@ -619,13 +616,7 @@ class SpacecraftFile():
 
             # Mask
             weight[earth_occ_index[:-1]] = 0
-
-        if gti is not None:
-            good_index, good_gti_index = gti.is_in_gti(timestamps)
-
-            # Mask
-            weight[~good_index] = 0
-
+        
         # Fill histogram:
         h_ori.fill(x, y, weight = weight)
 
