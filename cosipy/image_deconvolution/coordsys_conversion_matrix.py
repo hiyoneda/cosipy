@@ -155,6 +155,8 @@ class CoordsysConversionMatrix(Histogram):
             xpointing = row['xpointing']
             zpointing_averaged = row['zpointing_averaged']
             xpointing_averaged = row['xpointing_averaged']
+            earth_zenith = row['earth_zenith']
+            altitude = row['altitude']
             delta_time = row['delta_time']
             exposure = row['exposure']
 
@@ -166,7 +168,11 @@ class CoordsysConversionMatrix(Histogram):
                 x = SkyCoord(xpointing.T[0], xpointing.T[1], frame="galactic", unit="deg")
 
             attitude = Attitude.from_axes(x = x, z = z, frame = 'galactic')
-
+            
+            # exposure map calculation including earth occultation
+            exposure_map = cls._calc_exposure_map(nside_model, num_pointings, earth_zenith, altitude, delta_time, is_nest_model)
+            
+            # ccm
             for ipix in range(hp.nside2npix(nside_model)):
                 l, b = hp.pix2ang(nside_model, ipix, nest=is_nest_model, lonlat=True)
                 pixel_coord = SkyCoord(l, b, unit = "deg", frame = 'galactic')
@@ -184,9 +190,9 @@ class CoordsysConversionMatrix(Histogram):
                 pixels, weights = axis_local_map.get_interp_weights(src_path_skycoord)
 
                 if use_averaged_pointing:
-                    weights = weights * exposure
+                    weights = weights * np.sum(exposure_map[:,ipix])
                 else:
-                    weights = weights * delta_time
+                    weights = weights * exposure_map[:,ipix]
 
                 hist, bins = np.histogram(pixels, bins = axis_local_map.edges, weights = weights)
 
@@ -204,6 +210,20 @@ class CoordsysConversionMatrix(Histogram):
         coordsys_conv_matrix.binning_method = 'ScAtt'
 
         return coordsys_conv_matrix
+
+    @classmethod
+    def _calc_exposure_map(cls, nside_model, num_pointings, earth_zenith, altitude, delta_time, r_earth = 6378.0, is_nest_model = False):
+
+        npix_model = hp.nside2npix(nside_model)
+
+        exposure_map = np.zeros((num_pointings, npix_model))
+            
+        for i_pointing in range(num_pointings):
+            earth_radius = np.pi - np.arcsin(r_earth / (r_earth + altitude[i_pointing])) #rad
+            filling_pixel_index = hp.query_disc(nside_model, hp.ang2vec(earth_zenith[i_pointing,0], earth_zenith[i_pointing,1], lonlat = True), nest = is_nest_model, radius = earth_radius)
+            exposure_map[i_pointing][filling_pixel_index] = delta_time[i_pointing]
+
+        return exposure_map
 
     @classmethod
     def open(cls, filename, name = 'hist'):
