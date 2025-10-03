@@ -4,7 +4,7 @@ import histpy
 import numpy as np
 from histpy import Axes
 
-from cosipy.interfaces import BinnedDataInterface, EventDataInterface, DataInterface, Event
+from cosipy.interfaces import BinnedDataInterface, EventDataInterface, DataInterface, EventInterface
 
 __all__ = [
     "ExpectationDensityInterface",
@@ -43,10 +43,17 @@ class ExpectationDensityInterface(ExpectationInterface, Protocol):
         Total expected counts
         """
 
-    def expectation_density(self, events: Union[Event, Iterable[Event]]) -> Union[Event, Iterable[float]]:
+    def expectation_density(self, start:Optional[int] = None, stop:Optional[int] = None) -> Iterable[float]:
         """
-        Return a single value for a single Event.
-        As many values for an Iterable of events
+        Return the expected number of counts density from the start-th event
+        to the stop-th event.
+
+        Parameters
+        ----------
+        start : None | int
+            From beginning by default
+        stop: None|int
+            Until the end by default
         """
 
 

@@ -11,7 +11,7 @@ from numpy.ma.core import logical_or
 
 from cosipy import SpacecraftHistory
 from cosipy.interfaces.background_interface import BackgroundDensityInterface
-from cosipy.interfaces.data_interface import EventDataInterface, DataInterface, TimeTagEventData
+from cosipy.interfaces.data_interface import EventDataInterface, DataInterface, TimeTagEventDataInterface
 from cosipy.interfaces.event import EventMetadata
 from cosipy.interfaces.event_selection import EventSelectorInterface
 
@@ -23,8 +23,8 @@ from cosipy.interfaces import (BinnedDataInterface,
                                BinnedThreeMLModelFoldingInterface,
                                BinnedThreeMLSourceResponseInterface,
                                ThreeMLPluginInterface,
-                               UnbinnedThreeMLSourceResponseInterface, UnbinnedThreeMLModelFoldingInterface, Event,
-                               ThreeMLSourceResponseInterface, TimeTagEvent)
+                               UnbinnedThreeMLSourceResponseInterface, UnbinnedThreeMLModelFoldingInterface, EventInterface,
+                               ThreeMLSourceResponseInterface, TimeTagEventInterface)
 from histpy import Axis, Axes, Histogram
 import numpy as np
 from scipy.stats import norm, uniform
@@ -55,16 +55,21 @@ nevents_signal = 1000
 nevents_bkg = 1000
 nevents_tot = nevents_signal + nevents_bkg
 
-class ToyEvent(TimeTagEvent, Event):
+class ToyEvent(TimeTagEventInterface, EventInterface):
     """
     Unit-less 1D data of a measurement called "x" (could be anything)
     """
 
-    def __init__(self, x, time:Time):
+    def __init__(self, index:int, x:float, time:Time):
+        self._id = index
         self._x = x
         self._jd1 = time.jd1
         self._jd2 = time.jd2
         self._metadata = EventMetadata()
+
+    @property
+    def id(self):
+        return self._id
 
     @property
     def metadata(self) -> EventMetadata:
@@ -86,53 +91,50 @@ class ToyData(DataInterface):
 
     event_type = ToyEvent
 
-class ToyEventData(TimeTagEventData, ToyData):
-    # Random data. Normal signal on top of uniform bkg
+class ToyEventDataLoader(ToyData):
+    # This simulates reading event from file
+    # Check that they are not being read twice
 
-    def __init__(self, selector:EventSelectorInterface = None):
-
+    def __init__(self):
         rng = np.random.default_rng()
 
-        self._x = np.append(rng.normal(size = nevents_signal), rng.uniform(toy_axis.lo_lim, toy_axis.hi_lim, size = nevents_bkg))
+        self._x = np.append(rng.normal(size=nevents_signal),
+                            rng.uniform(toy_axis.lo_lim, toy_axis.hi_lim, size=nevents_bkg))
 
         self._tstart = Time("2000-01-01T00:00:00")
         self._tstop = Time("2000-01-02T00:00:00")
 
-        self._timestamps = self._tstart + np.random.uniform(size = nevents_tot)*u.day
+        dt = np.random.uniform(size=nevents_tot)
+        dt_sort = np.argsort(dt)
+        self._x = self._x[dt_sort]
+        dt = dt[dt_sort]
 
-        np.random.shuffle(self._x)
-
-        self._nevents = None # After selection
-
-        # Filter the events once and for all
-        # It can also be done on the fly if needed
-        new_x = []
-        new_jd1 = []
-        new_jd2 = []
-
-        for event in selector(self):
-            new_x.append(event.x)
-            new_jd1.append(event.jd1)
-            new_jd2.append(event.jd2)
-
-        self._x = np.asarray(new_x)
-        self._timestamps = Time(new_jd1, new_jd2, format = 'jd')
-
-    @property
-    def tsart(self):
-        return self._tstart
-
-    @property
-    def tstop(self):
-        return self._tstop
+        self._timestamps = self._tstart + dt * u.day
 
     def __iter__(self) -> Iterator[ToyEvent]:
-        nselected = 0
-        for x,t in zip(self._x, self._timestamps):
-            nselected += 1
-            yield ToyEvent(x,t)
+        print("Loading events!")
+        for n,(x,t) in enumerate(zip(self._x, self._timestamps)):
+            yield ToyEvent(n,x,t)
 
-        self._nevents = nselected
+class ToyEventData(TimeTagEventDataInterface, ToyData):
+    # Random data. Normal signal on top of uniform bkg
+
+    def __init__(self, loader:ToyEventDataLoader, selector:EventSelectorInterface = None):
+
+        self._loader = selector(loader)
+        self._cached_iter = None
+        self._nevents = None  # After selection
+
+    def __iter__(self) -> Iterator[ToyEvent]:
+
+        if self._cached_iter is None:
+            # First call. Split. Keep one and return the other
+            self._loader, self._cached_iter = itertools.tee(self._loader)
+            return self._cached_iter
+        else:
+            # Following calls: tee the loader again
+            self._loader, new_iter = itertools.tee(self._loader)
+            return new_iter
 
     @property
     def nevents(self) -> int:
@@ -144,15 +146,15 @@ class ToyEventData(TimeTagEventData, ToyData):
 
     @property
     def x(self):
-        return self._x
+        return np.asarray([e.x for e in self])
 
     @property
     def jd1(self) -> Iterable[float]:
-        return self._timestamps.jd1
+        return np.asarray([e.jd1 for e in self])
 
     @property
     def jd2(self) -> Iterable[float]:
-        return self._timestamps.jd2
+        return np.asarray([e.jd2 for e in self])
 
 class ToyBinnedData(BinnedDataInterface, ToyData):
 
@@ -183,8 +185,9 @@ class ToyBkg(BinnedBackgroundInterface, BackgroundDensityInterface):
     # code readability, especially if you use an IDE.
     """
 
-    def __init__(self, duration:Quantity):
+    def __init__(self, data: ToyEventData, duration:Quantity):
 
+        self._data = data
         self._unit_expectation = Histogram(toy_axis)
         self._unit_expectation[:] = 1 / self._unit_expectation.nbins
         self._norm = 1
@@ -198,15 +201,12 @@ class ToyBkg(BinnedBackgroundInterface, BackgroundDensityInterface):
     def ncounts(self) -> float:
         return self._norm * self._sel_fraction
 
-    def expectation_density(self, data: Union[ToyEvent, Iterable[ToyEvent]] = None) -> Iterable[float]:
+    def expectation_density(self, start:Optional[int] = None, stop:Optional[int] = None) -> Iterable[float]:
 
         density = self._norm * self._unit_expectation_density
 
-        if isinstance(data, Event):
-            return density
-        else:
-            for _ in data:
-                yield density
+        for _ in itertools.islice(self._data, start, stop):
+            yield density
 
     @property
     def parameters(self) -> Dict[str, u.Quantity]:
@@ -226,7 +226,8 @@ class ToyPointSourceResponse(BinnedThreeMLSourceResponseInterface, UnbinnedThree
     The normalization --the "flux"-- is the only free parameters
     """
 
-    def __init__(self, duration:Quantity):
+    def __init__(self, data: ToyEventData, duration:Quantity):
+        self._data = data
         self._source = None
         self._sel_fraction = (duration/(1*u.day)).to_value('')
         self._unit_expectation = Histogram(toy_axis,
@@ -242,18 +243,20 @@ class ToyPointSourceResponse(BinnedThreeMLSourceResponseInterface, UnbinnedThree
         ns_events = self._sel_fraction * self._source.spectrum.main.shape.k.value
         return ns_events
 
-    def expectation_density(self, data:Union[ToyEvent, Iterable[ToyEvent]] = None) -> Iterable[float]:
-
-        if isinstance(data, Event):
-            return next(iter(self.expectation_density([data])))
+    def expectation_density(self, start:Optional[int] = None, stop:Optional[int] = None) -> Iterable[float]:
 
         # I expect in the real case it'll be more efficient to compute
         # (ncounts, ncounts*prob) than (ncounts, prob)
 
-        cache = self.ncounts()*norm.pdf([event.x for event in data])
+        cache = self.ncounts()*norm.pdf([event.x for event in itertools.islice(self._data, start, stop)])
 
         for n in cache:
             yield n
+
+        # Alternative version without cache (slower)
+        # for event in itertools.islice(self._data, start, stop):
+        #     yield self.ncounts()*norm.pdf(event.x)
+
 
     def set_source(self, source: Source):
 
@@ -284,8 +287,9 @@ class ToyPointSourceResponse(BinnedThreeMLSourceResponseInterface, UnbinnedThree
 
 class ToyModelFolding(BinnedThreeMLModelFoldingInterface, UnbinnedThreeMLModelFoldingInterface):
 
-    def __init__(self, psr: ToyPointSourceResponse):
+    def __init__(self, data:ToyEventData, psr: ToyPointSourceResponse):
 
+        self._data = data
         self._model = None
 
         self._psr = psr
@@ -300,15 +304,11 @@ class ToyModelFolding(BinnedThreeMLModelFoldingInterface, UnbinnedThreeMLModelFo
 
         return ncounts
 
-    def expectation_density(self, data: Union[ToyEvent, Iterable[ToyEvent]] = None) -> Iterable[float]:
+    def expectation_density(self, start:Optional[int] = None, stop:Optional[int] = None) -> Iterable[float]:
 
         self._cache_psr_copies()
 
-        if isinstance(data, Event):
-            return next(iter(self.expectation_density([data])))
-
-        # One by one in this example, but they can also be done in chunks (e.g. with itertools batched or islice)
-        for expectations in zip(*[p.expectation_density(d) for p,d in zip(self._psr_copies.values(), itertools.tee(data))]):
+        for expectations in zip(*[p.expectation_density(start, stop) for p in self._psr_copies.values()]):
             yield np.sum(expectations)
 
     def set_model(self, model: Model):
@@ -357,37 +357,59 @@ def get_binned_data(event_data:ToyEventData, axis:Axis) -> ToyBinnedData:
 class ToyTimeSelector(EventSelectorInterface):
 
     def __init__(self, tstart:Time = None, tstop:Time = None):
+        """
+        Assumes events are time-ordered
+
+        Parameters
+        ----------
+        tstart
+        tstop
+        """
+
         self._tstart = tstart
         self._tstop = tstop
 
-    def _select(self, event:TimeTagEvent) -> bool:
+    def _select(self, event:TimeTagEventInterface) -> bool:
         # Single event
         return next(iter(self.select([event])))
 
-    def select(self, events:Union[TimeTagEvent, Iterable[TimeTagEvent]]) -> Union[bool, Iterable[bool]]:
+    def select(self, events:Union[TimeTagEventInterface, Iterable[TimeTagEventInterface]]) -> Union[bool, Iterable[bool]]:
 
-        if isinstance(events, Event):
+        if isinstance(events, EventInterface):
             # Single event
             return self._select(events)
         else:
             # Multiple
 
-            # Caching results optimizes the result sometimes
-            # The user can pass the iterable in chunks
-            jd1 = []
-            jd2 = []
+            # Example of working in chunks/batches. This can optimize the
+            # code sometimes.
 
-            for event in events:
-                jd1.append(event.jd1)
-                jd2.append(event.jd2)
+            def chunks():
+                chunk_size = 1000
+                it = iter(events)
+                while chunk := tuple(itertools.islice(it, chunk_size)):
+                    yield chunk
 
-            time = Time(jd1, jd2, format = 'jd')
+            for chunk in chunks():
 
-            selected = np.logical_and(np.logical_or(self._tstart is None, time > self._tstart),
-                                      np.logical_or(self._tstop is None,  time <= self._tstop))
+                jd1 = []
+                jd2 = []
 
-            for sel in selected:
-                yield sel
+                for event in chunk:
+                    jd1.append(event.jd1)
+                    jd2.append(event.jd2)
+
+                time = Time(jd1, jd2, format = 'jd')
+
+                selected = np.logical_and(np.logical_or(self._tstart is None, time > self._tstart),
+                                          np.logical_or(self._tstop is None,  time <= self._tstop))
+
+                for sel in selected:
+                    yield sel
+
+                if self._tstop is not None and time[-1] > self._tstop:
+                    # Stop further loading of event
+                    return
 
 
 # ======= Actual code. This is how the "tutorial" will look like ================
@@ -395,7 +417,8 @@ class ToyTimeSelector(EventSelectorInterface):
 def main():
 
     # Binned or unbinned
-    unbinned = False
+    unbinned = True
+    plot = True
 
     # Set the inputs. These will eventually open file or set specific parameters,
     # but since we are generating the data and models on the fly, and most parameter
@@ -405,14 +428,12 @@ def main():
     duration = tstop - tstart
     selector = ToyTimeSelector(tstart = tstart, tstop = tstop)
 
-    event_data = ToyEventData(selector=selector)
+    data_loader = ToyEventDataLoader()
+    event_data = ToyEventData(data_loader, selector=selector)
 
-    print(sum(1 for _ in event_data), nevents_tot)
-
-    binned_data = get_binned_data(event_data, toy_axis)
-    psr = ToyPointSourceResponse(duration = duration)
-    response = ToyModelFolding(psr)
-    bkg = ToyBkg(duration = duration)
+    psr = ToyPointSourceResponse(data = event_data, duration = duration)
+    response = ToyModelFolding(data = event_data, psr = psr)
+    bkg = ToyBkg(data = event_data, duration = duration)
 
     ## Source model
     ## We'll just use the K value in u.cm / u.cm / u.s / u.keV
@@ -440,13 +461,21 @@ def main():
     #bkg = None # Uncomment for no bkg
     #model = Model() # Uncomment for bkg-only hypothesis
 
+    binned_data = None
+    if plot or not unbinned:
+        binned_data = get_binned_data(event_data, toy_axis)
+
     # Fit
     if unbinned:
-        like_fun = UnbinnedLikelihood(event_data, response, bkg)
+        like_fun = UnbinnedLikelihood(response, bkg)
     else:
         like_fun = PoissonLikelihood(binned_data, response, bkg)
 
-    cosi = ThreeMLPluginInterface('cosi', like_fun)
+
+    cosi = ThreeMLPluginInterface('cosi',
+                                  like_fun,
+                                  response = response,
+                                  bkg = bkg)
 
     # Before the fit, you can set the parameters initial values, bounds, etc.
     # This is passed to the minimizer.
@@ -461,7 +490,6 @@ def main():
     print(like.minimizer)
 
     # Plot results
-    plot = True
     if plot:
 
         fig, ax = plt.subplots()

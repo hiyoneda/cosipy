@@ -1,6 +1,6 @@
-from typing import Dict
+from typing import Dict, Optional
 
-from cosipy.interfaces import ThreeMLModelFoldingInterface
+from cosipy.interfaces import ThreeMLModelFoldingInterface, BackgroundInterface
 from cosipy.interfaces.likelihood_interface import LikelihoodInterface
 from threeML import PluginPrototype, Parameter
 
@@ -9,7 +9,10 @@ __all__ = ["ThreeMLPluginInterface"]
 class ThreeMLPluginInterface(PluginPrototype):
 
     def __init__(self,
-                 name: str, likelihood: LikelihoodInterface):
+                 name: str,
+                 likelihood: LikelihoodInterface,
+                 response:ThreeMLModelFoldingInterface,
+                 bkg:Optional[BackgroundInterface] = None,):
         """
 
         Parameters
@@ -26,20 +29,18 @@ class ThreeMLPluginInterface(PluginPrototype):
         super().__init__(name, {})
 
         self._like = likelihood
-
-        # Check we can use this likelihood
-        if not isinstance(self._like.response, ThreeMLModelFoldingInterface):
-            raise TypeError("ThreeMLPluginInterface needs a LikelihoodInterface using a response of type ThreeMLModelResponseInterface")
+        self._response = response
+        self._bkg = bkg
 
         # Currently, the only nuisance parameters are the ones for the bkg
         # We could have systematics here as well
-        if self._like.bkg is None:
+        if self._bkg is None:
             self._threeml_bkg_parameters = {}
         else:
             # 1. Adds plugin name, required by 3ML code
             # See https://github.com/threeML/threeML/blob/7a16580d9d5ed57166e3b1eec3d4fccd3eeef1eb/threeML/classicMLE/joint_likelihood.py#L131
             # 2. Translation to bkg bare parameters. 3ML "Parameter" keeps track of a few more things than a "bare" (Quantity) parameter.
-            self._threeml_bkg_parameters = {self._add_prefix_name(label): Parameter(label, param.value, unit=param.unit) for label, param in self._like.bkg.parameters.items()}
+            self._threeml_bkg_parameters = {self._add_prefix_name(label): Parameter(label, param.value, unit=param.unit) for label, param in self._bkg.parameters.items()}
 
         # Allows idiom plugin.bkg_parameters["bkg_param_name"] to get 3ML parameter
         self.bkg_parameter = ThreeMLPluginInterface._Bkg_parameter(self)
@@ -67,14 +68,14 @@ class ThreeMLPluginInterface(PluginPrototype):
     def _update_bkg_parameters(self, name = None):
         # 1. Remove plugin name. Opposite of the nuisance_parameters property
         # 2. Convert to "bare" Quantity value
-        if self._like.bkg is not None:
+        if self._bkg is not None:
             if name is None:
                 #Update all
-                self._like.bkg.set_parameters(**{self._remove_prefix_name(label): parameter.as_quantity for label, parameter in
+                self._bkg.set_parameters(**{self._remove_prefix_name(label): parameter.as_quantity for label, parameter in
                                             self._threeml_bkg_parameters.items()})
             else:
                 # Only specific value
-                self._like.bkg.set_parameters(**{name:self._threeml_bkg_parameters[self._add_prefix_name(name)].as_quantity})
+                self._bkg.set_parameters(**{name:self._threeml_bkg_parameters[self._add_prefix_name(name)].as_quantity})
 
     class _Bkg_parameter:
         # Allows idiom plugin.bkg_parameters["bkg_param_name"] to get 3ML parameter
@@ -94,7 +95,7 @@ class ThreeMLPluginInterface(PluginPrototype):
         return self._like.nobservations
 
     def set_model(self, model):
-        self._like.response.set_model(model)
+        self._response.set_model(model)
 
     def get_log_like(self):
         # Update underlying background object in case the Parameter objects changed internally

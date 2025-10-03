@@ -1,14 +1,19 @@
 from abc import ABC, abstractmethod
 from typing import Sequence, Union, Protocol
+
+import numpy as np
+from astropy.coordinates import Angle, SkyCoord, BaseCoordinateFrame
+from scoords import SpacecraftFrame
 from typing_extensions import runtime_checkable
 
 from astropy.time import Time
 from astropy.units import Quantity, Unit
+import astropy.units as u
 
 __all__ = [
-    "Event",
-    "TimeTagEvent",
-    "EventWithEnergy",
+    "EventInterface",
+    "TimeTagEventInterface",
+    "EventWithEnergyInterface",
 ]
 
 class EventMetadata:
@@ -32,16 +37,24 @@ class EventMetadata:
         return f"{self.__class__.__name__}({self._metadata})"
 
 @runtime_checkable
-class Event(Protocol):
+class EventInterface(Protocol):
     """
     Derived classes implement all accessors
     """
 
     @property
+    def id(self) -> int:
+        """
+        Typically set by the main data loader or source.
+
+        No necessarily in sequential order
+        """
+
+    @property
     def metadata(self) -> EventMetadata:...
 
 @runtime_checkable
-class TimeTagEvent(Event, Protocol):
+class TimeTagEventInterface(EventInterface, Protocol):
 
     @property
     def jd1(self) -> float:...
@@ -57,18 +70,69 @@ class TimeTagEvent(Event, Protocol):
         return Time(self.jd1, self.jd2, format = 'jd')
 
 @runtime_checkable
-class EventWithEnergy(Event, Protocol):
+class EventWithEnergyInterface(EventInterface, Protocol):
 
     @property
-    def energy_value(self) -> float:...
-
-    @property
-    def energy_unit(self) -> Unit:...
+    def energy_keV(self) -> float:...
 
     @property
     def energy(self) -> Quantity:
         """
         Add fancy energy quantity
         """
-        return Quantity(self.energy_value, self.energy_unit)
+        return Quantity(self.energy_keV, u.keV)
+
+@runtime_checkable
+class ComptonDataSpaceEventInterface(EventInterface, Protocol):
+
+    @property
+    def frame(self) -> BaseCoordinateFrame:...
+
+    @property
+    def scattering_angle_rad(self) -> float: ...
+
+    @property
+    def scattering_angle(self) -> Angle:
+        """
+        Add fancy energy quantity
+        """
+        return Angle(self.scattering_angle_rad, u.rad)
+
+    @property
+    def scattered_lon_rad(self) -> float: ...
+
+    @property
+    def scattered_lat_radians(self) -> float: ...
+
+    @property
+    def scattered_direction(self) -> SkyCoord:
+        """
+        Add fancy energy quantity
+        """
+        return SkyCoord(self.scattered_lon_rad,
+                        np.pi/2 - self.scattered_lat_radians,
+                        unit=u.rad,
+                        frame=self.frame)
+
+
+@runtime_checkable
+class EventInSCFrameInterface(EventInterface, Protocol):
+
+    @property
+    def frame(self) -> SpacecraftFrame:...
+
+@runtime_checkable
+class ComptonDataSpaceInSCFrameEventInterface(EventInSCFrameInterface,
+                                              ComptonDataSpaceEventInterface,
+                                              Protocol):
+    pass
+
+class TimeTagEmCDSEventInSCFrameInterface(TimeTagEventInterface,
+                                          EventWithEnergyInterface,
+                                          ComptonDataSpaceInSCFrameEventInterface):
+    pass
+
+
+
+
 

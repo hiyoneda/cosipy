@@ -21,18 +21,19 @@ __all__ = ['UnbinnedLikelihood',
            'PoissonLikelihood']
 
 class UnbinnedLikelihood(UnbinnedLikelihoodInterface):
-    def __init__(self, data:EventDataInterface, response:ExpectationDensityInterface, bkg:BackgroundDensityInterface = None):
+    def __init__(self, response:ExpectationDensityInterface, bkg:BackgroundDensityInterface = None):
+        """
+        Will get the number of events from the response and bkg expectation_density iterators
 
-        self._data = data
+        Parameters
+        ----------
+        response
+        bkg
+        """
+
         self._bkg = bkg
         self._response = response
-
-    @property
-    def data (self) -> EventDataInterface: return self._data
-    @property
-    def response(self) -> ExpectationDensityInterface: return self._response
-    @property
-    def bkg (self) -> BackgroundDensityInterface: return self._bkg
+        self._nobservations = None
 
     @property
     def has_bkg(self):
@@ -40,7 +41,28 @@ class UnbinnedLikelihood(UnbinnedLikelihoodInterface):
 
     @property
     def nobservations(self) -> int:
-        return self._data.nevents
+        """
+        Calling get_log_like first is faster, since we don't need to loop though the
+        events
+        """
+
+        if self._nobservations is None:
+            self._nobservations = sum(1 for _ in self._get_density_iter())
+
+        return self._nobservations
+
+    def _get_density_iter(self):
+
+        if self.has_bkg:
+
+            signal_density = self._response.expectation_density()
+            bkg_density = self._bkg.expectation_density()
+
+            return map(operator.add, signal_density, bkg_density)
+
+        else:
+
+            return self._response.expectation_density()
 
     def get_log_like(self) -> float:
 
@@ -49,38 +71,41 @@ class UnbinnedLikelihood(UnbinnedLikelihoodInterface):
         ntot = self._response.ncounts()
 
         if self.has_bkg:
-
             ntot += self._bkg.ncounts()
 
-            # Prevent 2 iteration over data using tee()
-            data_iter_1, data_iter_2 = itertools.tee(self._data, 2)
+        # It's faster to compute all log values at once, but requires keeping them in memory
+        # Doing it by chunk is a compromise. We might need to adjust the chunk_size
+        # Based on the system
+        nobservations = 0
+        density_log_sum = 0
 
-            signal_density = self._response.expectation_density(data_iter_1)
-            bkg_density = self._bkg.expectation_density(data_iter_2)
+        def chunks():
+            chunk_size = 100000
+            it = iter(self._get_density_iter())
+            while chunk := tuple(itertools.islice(it, chunk_size)):
+                yield chunk
 
-            density = np.fromiter(map(operator.add, signal_density, bkg_density), dtype=float)
+        for density_iter_chunk in chunks():
 
-        else:
-            density = np.fromiter(self._response.expectation_density(), dtype=float)
+            density = np.fromiter(density_iter_chunk, dtype=float)
+            density_log_sum += np.sum(np.log(density))
+            nobservations += density.size
 
-        log_like = np.sum(np.log(density)) - ntot
+        self._nobservations = nobservations
+
+        log_like = density_log_sum - ntot
 
         return log_like
 
 
 class PoissonLikelihood(BinnedLikelihoodInterface):
-    def __init__(self, data:BinnedDataInterface, response:BinnedExpectationInterface, bkg:BinnedBackgroundInterface = None):
+    def __init__(self, data:BinnedDataInterface,
+                 response:BinnedExpectationInterface,
+                 bkg:BinnedBackgroundInterface = None):
 
         self._data = data
         self._bkg = bkg
         self._response = response
-
-    @property
-    def data (self) -> BinnedDataInterface: return self._data
-    @property
-    def response(self) -> BinnedExpectationInterface: return self._response
-    @property
-    def bkg (self) -> BinnedBackgroundInterface: return self._bkg
 
     @property
     def has_bkg(self):

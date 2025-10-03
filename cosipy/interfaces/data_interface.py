@@ -2,10 +2,14 @@ import itertools
 from typing import Protocol, runtime_checkable, Dict, Type, Any, Tuple, Iterator, Union, Sequence, Iterable, ClassVar
 
 import numpy as np
+from astropy.coordinates import BaseCoordinateFrame, Angle, SkyCoord
 from astropy.units import Unit, Quantity
+import astropy.units as u
+from scoords import SpacecraftFrame
 
-from . import EventWithEnergy
-from .event import Event, TimeTagEvent
+from . import EventWithEnergyInterface
+from .event import EventInterface, TimeTagEventInterface, ComptonDataSpaceEventInterface, \
+    ComptonDataSpaceInSCFrameEventInterface, TimeTagEmCDSEventInSCFrameInterface
 from histpy import Histogram, Axes
 
 from astropy.time import Time
@@ -20,8 +24,8 @@ import histpy
 __all__ = ["DataInterface",
            "EventDataInterface",
            "BinnedDataInterface",
-           "TimeTagEventData",
-           "EventDataWithEnergy"
+           "TimeTagEventDataInterface",
+           "EventDataWithEnergyInterface"
           ]
 
 @runtime_checkable
@@ -40,12 +44,12 @@ class BinnedDataInterface(DataInterface, Protocol):
 @runtime_checkable
 class EventDataInterface(DataInterface, Protocol):
 
-    def __iter__(self) -> Iterator[Event]:
+    def __iter__(self) -> Iterator[EventInterface]:
         """
         Return one Event at a time
         """
 
-    def __getitem__(self, item: int) -> Event:
+    def __getitem__(self, item: int) -> EventInterface:
         """
         Convenience method. Pretty slow in general. It's suggested that
         the implementations override it
@@ -62,10 +66,14 @@ class EventDataInterface(DataInterface, Protocol):
         """
         return sum(1 for _ in iter(self))
 
-@runtime_checkable
-class TimeTagEventData(EventDataInterface, Protocol):
+    @property
+    def ids(self) -> Iterable[int]:
+        return [e.id for e in self]
 
-    def __iter__(self) -> Iterator[TimeTagEvent]:...
+@runtime_checkable
+class TimeTagEventDataInterface(EventDataInterface, Protocol):
+
+    def __iter__(self) -> Iterator[TimeTagEventInterface]:...
 
     @property
     def jd1(self) -> Iterable[float]: ...
@@ -81,20 +89,67 @@ class TimeTagEventData(EventDataInterface, Protocol):
         return Time(self.jd1, self.jd2, format = 'jd')
 
 @runtime_checkable
-class EventDataWithEnergy(EventDataInterface, Protocol):
+class EventDataWithEnergyInterface(EventDataInterface, Protocol):
 
-    def __iter__(self) -> Iterator[EventWithEnergy]:...
-
-    @property
-    def energy_value(self) -> Iterable[float]:...
+    def __iter__(self) -> Iterator[EventWithEnergyInterface]:...
 
     @property
-    def energy_unit(self) -> Unit:...
+    def energy_rad(self) -> Iterable[float]:...
 
     @property
     def energy(self) -> Quantity:
         """
         Add fancy energy quantity
         """
-        return Quantity(self.energy_value, self.energy_unit)
+        return Quantity(self.energy_rad, u.rad)
 
+@runtime_checkable
+class ComptonDataSpaceEventDataInterface(EventDataInterface, Protocol):
+
+    def __iter__(self) -> Iterator[ComptonDataSpaceEventInterface]:...
+
+    @property
+    def frame(self) -> BaseCoordinateFrame: ...
+
+    @property
+    def scattering_angle_rad(self) -> Iterable[float]:...
+
+    @property
+    def scattering_angle(self) -> Angle:
+        """
+        Add fancy energy quantity
+        """
+        return Angle(self.scattering_angle_rad, u.rad)
+
+    @property
+    def scattered_lon_rad(self) -> Iterable[float]: ...
+
+    @property
+    def scattered_lat_rad(self) -> Iterable[float]: ...
+
+    @property
+    def scattered_direction(self) -> SkyCoord:
+        """
+        Add fancy energy quantity
+        """
+        return SkyCoord(self.scattered_lon_rad,
+                        np.pi/2 - self.scattered_lat_rad,
+                        unit = u.rad,
+                        frame = self.frame)
+
+@runtime_checkable
+class EventDataInSCFrameInterface(EventDataInterface, Protocol):
+
+    @property
+    def frame(self) -> SpacecraftFrame:...
+
+@runtime_checkable
+class ComptonDataSpaceInSCFrameEventDataInterface(EventDataInSCFrameInterface,
+                                                  ComptonDataSpaceEventDataInterface,
+                                                  Protocol):
+    def __iter__(self) -> Iterator[ComptonDataSpaceInSCFrameEventInterface]:...
+
+class TimeTagEmCDSEventDataInSCFrameInterface(TimeTagEventDataInterface,
+                                              EventDataWithEnergyInterface,
+                                               ComptonDataSpaceInSCFrameEventDataInterface):
+    def __iter__(self) -> Iterator[TimeTagEmCDSEventInSCFrameInterface]:...

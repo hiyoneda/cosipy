@@ -2,12 +2,12 @@ import itertools
 from typing import Protocol, runtime_checkable, Dict, Any, Iterator, Sequence, Generator, Iterable, Union, Optional, \
     Tuple
 
-from . import Event
+from . import EventInterface
 
 @runtime_checkable
 class EventSelectorInterface(Protocol):
 
-    def select(self, event:Union[Event, Iterable[Event]]) -> Union[bool, Iterable[bool]]:
+    def select(self, event:Union[EventInterface, Iterable[EventInterface]]) -> Union[bool, Iterable[bool]]:
         """
         True to keep an event
 
@@ -15,7 +15,7 @@ class EventSelectorInterface(Protocol):
         As many values for an Iterable of events
         """
 
-    def mask(self, events: Iterable[Event]) -> Iterable[Tuple[bool,Event]]:
+    def mask(self, events: Iterable[EventInterface]) -> Iterable[Tuple[bool,EventInterface]]:
         """
         Returns an iterable of tuples. Each tuple has 2 elements:
         - First: True to keep an event, False to filter it out.
@@ -25,9 +25,11 @@ class EventSelectorInterface(Protocol):
         for selected, event in zip(self.select(events1), events2):
             yield selected, event
 
-    def __call__(self, events: Iterable[Event]) -> Iterable[Event]:
+    def __call__(self, events: Iterable[EventInterface]) -> Union[Iterable[EventInterface], None]:
         """
         Skips events that were not selected
+
+        Returning None raises StopIteration
         """
         for selected,event in self.mask(events):
             if selected:

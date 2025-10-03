@@ -1,18 +1,21 @@
-from typing import Protocol, Union
+from typing import Protocol, Union, Optional, Iterable, Tuple, runtime_checkable
 
 from astropy.coordinates import SkyCoord
+from astropy.time import Time
 from astropy.units import Quantity
 from histpy import Axes, Histogram
 
 from astropy import units as u
 from scoords import Attitude
 
-from cosipy.interfaces import BinnedDataInterface
+from cosipy.interfaces import BinnedDataInterface, ExpectationDensityInterface, BinnedExpectationInterface, EventInterface
+from cosipy.interfaces.photon_list import PhotonListWithDirectionInterface
+from cosipy.interfaces.photon_parameters import PhotonInterface
 from cosipy.polarization import PolarizationAngle
 
 __all__ = ["BinnedInstrumentResponseInterface"]
 
-class BinnedInstrumentResponseInterface(Protocol):
+class BinnedInstrumentResponseInterface(BinnedExpectationInterface, Protocol):
 
     def differential_effective_area(self,
                                     data: BinnedDataInterface,
@@ -53,3 +56,52 @@ class BinnedInstrumentResponseInterface(Protocol):
         The effective area times the event measurement probability distribution integrated on each of the bins
         of the provided axes. It has the shape (direction.shape, energy.shape, polarization.shape, axes.shape)
         """
+
+@runtime_checkable
+class InstrumentResponseFunctionInterface(Protocol):
+
+    def event_probability(self, query: Iterable[Tuple[PhotonInterface, EventInterface]]) -> Iterable[float]:
+        """
+        Return the probability density of measuring a given event given a photon.
+        """
+
+    def random_events(self, photons:Iterable[PhotonInterface]) -> Iterable[EventInterface]:
+        """
+        Return a stream of random events, one per photon
+        """
+
+@runtime_checkable
+class NearFieldInstrumentResponseFunctionInterface(InstrumentResponseFunctionInterface, Protocol):
+
+    def effective_area_cm2(self, photons: PhotonListWithDirectionInterface) -> Iterable[float]:
+        """
+
+        """
+
+    def effective_area(self, photons: PhotonListWithDirectionInterface) -> Iterable[u.Quantity]:
+        """
+        Convenience function
+        """
+        for area_cm2 in self.effective_area_cm2(photons):
+            yield u.Quantity(area_cm2, u.cm2)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

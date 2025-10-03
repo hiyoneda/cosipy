@@ -209,7 +209,10 @@ def main():
 
     like_fun = PoissonLikelihood(data, response, bkg)
 
-    cosi = ThreeMLPluginInterface('cosi', like_fun)
+    cosi = ThreeMLPluginInterface('cosi',
+                                  like_fun,
+                                  response,
+                                  bkg)
 
     # Nuisance parameter guess, bounds, etc.
     cosi.bkg_parameter['bkg_norm'] = Parameter("bkg_norm",  # background parameter
