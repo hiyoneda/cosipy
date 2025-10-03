@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Iterable, Iterator, Optional
+from typing import Iterable, Iterator, Optional, Tuple
 
 import numpy as np
 from astropy.coordinates import BaseCoordinateFrame, Angle, SkyCoord, UnitSphericalRepresentation
@@ -50,6 +50,14 @@ class TimeTagEmCDSEventInSCFrame(TimeTagEmCDSEventInSCFrameInterface):
         return self._frame
 
     @property
+    def jd1(self):
+        return self._jd1
+
+    @property
+    def jd2(self):
+        return self._jd2
+
+    @property
     def energy_keV(self) -> float:
         return self._energy
 
@@ -62,7 +70,7 @@ class TimeTagEmCDSEventInSCFrame(TimeTagEmCDSEventInSCFrameInterface):
         return self._chi
 
     @property
-    def scattered_lat_radians(self) -> float:
+    def scattered_lat_rad(self) -> float:
         return self._psi
 
 class TimeTagEmCDSEventDataInSCFrameFromArrays(TimeTagEmCDSEventDataInSCFrameInterface):
@@ -129,10 +137,10 @@ class TimeTagEmCDSEventDataInSCFrameFromArrays(TimeTagEmCDSEventDataInSCFrameInt
                 new_id.append(event.id)
                 new_jd1.append(event.jd1)
                 new_jd2.append(event.jd2)
-                new_energy.append(event.energy)
-                new_phi.append(event.phi)
-                new_psi.append(event.psi)
-                new_chi.append(event.chi)
+                new_energy.append(event.energy_keV)
+                new_phi.append(event.scattering_angle_rad)
+                new_psi.append(event.scattered_lat_rad)
+                new_chi.append(event.scattered_lon_rad)
                 nevents +=  1
 
             self._nevents = nevents
@@ -142,7 +150,7 @@ class TimeTagEmCDSEventDataInSCFrameFromArrays(TimeTagEmCDSEventDataInSCFrameInt
             self._jd2 = np.asarray(new_jd2)
             self._energy = np.asarray(new_energy)
             self._phi = np.asarray(new_phi)
-            self._psi = np.asarray(new_psi)
+            self._psi = np.pi/2 - np.asarray(new_psi) #Psi is colatitude
             self._chi = np.asarray(new_chi)
 
     def __getitem__(self, i: int) -> TimeTagEmCDSEventInSCFrameInterface:
@@ -170,7 +178,7 @@ class TimeTagEmCDSEventDataInSCFrameFromArrays(TimeTagEmCDSEventDataInSCFrameInt
 
     @property
     def jd2(self) -> Iterable[float]:
-        return self._jd1
+        return self._jd2
 
     @property
     def energy_rad(self) -> Iterable[float]:
@@ -190,17 +198,41 @@ class TimeTagEmCDSEventDataInSCFrameFromArrays(TimeTagEmCDSEventDataInSCFrameInt
 
 class TimeTagEmCDSEventDataInSCFrameFromDC3Fits(TimeTagEmCDSEventDataInSCFrameFromArrays):
 
-    def __init__(self, data_path: Path):
+    def __init__(self, *data_path: Tuple[Path],
+                 selection:EventSelectorInterface = None):
 
-        # get_dict_from_fits is really a static method, no config file needed
-        data_dict = UnBinnedData.get_dict_from_fits(None, data_path)
-        time = Time(data_dict['TimeTags'], format='unix')
-        energy = u.Quantity(data_dict['Energies'], u.keV)
-        phi = Angle(data_dict['Phi'], u.rad)
-        psichi = SkyCoord(data_dict['Chi local'], np.pi / 2 - data_dict['Psi local'], unit=u.rad,
+        time = np.empty(0)
+        energy = np.empty(0)
+        phi = np.empty(0)
+        psi = np.empty(0)
+        chi = np.empty(0)
+
+        for file in data_path:
+            # get_dict_from_fits is really a static method, no config file needed
+            data_dict = UnBinnedData.get_dict_from_fits(None, file)
+
+            time = np.append(time, data_dict['TimeTags'])
+            energy = np.append(energy, data_dict['Energies'])
+            phi = np.append(phi, data_dict['Phi'])
+            psi = np.append(psi, data_dict['Psi local'])
+            chi = np.append(psi, data_dict['Chi local'])
+
+        # Time sort
+        tsort = np.argsort(time)
+
+        time = time[tsort]
+        energy = energy[tsort]
+        phi = phi[tsort]
+        psi = psi[tsort]
+        chi = chi[tsort]
+
+        time = Time(time, format='unix')
+        energy = u.Quantity(energy, u.keV)
+        phi = Angle(phi, u.rad)
+        psichi = SkyCoord(chi, np.pi / 2 - psi, unit=u.rad,
                           frame=SpacecraftFrame())
 
-        super().__init__(time, energy, phi, psichi)
+        super().__init__(time, energy, phi, psichi, selection = selection)
 
 
 

@@ -102,7 +102,7 @@ class ComptonDataSpaceEventInterface(EventInterface, Protocol):
     def scattered_lon_rad(self) -> float: ...
 
     @property
-    def scattered_lat_radians(self) -> float: ...
+    def scattered_lat_rad(self) -> float: ...
 
     @property
     def scattered_direction(self) -> SkyCoord:
@@ -110,7 +110,7 @@ class ComptonDataSpaceEventInterface(EventInterface, Protocol):
         Add fancy energy quantity
         """
         return SkyCoord(self.scattered_lon_rad,
-                        np.pi/2 - self.scattered_lat_radians,
+                        np.pi/2 - self.scattered_lat_rad,
                         unit=u.rad,
                         frame=self.frame)
 

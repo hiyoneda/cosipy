@@ -10,6 +10,7 @@ from astropy.units import Quantity
 from numpy.ma.core import logical_or
 
 from cosipy import SpacecraftHistory
+from cosipy.event_selection.time_selection import TimeSelector
 from cosipy.interfaces.background_interface import BackgroundDensityInterface
 from cosipy.interfaces.data_interface import EventDataInterface, DataInterface, TimeTagEventDataInterface
 from cosipy.interfaces.event import EventMetadata
@@ -354,64 +355,6 @@ def get_binned_data(event_data:ToyEventData, axis:Axis) -> ToyBinnedData:
 
     return ToyBinnedData(binned_data)
 
-class ToyTimeSelector(EventSelectorInterface):
-
-    def __init__(self, tstart:Time = None, tstop:Time = None):
-        """
-        Assumes events are time-ordered
-
-        Parameters
-        ----------
-        tstart
-        tstop
-        """
-
-        self._tstart = tstart
-        self._tstop = tstop
-
-    def _select(self, event:TimeTagEventInterface) -> bool:
-        # Single event
-        return next(iter(self.select([event])))
-
-    def select(self, events:Union[TimeTagEventInterface, Iterable[TimeTagEventInterface]]) -> Union[bool, Iterable[bool]]:
-
-        if isinstance(events, EventInterface):
-            # Single event
-            return self._select(events)
-        else:
-            # Multiple
-
-            # Example of working in chunks/batches. This can optimize the
-            # code sometimes.
-
-            def chunks():
-                chunk_size = 1000
-                it = iter(events)
-                while chunk := tuple(itertools.islice(it, chunk_size)):
-                    yield chunk
-
-            for chunk in chunks():
-
-                jd1 = []
-                jd2 = []
-
-                for event in chunk:
-                    jd1.append(event.jd1)
-                    jd2.append(event.jd2)
-
-                time = Time(jd1, jd2, format = 'jd')
-
-                selected = np.logical_and(np.logical_or(self._tstart is None, time > self._tstart),
-                                          np.logical_or(self._tstop is None,  time <= self._tstop))
-
-                for sel in selected:
-                    yield sel
-
-                if self._tstop is not None and time[-1] > self._tstop:
-                    # Stop further loading of event
-                    return
-
-
 # ======= Actual code. This is how the "tutorial" will look like ================
 
 def main():
@@ -426,7 +369,7 @@ def main():
     tstart = Time("2000-01-01T01:00:00")
     tstop = Time("2000-01-01T10:00:00")
     duration = tstop - tstart
-    selector = ToyTimeSelector(tstart = tstart, tstop = tstop)
+    selector = TimeSelector(tstart = tstart, tstop = tstop)
 
     data_loader = ToyEventDataLoader()
     event_data = ToyEventData(data_loader, selector=selector)
