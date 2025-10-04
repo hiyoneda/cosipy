@@ -11,7 +11,9 @@ from .data_io import ReadTraTest
 
 from .threeml import Band_Eflux
 
-from .ts_map import FastTSMap
+from .spacecraftfile import SpacecraftFile
+
+from .ts_map import FastTSMap, MOCTSMap
 
 from .source_injector import SourceInjector
 

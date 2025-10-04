@@ -1,3 +1,4 @@
+from histpy import Histogram
 from astropy.coordinates import SkyCoord
 from astropy.units import Quantity
 
@@ -114,12 +115,12 @@ class PointSourceResponse(Histogram):
         flux = get_integrated_spectral_model(spectrum, energy_axis)
         
         expectation = np.tensordot(contents, flux.contents, axes=([0], [0]))
-        
-        # Note: np.tensordot loses unit if we use a sparse matrix as it input.
-        if self.is_sparse:
-            expectation *= self.unit * flux.unit
 
-        hist = Histogram(self.measurement_axes, contents=expectation)
+        # if self is sparse, expectation will be a SparseArray with
+        # no units, so set the result's unit explicitly
+        hist = Histogram(self.measurement_axes, contents = expectation,
+                         unit = self.unit * flux.unit,
+                         copy_contents = False)
 
         if not hist.unit == u.dimensionless_unscaled:
             raise RuntimeError("Expectation should be dimensionless, but has units of " + str(hist.unit) + ".")

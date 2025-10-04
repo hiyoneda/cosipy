@@ -2,6 +2,7 @@ from .PointSourceResponse import PointSourceResponse
 from .DetectorResponse import DetectorResponse
 from .FullDetectorResponse import FullDetectorResponse
 from .ExtendedSourceResponse import ExtendedSourceResponse
+from .RspConverter import RspConverter
 from .threeml_response import *
 from .threeml_point_source_response import *
 from .instrument_response import *
