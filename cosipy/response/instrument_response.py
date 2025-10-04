@@ -198,19 +198,15 @@ class BinnedInstrumentResponse(BinnedInstrumentResponseInterface):
 
         """
 
-        # Get response in local coordinates
-        direction = direction.transform_to(SpacecraftFrame(attitude=attitude))
-
-        # TODO: Change to get_pixel(pix, weight) after PR 364
-        dr_pix = self._dr[self._dr.ang2pix(direction)]
-
-        dr_pix.axes['PsiChi'].coordsys = SpacecraftFrame(attitude=attitude)
-
         # Generate axes that will allow us to use _sum_rot_hist,
         # and obtain the same results as in v3.x
         out_axes = [self._dr.axes['Ei']]
 
+
+
         if self.is_polarization_response:
+
+            raise RuntimeError("Fix me. No pol yet")
 
             # Since we're doing a 0-th order interpolation, the only thing that matter are the bin centers,
             # so we're placing them at the input polarization angles
@@ -226,28 +222,67 @@ class BinnedInstrumentResponse(BinnedInstrumentResponseInterface):
             out_axes += [PolarizationAxis(pol_edges, convention = polarization.convention)]
 
         out_axes += list(axes)
-
-        # Either initialize a new
-        if out is None:
-            out = Histogram(out_axes,
-                            unit = dr_pix.unit)
-        else:
-            if not add_inplace:
-                out.fill(0.)
-
-            out = Histogram(out_axes,
-                            contents = out,
-                            copy_contents=False)
+        out_axes = Axes(out_axes)
 
         if weight is None:
             # Weight takes the role of the exposure in _sum_rot_hist, which is not an optional argument
             weight = 1
 
-        FullDetectorResponse._sum_rot_hist(dr_pix, out, weight,
-                                           axis = 'PsiChi',
-                                           pol_axis = 'Pol')
+        # Almost copy-paste from FullDetectorResponse.get_point_source_response(). Improve to avoid duplicated code
+        def rotate_coords(c, rot):
+            """
+            Apply a rotation matrix to one or more 3D directions
+            represented as Cartesian 3-vectors.  Return rotated directions
+            in polar form as a pair (co-latitude, longitude) in
+            radians.
 
-        return out.contents
+            """
+            c_local = rot @ c
+
+            c_x, c_y, c_z = c_local
+
+            theta = np.arctan2(c_y, c_x)
+            phi = np.arccos(c_z)
+
+            return (phi, theta)
+
+        rot = attitude.transform_to('icrs').rot.inv().as_matrix()
+
+        src_cart = direction.transform_to('icrs').cartesian.xyz.value
+        loc_src_colat, loc_src_lon = rotate_coords(src_cart, rot)
+        loc_src_pixels = self._dr._axes['NuLambda'].find_bin(theta=loc_src_colat,
+                                                             phi=loc_src_lon)
+
+        sf_psichi_axis = axes['PsiChi']
+        sf_psichi_dirs = sf_psichi_axis.pix2skycoord(np.arange(sf_psichi_axis.nbins))
+        sf_psichi_dirs_cart = sf_psichi_dirs.transform_to('icrs').cartesian.xyz.value
+        loc_psichi_colat, loc_psichi_lon = rotate_coords(sf_psichi_dirs_cart, rot)
+        loc_psichi_pixels = self._dr._axes['PsiChi'].find_bin(theta=loc_psichi_colat,
+                                                              phi=loc_psichi_lon)
+
+
+        # Either initialize a new or clear cache
+        if out is None:
+            out = Quantity(np.zeros(out_axes.shape), dr_pix.unit)
+        else:
+            if not add_inplace:
+                out[:] = 0
+
+        if isinstance(weight, u.Quantity):
+            weight_unit = weight.unit
+            weight = weight.value
+        else:
+            weight_unit = None
+
+        self._dr._add_rot_psrs(out_axes, weight,
+                               loc_psichi_pixels,
+                               (loc_src_pixels,), (out.value,))
+
+
+        if weight_unit is not None:
+            out = u.Quantity(out.value, weight_unit*out.unit, copy = False)
+
+        return out
 
 
 

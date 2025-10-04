@@ -1,5 +1,7 @@
 import logging
 
+from cosipy.util import fetch_wasabi_file
+
 logging.basicConfig(
         level=logging.INFO,
         format='%(asctime)s - %(levelname)s - %(filename)s:%(lineno)d - %(message)s'
@@ -43,6 +45,11 @@ def main():
     # fetch_wasabi_file('COSI-SMEX/DC2/Data/Orientation/20280301_3_month_with_orbital_info.ori', output=str(data_path / '20280301_3_month_with_orbital_info.ori'), checksum = '416fcc296fc37a056a069378a2d30cb2')
     # fetch_wasabi_file('COSI-SMEX/DC2/Responses/SMEXv12.Continuum.HEALPixO3_10bins_log_flat.binnedimaging.imagingresponse.nonsparse_nside8.area.good_chunks_unzip.h5.zip', output=str(data_path / 'SMEXv12.Continuum.HEALPixO3_10bins_log_flat.binnedimaging.imagingresponse.nonsparse_nside8.area.good_chunks_unzip.h5.zip'), unzip = True, checksum = 'e8ff763c5d9e63d3797567a4a51d9eda')
 
+    dr_path = data_path / "SMEXv12.Continuum.HEALPixO3_10bins_log_flat.binnedimaging.imagingresponse.h5"  # path to detector response
+    fetch_wasabi_file(
+        'COSI-SMEX/develop/Data/Responses/SMEXv12.Continuum.HEALPixO3_10bins_log_flat.binnedimaging.imagingresponse.h5',
+        output=str(dr_path),
+        checksum='eb72400a1279325e9404110f909c7785')
 
     # Set model to fit
     l = 93.
@@ -90,7 +97,6 @@ def main():
     ori = ori.select_interval(tmin, tmax) # Function changed name during refactoring
 
     # Prepare instrument response
-    dr_path = data_path / "SMEXv12.Continuum.HEALPixO3_10bins_log_flat.binnedimaging.imagingresponse.nonsparse_nside8.area.good_chunks_unzip.h5"
     dr = FullDetectorResponse.open(dr_path)
 
     # Workaround to avoid inf values. Out bkg should be smooth, but currently it's not.

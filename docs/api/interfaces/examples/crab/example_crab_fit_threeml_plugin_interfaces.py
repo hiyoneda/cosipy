@@ -126,10 +126,11 @@ def main():
     # In[10]:
 
     # Before and after Jeremy's changes
-    dr_path_zip = data_path / "SMEXv12.Continuum.HEALPixO3_10bins_log_flat.binnedimaging.imagingresponse.nonsparse_nside8.area.good_chunks_unzip.h5.zip"  # path to detector response
-    dr_path =  dr_path_zip.with_suffix('')
-    fetch_wasabi_file('COSI-SMEX/DC2/Responses/SMEXv12.Continuum.HEALPixO3_10bins_log_flat.binnedimaging.imagingresponse.nonsparse_nside8.area.good_chunks_unzip.h5.zip',
-                      output = str(dr_path_zip), unzip = True, checksum = 'e8ff763c5d9e63d3797567a4a51d9eda')
+    dr_path = data_path / "SMEXv12.Continuum.HEALPixO3_10bins_log_flat.binnedimaging.imagingresponse.h5"  # path to detector response
+    fetch_wasabi_file(
+        'COSI-SMEX/develop/Data/Responses/SMEXv12.Continuum.HEALPixO3_10bins_log_flat.binnedimaging.imagingresponse.h5',
+        output=str(dr_path),
+        checksum='eb72400a1279325e9404110f909c7785')
 
     # dr_path = str(data_path / "SMEXv12.Continuum.HEALPixO3_10bins_log_flat.binnedimaging.imagingresponse.h5") # path to detector response
     # fetch_wasabi_file('COSI-SMEX/develop/Data/Responses/SMEXv12.Continuum.HEALPixO3_10bins_log_flat.binnedimaging.imagingresponse.h5',
