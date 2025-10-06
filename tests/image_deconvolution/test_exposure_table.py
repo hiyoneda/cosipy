@@ -1,8 +1,11 @@
+import numpy as np
 from histpy import Histogram
 
 from cosipy import test_data
 from cosipy.image_deconvolution import SpacecraftAttitudeExposureTable
 from cosipy.spacecraftfile import SpacecraftFile
+from cosipy import response
+from cosipy import BinnedData
 
 def test_exposure_table(tmp_path):
 
@@ -33,3 +36,26 @@ def test_exposure_table(tmp_path):
     map_pointing_zx = exposure_table.calc_pointing_trajectory_map()
 
     assert map_pointing_zx == Histogram.open(test_data.path / "image_deconvolution/map_pointing_zx_test_nside1_ring.hdf5")
+
+    # test_generating_histogram 
+    full_detector_response = response.FullDetectorResponse.open(test_data.path / "test_full_detector_response.h5")
+    
+    analysis = BinnedData(test_data.path / "inputs_crab.yaml")
+    
+    analysis.cosi_dataset = analysis.get_dict_from_hdf5(test_data.path / "unbinned_data_MEGAlib_calc.hdf5")
+
+    # NOTE: test_data.path / "unbinned_data_MEGAlib_calc.hdf5" is written in a old format!!!
+    _ = analysis.cosi_dataset.pop('Xpointings')
+    analysis.cosi_dataset['Xpointings (glon,glat)'] = _
+    
+    _ = analysis.cosi_dataset.pop('Ypointings')
+    analysis.cosi_dataset['Ypointings (glon,glat)'] = _
+    
+    _ = analysis.cosi_dataset.pop('Zpointings')
+    analysis.cosi_dataset['Zpointings (glon,glat)'] = _
+
+    binned_signal = exposure_table.get_binned_data_scatt(analysis, psichi_binning = 'local', sparse = False)
+
+    binned_signal_ref = Histogram.open(test_data.path / "image_deconvolution" / 'test_event_histogram_localCDS_scatt.h5')
+
+    assert np.all(binned_signal.contents == binned_signal_ref.contents)
