@@ -7,6 +7,9 @@ import numpy as np
 import healpy as hp
 from astropy.io import fits
 import astropy.units as u
+from astropy.coordinates import SkyCoord
+from histpy import Histogram, HealpixAxis, Axis, Axes
+from scoords import SpacecraftFrame
 
 from cosipy.spacecraftfile import SpacecraftAttitudeMap
 
@@ -431,3 +434,69 @@ class SpacecraftAttitudeExposureTable(pd.DataFrame):
             map_pointing_zx[hp_index[0], hp_index[1]] = exposure * u.s
         
         return map_pointing_zx
+
+    def get_binned_data_scatt(self, unbinned_event, psichi_binning = 'local', sparse = False):
+        """
+        Create binned data from unbinned events using spacecraft attitude binning.
+    
+        Events are grouped by spacecraft attitude (z- and x-pointing), energy, 
+        Compton scattering angle, and scatter direction.
+    
+        Parameters
+        ----------
+        unbinned_event : :py:class:`cosipy.data_io.UnbinnedData`
+            Unbinned event data.
+        psichi_binning : str, default 'local'
+            Coordinate system for PsiChi axis: 'local' or 'galactic'.
+        sparse : bool, default False
+            If True, use sparse array representation.
+    
+        Returns
+        -------
+        :py:class:`histpy.Histogram`
+            Binned data with axes ["ScAtt", "Em", "Phi", "PsiChi"].
+        """
+        exposure_dict = {row['healpix_index']: row['scatt_binning_index'] for _, row in self.iterrows()}
+            
+        # from BinnedData.py
+ 
+        # Get energy bins:
+        energy_bin_edges = np.array(unbinned_event.energy_bins)
+        
+        # Get phi bins:
+        number_phi_bins = int(180./unbinned_event.phi_pix_size)
+        phi_bin_edges = np.linspace(0,180,number_phi_bins+1)
+        
+        # Define psichi axis and data for binning:
+        if psichi_binning == 'galactic':
+            psichi_axis = HealpixAxis(nside = unbinned_event.nside, scheme = unbinned_event.scheme, coordsys = 'galactic', label='PsiChi')
+            coords = SkyCoord(l=unbinned_event.cosi_dataset['Chi galactic']*u.deg, b=unbinned_event.cosi_dataset['Psi galactic']*u.deg, frame = 'galactic')
+        if psichi_binning == 'local':
+            psichi_axis = HealpixAxis(nside = unbinned_event.nside, scheme = unbinned_event.scheme, coordsys = SpacecraftFrame(), label='PsiChi')
+            coords = SkyCoord(lon=unbinned_event.cosi_dataset['Chi local']*u.rad, lat=((np.pi/2.0) - unbinned_event.cosi_dataset['Psi local'])*u.rad, frame = SpacecraftFrame())
+
+        # Define scatt axis and data for binning
+        n_scatt_bins = len(self)
+        scatt_axis = Axis(np.arange(n_scatt_bins + 1), label='ScAtt')
+        
+        is_nest = True if self.scheme == 'nested' else False
+        
+        nside_scatt = self.nside
+        
+        zindex = hp.ang2pix(nside_scatt, unbinned_event.cosi_dataset['Zpointings (glon,glat)'].T[0] * 180 / np.pi, 
+                            unbinned_event.cosi_dataset['Zpointings (glon,glat)'].T[1] * 180 / np.pi, nest=is_nest, lonlat=True)
+        xindex = hp.ang2pix(nside_scatt, unbinned_event.cosi_dataset['Xpointings (glon,glat)'].T[0] * 180 / np.pi, 
+                            unbinned_event.cosi_dataset['Xpointings (glon,glat)'].T[1] * 180 / np.pi, nest=is_nest, lonlat=True)    
+        scatt_data = np.array( [ exposure_dict[(z, x)] + 0.5 if (z,x) in exposure_dict.keys() else -1 for z, x in zip(zindex, xindex)] ) # should this "0.5" be needed?
+        
+        # Initialize histogram:
+        binned_data = Histogram([scatt_axis,
+                                 Axis(energy_bin_edges*u.keV, label='Em'),
+                                 Axis(phi_bin_edges*u.deg, label='Phi'),
+                                 psichi_axis],
+                                 sparse=sparse)
+
+        # Fill histogram:
+        binned_data.fill(scatt_data, unbinned_event.cosi_dataset['Energies']*u.keV, np.rad2deg(unbinned_event.cosi_dataset['Phi'])*u.deg, coords)    
+        
+        return binned_data
