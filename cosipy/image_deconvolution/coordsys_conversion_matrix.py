@@ -170,7 +170,8 @@ class CoordsysConversionMatrix(Histogram):
             attitude = Attitude.from_axes(x = x, z = z, frame = 'galactic')
             
             # exposure map calculation including earth occultation
-            exposure_map = cls._calc_exposure_map(nside_model, num_pointings, earth_zenith, altitude, delta_time, is_nest_model)
+            exposure_time_map = cls._calc_exposure_time_map(nside_model, num_pointings, earth_zenith, altitude, delta_time, 
+                                                            is_nest_model = is_nest_model)
             
             # ccm
             for ipix in range(hp.nside2npix(nside_model)):
@@ -190,9 +191,9 @@ class CoordsysConversionMatrix(Histogram):
                 pixels, weights = axis_local_map.get_interp_weights(src_path_skycoord)
 
                 if use_averaged_pointing:
-                    weights = weights * np.sum(exposure_map[:,ipix])
+                    weights = weights * np.sum(exposure_time_map[:,ipix])
                 else:
-                    weights = weights * exposure_map[:,ipix]
+                    weights = weights * exposure_time_map[:,ipix]
 
                 hist, bins = np.histogram(pixels, bins = axis_local_map.edges, weights = weights)
 
@@ -212,18 +213,51 @@ class CoordsysConversionMatrix(Histogram):
         return coordsys_conv_matrix
 
     @classmethod
-    def _calc_exposure_map(cls, nside_model, num_pointings, earth_zenith, altitude, delta_time, r_earth = 6378.0, is_nest_model = False):
-
+    def _calc_exposure_time_map(cls, nside_model, num_pointings, earth_zenith, altitude, delta_time, is_nest_model = False, r_earth = 6378.0):
+        """
+        Calculate exposure time map considering Earth occultation.
+    
+        This method computes an exposure time map for each pointing, identifying
+        pixels that are occulted by the Earth and assigning exposure times accordingly.
+        For each pointing, pixels within the Earth's angular radius are identified
+        and assigned the corresponding time interval.
+    
+        Parameters
+        ----------
+        nside_model : int
+            HEALPix NSIDE parameter for the model map resolution.
+        num_pointings : int
+            Number of spacecraft pointings.
+        earth_zenith : numpy.ndarray
+            Array of shape (num_pointings, 2) containing the direction to Earth's center
+            in galactic coordinates [longitude, latitude] in degrees for each pointing.
+        altitude : numpy.ndarray
+            Array of spacecraft altitudes in kilometers for each pointing.
+        delta_time : numpy.ndarray
+            Array of time intervals in seconds for each pointing.
+        is_nest_model : bool, default False
+            If True, use nested HEALPix pixel ordering scheme. If False, use ring ordering.
+        r_earth : float, default 6378.0
+            Earth's radius in kilometers.
+    
+        Returns
+        -------
+        numpy.ndarray
+            Exposure time map of shape (num_pointings, npix_model), where npix_model
+            is the total number of HEALPix pixels. Each element [i, j] contains the
+            exposure time in seconds for pointing i and pixel j that is within the
+            Earth occultation region.
+        """
         npix_model = hp.nside2npix(nside_model)
 
-        exposure_map = np.zeros((num_pointings, npix_model))
+        exposure_time_map = np.zeros((num_pointings, npix_model))
             
         for i_pointing in range(num_pointings):
             earth_radius = np.pi - np.arcsin(r_earth / (r_earth + altitude[i_pointing])) #rad
             filling_pixel_index = hp.query_disc(nside_model, hp.ang2vec(earth_zenith[i_pointing,0], earth_zenith[i_pointing,1], lonlat = True), nest = is_nest_model, radius = earth_radius)
-            exposure_map[i_pointing][filling_pixel_index] = delta_time[i_pointing]
+            exposure_time_map[i_pointing][filling_pixel_index] = delta_time[i_pointing]
 
-        return exposure_map
+        return exposure_time_map
 
     @classmethod
     def open(cls, filename, name = 'hist'):
