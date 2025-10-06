@@ -9,6 +9,8 @@ from astropy.coordinates import SkyCoord, cartesian_to_spherical, Galactic
 from scoords import Attitude, SpacecraftFrame
 from histpy import Histogram, Axes, Axis, HealpixAxis
 
+from .dataIF_COSI_DC2 import tensordot_sparse
+
 class CoordsysConversionMatrix(Histogram):
     """
     A class for coordinate conversion matrix (ccm).
@@ -211,5 +213,31 @@ class CoordsysConversionMatrix(Histogram):
 
         return new
 
-# TODO
-#   def calc_exposure_map(self, full_detector_response): #once the response file format is fixed, I will implement this function
+    def calc_exposure_map(self, full_detector_response):
+        """
+        Calculate the exposure map from the coordinate conversion matrix and detector response.
+    
+        Performs a tensor dot product between the CCM and the effective area, contracting
+        over the 'NuLambda' axis to transform from local spacecraft coordinates to sky coordinates.
+    
+        Parameters
+        ----------
+        full_detector_response : :py:class:`cosipy.response.FullDetectorResponse`
+            Full detector response
+    
+        Returns
+        -------
+        :py:class:`histpy.Histogram`
+            Exposure map with axes ["ScAtt", "lb", "Ei"] representing the effective area x time
+            for each attitude bin, sky pixel, and energy bin.
+        """
+        effective_area = full_detector_response.to_dr().project(['NuLambda', 'Ei'])
+                
+        exposure_map_contents = tensordot_sparse(self.contents, self.unit, 
+                                                 effective_area.contents, axes = ([2],[0]))
+        # ["ScAtt", "lb", "NuLambda"] x ["NuLambda", "Ei"]
+        exposure_map_axes = [self.axes['ScAtt'], self.axes['lb'], effective_area.axes['Ei']]
+        
+        exposure_map = Histogram(exposure_map_axes, exposure_map_contents)
+
+        return exposure_map
