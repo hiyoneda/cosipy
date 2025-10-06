@@ -22,84 +22,12 @@ class CoordsysConversionMatrix(Histogram):
                          labels = labels, axis_scale = axis_scale, sparse = sparse, unit = unit,
                          copy_contents = copy_contents)
 
-        self.binning_method = binning_method #'Time' or 'ScAtt'
+        self.binning_method = binning_method #'ScAtt'
 
     def copy(self):
         new = super().copy()
         new.binning_method = self.binning_method
         return new
-
-    @classmethod
-    def time_binning_ccm(cls, full_detector_response, orientation, time_intervals, nside_model = None, is_nest_model = False):
-        """
-        Calculate a ccm from a given orientation.
-
-        Parameters
-        ----------
-        full_detector_response : :py:class:`cosipy.response.FullDetectorResponse`
-            Response
-        orientation : :py:class:`cosipy.spacecraftfile.SpacecraftFile`
-            Orientation
-        time_intervals : :py:class:`np.array`
-            The same format of binned_data.axes['Time'].edges
-        nside_model : int or None, default None
-            If it is None, it will be the same as the NSIDE in the response.
-        is_nest_model : bool, default False
-            If scheme of the model map is nested, it should be False while it is rare.
-
-        Returns
-        -------
-        :py:class:`cosipy.image_deconvolution.CoordsysConversionMatrix`
-            Its axes are [ "Time", "lb", "NuLambda" ].
-        """
-
-        if nside_model is None:
-            nside_model = full_detector_response.nside
-
-        axis_time = Axis(edges = time_intervals, label = "Time")
-        axis_model_map = HealpixAxis(nside = nside_model, coordsys = "galactic", label = "lb")
-        axis_local_map = full_detector_response.axes["NuLambda"]
-
-        axis_coordsys_conv_matrix = Axes((axis_time, axis_model_map, axis_local_map), copy_axes=False) #Time, lb, NuLambda
-
-        contents = []
-
-        for i_time, [init_time, end_time] in tqdm(enumerate(axis_time.bounds), total = len(axis_time.bounds)):
-            ccm_thispix = np.zeros((axis_model_map.nbins, axis_local_map.nbins)) # without unit
-
-            init_time = Time(init_time, format = 'unix')
-            end_time = Time(end_time, format = 'unix')
-
-            filtered_orientation = orientation.source_interval(init_time, end_time)
-
-            for ipix in range(hp.nside2npix(nside_model)):
-                l, b = hp.pix2ang(nside_model, ipix, nest=is_nest_model, lonlat=True)
-                pixel_coord = SkyCoord(l, b, unit = "deg", frame = 'galactic')
-
-                pixel_movement = filtered_orientation.get_target_in_sc_frame(target_name = f"pixel_{ipix}_{i_time}",
-                                                                             target_coord = pixel_coord,
-                                                                             quiet = True,
-                                                                             save = False)
-
-                dwell_time_map = filtered_orientation.get_dwell_map(response = full_detector_response.filename,
-                                                                    src_path = pixel_movement,
-                                                                    save = False)
-
-                ccm_thispix[ipix] = dwell_time_map.data
-                # (HealpixMap).data returns the numpy array without its unit. dwell_time_map.unit is u.s.
-
-            ccm_thispix_sparse = sparse.COO.from_numpy( ccm_thispix.reshape((1, axis_model_map.nbins, axis_local_map.nbins)) )
-
-            contents.append(ccm_thispix_sparse)
-
-        coordsys_conv_matrix = cls(axis_coordsys_conv_matrix,
-                                   contents = sparse.concatenate(contents),
-                                   unit = u.s,
-                                   copy_contents = False)
-
-        coordsys_conv_matrix.binning_method = "Time"
-
-        return coordsys_conv_matrix
 
     @classmethod
     def spacecraft_attitude_binning_ccm(cls, full_detector_response, exposure_table, nside_model = None, use_averaged_pointing = False):
