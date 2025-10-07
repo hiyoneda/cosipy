@@ -1,15 +1,23 @@
 #!/usr/bin/env python
 # coding: utf-8
 
+import logging
+logging.basicConfig(format='%(asctime)s - %(levelname)s - %(message)s',
+                    level=logging.INFO)
+logger = logging.getLogger(__name__)
 
-
+import cProfile
 
 from cosipy import test_data, BinnedData, UnBinnedData
 from cosipy.data_io.EmCDSUnbinnedData import TimeTagEmCDSEventDataInSCFrameFromArrays, \
-    TimeTagEmCDSEventDataInSCFrameFromDC3Fits
+    TimeTagEmCDSEventDataInSCFrameFromDC3Fits, TimeTagEmCDSEventInSCFrame
 from cosipy.event_selection.time_selection import TimeSelector
+from cosipy.interfaces.photon_parameters import PhotonWithDirectionAndEnergyInSCFrameInterface
+from cosipy.response.instrument_response_function import UnpolarizedDC3InterpolatedFarFieldInstrumentResponseFunction
+from cosipy.response.photon_types import PhotonWithDirectionAndEnergyInSCFrame
 from cosipy.spacecraftfile import SpacecraftHistory
 from cosipy.response.FullDetectorResponse import FullDetectorResponse
+from cosipy.threeml.psr_fixed_ei import UnbinnedThreeMLPointSourceResponseTrapz
 from cosipy.util import fetch_wasabi_file
 
 from cosipy.statistics import PoissonLikelihood
@@ -29,13 +37,15 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 from threeML import Band, PointSource, Model, JointLikelihood, DataList
-from astromodels import Parameter
+from astromodels import Parameter, Powerlaw
 
 from pathlib import Path
 
 import os
 
 def main():
+
+    profile = cProfile.Profile()
 
     # Download all data
     data_path = Path("")  # /path/to/files. Current dir by default
@@ -48,18 +58,88 @@ def main():
     fetch_wasabi_file('COSI-SMEX/DC3/Data/Backgrounds/Ge/AlbedoPhotons_3months_unbinned_data_filtered_with_SAAcut.fits.gz',
                       output=str(bkg_data_path), checksum='191a451ee597fd2e4b1cf237fc72e6e2')
 
-    selector = TimeSelector(tstart = Time("2028-03-01 01:35:00.117"), tstop = Time("2028-03-03 01:35:00.117")) #About 3 days
+    dr_path = data_path / "SMEXv12.Continuum.HEALPixO3_10bins_log_flat.binnedimaging.imagingresponse.h5"  # path to detector response
+    fetch_wasabi_file(
+        'COSI-SMEX/develop/Data/Responses/SMEXv12.Continuum.HEALPixO3_10bins_log_flat.binnedimaging.imagingresponse.h5',
+        output=str(dr_path),
+        checksum='eb72400a1279325e9404110f909c7785')
 
+    sc_orientation_path = data_path / "20280301_3_month_with_orbital_info.ori"
+    fetch_wasabi_file('COSI-SMEX/DC2/Data/Orientation/20280301_3_month_with_orbital_info.ori',
+                      output=str(sc_orientation_path), checksum='416fcc296fc37a056a069378a2d30cb2')
+
+
+    profile.enable()
+    # orientation history
+    tstart = Time("2028-03-01 01:35:00.117")
+    tstop = Time("2028-03-01 02:35:00.117")
+    sc_orientation = SpacecraftHistory.open(sc_orientation_path)
+    sc_orientation = sc_orientation.select_interval(tstart, tstop)
+
+    # Prepare data
+    selector = TimeSelector(tstart = sc_orientation.tstart, tstop = sc_orientation.tstop)
+
+    logger.info("Loading data...")
     data = TimeTagEmCDSEventDataInSCFrameFromDC3Fits(crab_data_path, bkg_data_path,
                                                      selection=selector)
+    logger.info("Loading data DONE")
+
+    # Prepare instrument response function
+    logger.info("Loading response....")
+    dr = FullDetectorResponse.open(dr_path)
+    irf = UnpolarizedDC3InterpolatedFarFieldInstrumentResponseFunction(dr)
+    logger.info("Loading response DONE")
+
+    psr = UnbinnedThreeMLPointSourceResponseTrapz(data, irf, sc_orientation, dr.axes['Ei'].centers)
+
+    # Set model
+    l = 184.56
+    b = -5.78
+
+    index = -1.99
+    piv = 500. * u.keV
+    K = 0.048977e-3 / u.cm / u.cm / u.s / u.keV
+
+    spectrum = Powerlaw()
+
+    spectrum.index.min_value = -3
+    spectrum.index.max_value = -1
+
+    spectrum.index.value = index
+    spectrum.K.value = K.value
+    spectrum.piv.value = piv.value
+
+    spectrum.K.unit = K.unit
+    spectrum.piv.unit = piv.unit
+
+    spectrum.index.delta = 0.01
+
+    source = PointSource("source",  # Name of source (arbitrary, but needs to be unique)
+                         l=l,  # Longitude (deg)
+                         b=b,  # Latitude (deg)
+                         spectral_shape=spectrum)  # Spectral model
+
+    # Optional: free the position parameters
+    # source.position.l.free = True
+    # source.position.b.free = True
+
+    model = Model(
+        source)  # Model with single source. If we had multiple sources, we would do Model(source1, source2, ...)
+
+    psr.set_source(source)
+    logger.info("Updating PSR cache...")
+    psr._update_cache()
+    logger.info("Updating PSR cache DONE")
+
+    print(psr.ncounts)
+    print(np.fromiter(psr.expectation_density(), dtype = float))
+
+    profile.disable()
+    profile.dump_stats("prof_interfaces.prof")
 
     return
 
 
 if __name__ == "__main__":
-
-    import cProfile
-    cProfile.run('main()', filename = "prof_interfaces.prof")
-    exit()
 
     main()

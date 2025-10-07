@@ -10,7 +10,7 @@ from scoords import Attitude
 
 from cosipy.interfaces import BinnedDataInterface, ExpectationDensityInterface, BinnedExpectationInterface, EventInterface
 from cosipy.interfaces.photon_list import PhotonListWithDirectionInterface
-from cosipy.interfaces.photon_parameters import PhotonInterface
+from cosipy.interfaces.photon_parameters import PhotonInterface, PhotonWithDirectionInterface
 from cosipy.polarization import PolarizationAngle
 
 __all__ = ["BinnedInstrumentResponseInterface"]
@@ -71,19 +71,19 @@ class InstrumentResponseFunctionInterface(Protocol):
         """
 
 @runtime_checkable
-class NearFieldInstrumentResponseFunctionInterface(InstrumentResponseFunctionInterface, Protocol):
+class FarFieldInstrumentResponseFunctionInterface(InstrumentResponseFunctionInterface, Protocol):
 
-    def effective_area_cm2(self, photons: PhotonListWithDirectionInterface) -> Iterable[float]:
+    def effective_area_cm2(self, photons: Iterable[PhotonWithDirectionInterface]) -> Iterable[float]:
         """
 
         """
 
-    def effective_area(self, photons: PhotonListWithDirectionInterface) -> Iterable[u.Quantity]:
+    def effective_area(self, photons: Iterable[PhotonWithDirectionInterface]) -> Iterable[u.Quantity]:
         """
         Convenience function
         """
         for area_cm2 in self.effective_area_cm2(photons):
-            yield u.Quantity(area_cm2, u.cm2)
+            yield u.Quantity(area_cm2, u.cm*u.cm)
 
 
 

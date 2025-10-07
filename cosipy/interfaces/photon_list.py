@@ -78,7 +78,5 @@ class PhotonListInSCFrameInterface(PhotonListInterface, Protocol):
     @property
     def frame(self) -> SpacecraftFrame:...
 
-class PhotonWithDirectionInSCFrameInterface(PhotonListWithDirectionInterface,
-                                            PhotonListInSCFrameInterface):
-    pass
+
 

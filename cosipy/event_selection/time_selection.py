@@ -6,22 +6,27 @@ from astropy.time import Time
 
 from cosipy.interfaces import TimeTagEventInterface, EventInterface
 from cosipy.interfaces.event_selection import EventSelectorInterface
+from cosipy.util.iterables import itertools_batched
 
 
 class TimeSelector(EventSelectorInterface):
 
-    def __init__(self, tstart:Time = None, tstop:Time = None):
+    def __init__(self, tstart:Time = None, tstop:Time = None, batch_size:int = 10000):
         """
         Assumes events are time-ordered
 
         Parameters
         ----------
+        chunk_size : object
+            Number of events processed at a time
         tstart
         tstop
         """
 
         self._tstart = tstart
         self._tstop = tstop
+
+        self._batch_size = batch_size
 
     def _select(self, event:TimeTagEventInterface) -> bool:
         # Single event
@@ -38,13 +43,7 @@ class TimeSelector(EventSelectorInterface):
             # Working in chunks/batches.
             # This can optimized based on the system
 
-            def chunks():
-                chunk_size = 10000
-                it = iter(events)
-                while chunk := tuple(itertools.islice(it, chunk_size)):
-                    yield chunk
-
-            for chunk in chunks():
+            for chunk in itertools_batched(events, self._batch_size):
 
                 jd1 = []
                 jd2 = []

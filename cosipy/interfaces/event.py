@@ -127,9 +127,17 @@ class ComptonDataSpaceInSCFrameEventInterface(EventInSCFrameInterface,
                                               Protocol):
     pass
 
+@runtime_checkable
+class EmCDSEventInSCFrameInterface(EventInSCFrameInterface,
+                                   EventWithEnergyInterface,
+                                   ComptonDataSpaceEventInterface,
+                                   Protocol):
+    pass
+
+@runtime_checkable
 class TimeTagEmCDSEventInSCFrameInterface(TimeTagEventInterface,
-                                          EventWithEnergyInterface,
-                                          ComptonDataSpaceInSCFrameEventInterface):
+                                          EmCDSEventInSCFrameInterface,
+                                          Protocol):
     pass
 
 

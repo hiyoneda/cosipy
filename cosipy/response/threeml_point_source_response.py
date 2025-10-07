@@ -101,7 +101,6 @@ class BinnedThreeMLPointSourceResponse(BinnedThreeMLSourceResponseInterface):
 
     def clear_cache(self):
 
-        self._source = None
         self._last_convolved_source_dict = None
         self._expectation = None
         self._last_convolved_source_skycoord = None

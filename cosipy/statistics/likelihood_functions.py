@@ -4,6 +4,7 @@ import operator
 
 from cosipy import UnBinnedData
 from cosipy.interfaces.expectation_interface import ExpectationInterface, ExpectationDensityInterface
+from cosipy.util.iterables import itertools_batched
 
 logger = logging.getLogger(__name__)
 
@@ -21,7 +22,9 @@ __all__ = ['UnbinnedLikelihood',
            'PoissonLikelihood']
 
 class UnbinnedLikelihood(UnbinnedLikelihoodInterface):
-    def __init__(self, response:ExpectationDensityInterface, bkg:BackgroundDensityInterface = None):
+    def __init__(self, response:ExpectationDensityInterface,
+                 bkg:BackgroundDensityInterface = None,
+                 batch_size:int = 100000):
         """
         Will get the number of events from the response and bkg expectation_density iterators
 
@@ -34,6 +37,8 @@ class UnbinnedLikelihood(UnbinnedLikelihoodInterface):
         self._bkg = bkg
         self._response = response
         self._nobservations = None
+
+        self._batch_size = batch_size
 
     @property
     def has_bkg(self):
@@ -79,13 +84,7 @@ class UnbinnedLikelihood(UnbinnedLikelihoodInterface):
         nobservations = 0
         density_log_sum = 0
 
-        def chunks():
-            chunk_size = 100000
-            it = iter(self._get_density_iter())
-            while chunk := tuple(itertools.islice(it, chunk_size)):
-                yield chunk
-
-        for density_iter_chunk in chunks():
+        for density_iter_chunk in itertools_batched(self._get_density_iter(), self._batch_size):
 
             density = np.fromiter(density_iter_chunk, dtype=float)
             density_log_sum += np.sum(np.log(density))

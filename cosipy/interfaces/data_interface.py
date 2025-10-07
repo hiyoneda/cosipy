@@ -40,6 +40,20 @@ class BinnedDataInterface(DataInterface, Protocol):
     def data(self) -> Histogram:...
     @property
     def axes(self) -> Axes:...
+    def fill(self, event_data:Iterable[EventInterface]):
+        """
+        Bin the data.
+
+        Parameters
+        ----------
+        event_data
+
+        Returns
+        -------
+
+        """
+
+
 
 @runtime_checkable
 class EventDataInterface(DataInterface, Protocol):

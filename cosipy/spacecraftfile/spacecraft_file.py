@@ -258,6 +258,9 @@ class SpacecraftHistory:
 
         rot_matrix = self._attitude.as_matrix()
 
+        # In case of multiple points
+        weights = np.expand_dims(weights, (weights.ndim, weights.ndim+1))
+
         interp_attitude = Attitude.from_matrix(rot_matrix[points[0]]*weights[0] + rot_matrix[points[1]]*weights[1], frame = self._attitude.frame)
 
         return interp_attitude

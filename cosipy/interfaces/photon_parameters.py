@@ -55,3 +55,9 @@ class PhotonInSCFrameInterface(PhotonInterface, Protocol):
 class PhotonWithDirectionInSCFrameInterface(PhotonWithDirectionInterface,
                                             PhotonInSCFrameInterface):
     pass
+
+class PhotonWithDirectionAndEnergyInSCFrameInterface(PhotonWithDirectionInSCFrameInterface,
+                                                     PhotonWithEnergyInterface):
+    pass
+
+

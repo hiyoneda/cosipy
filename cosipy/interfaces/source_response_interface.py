@@ -47,8 +47,8 @@ class ThreeMLSourceResponseInterface(Protocol):
         """
         This method is used to re-use the same object for multiple
         sources.
-        It is expected to return a copy of itself, but deepcopy it's
-        and any other necessary information such that when
+        It is expected to return a safe copy of itself
+        such that when
         a new source is set, the expectation calculation
         are independent.
 
