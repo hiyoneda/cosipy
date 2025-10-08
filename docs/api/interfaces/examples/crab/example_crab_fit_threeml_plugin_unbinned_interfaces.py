@@ -76,6 +76,12 @@ def main():
     sc_orientation = SpacecraftHistory.open(sc_orientation_path)
     sc_orientation = sc_orientation.select_interval(tstart, tstop)
 
+    # Prepare instrument response function
+    logger.info("Loading response....")
+    dr = FullDetectorResponse.open(dr_path)
+    irf = UnpolarizedDC3InterpolatedFarFieldInstrumentResponseFunction(dr)
+    logger.info("Loading response DONE")
+
     # Prepare data
     selector = TimeSelector(tstart = sc_orientation.tstart, tstop = sc_orientation.tstop)
 
@@ -84,15 +90,10 @@ def main():
                                                      selection=selector)
     logger.info("Loading data DONE")
 
-    # Prepare instrument response function
-    logger.info("Loading response....")
-    dr = FullDetectorResponse.open(dr_path)
-    irf = UnpolarizedDC3InterpolatedFarFieldInstrumentResponseFunction(dr)
-    logger.info("Loading response DONE")
-
+    # Prepare point source response, which convolved the IRF with the SC orientation
     psr = UnbinnedThreeMLPointSourceResponseTrapz(data, irf, sc_orientation, dr.axes['Ei'].centers)
 
-    # Set model
+    # Prepare the model
     l = 184.56
     b = -5.78
 

@@ -1,4 +1,6 @@
-from typing import Protocol, Union, Optional, Iterable, Tuple, runtime_checkable
+import itertools
+import operator
+from typing import Protocol, Union, Optional, Iterable, Tuple, runtime_checkable, ClassVar
 
 from astropy.coordinates import SkyCoord
 from astropy.time import Time
@@ -60,9 +62,16 @@ class BinnedInstrumentResponseInterface(BinnedExpectationInterface, Protocol):
 @runtime_checkable
 class InstrumentResponseFunctionInterface(Protocol):
 
+    # The photon class and event class that the IRF implementation can handle
+    photon_type = ClassVar[PhotonInterface]
+    event_type = ClassVar[EventInterface]
+
     def event_probability(self, query: Iterable[Tuple[PhotonInterface, EventInterface]]) -> Iterable[float]:
         """
         Return the probability density of measuring a given event given a photon.
+
+        The units of the output the inverse of the phase space of the class event_type data space.
+        e.g. if the event measured energy in keV, the units of output of this function are implicitly 1/keV
         """
 
     def random_events(self, photons:Iterable[PhotonInterface]) -> Iterable[EventInterface]:
@@ -78,11 +87,57 @@ class FarFieldInstrumentResponseFunctionInterface(InstrumentResponseFunctionInte
 
         """
 
+    def differential_effective_area_cm2(self, query: Iterable[Tuple[PhotonWithDirectionInterface, EventInterface]]) -> Iterable[float]:
+        """
+        Event probability multiplied by effective area
+
+        This is provided as a helper function assuming the child classes implemented event_probability
+        """
+
+        # Guard to avoid infinite recursion in incomplete child classes
+        cls = type(self)
+        if (cls.differential_effective_area_cm2 is FarFieldInstrumentResponseFunctionInterface.differential_effective_area_cm2
+            and
+            cls.event_probability is FarFieldInstrumentResponseFunctionInterface.event_probability):
+            raise NotImplementedError("Implement differential_effective_area_cm2 and/or event_probability")
+
+        query1, query2 = itertools.tee(query, 2)
+        photon_query = [photon for photon,_ in query1]
+
+        return map(operator.mul, self.effective_area_cm2(photon_query), self.event_probability(query2))
+
+    def event_probability(self, query: Iterable[Tuple[PhotonWithDirectionInterface, EventInterface]]) -> Iterable[float]:
+        """
+        Return the probability density of measuring a given event given a photon.
+
+        In the far field case it is the same as the differential_effective_area_cm2 divided by the effective area
+
+        This is provided as a helper function assuming the child classes implemented differential_effective_area_cm2
+        """
+
+        # Guard to avoid infinite recursion in incomplete child classes
+        cls = type(self)
+        if (
+                cls.differential_effective_area_cm2 is FarFieldInstrumentResponseFunctionInterface.differential_effective_area_cm2
+                and
+                cls.event_probability is FarFieldInstrumentResponseFunctionInterface.event_probability):
+            raise NotImplementedError("Implement differential_effective_area_cm2 and/or event_probability")
+
+        query1, query2 = itertools.tee(query, 2)
+        photon_query = [photon for photon, _ in query1]
+
+        return map(operator.truediv, self.differential_effective_area_cm2(query2), self.effective_area_cm2(photon_query))
+
+
     def effective_area(self, photons: Iterable[PhotonWithDirectionInterface]) -> Iterable[u.Quantity]:
         """
         Convenience function
         """
         for area_cm2 in self.effective_area_cm2(photons):
+            yield u.Quantity(area_cm2, u.cm*u.cm)
+
+    def differential_effective_area(self, query: Iterable[Tuple[PhotonWithDirectionInterface, EventInterface]]) -> Iterable[u.Quantity]:
+        for area_cm2 in self.differential_effective_area(query):
             yield u.Quantity(area_cm2, u.cm*u.cm)
 
 

@@ -21,18 +21,39 @@ from cosipy.util.iterables import itertools_batched
 
 class UnpolarizedDC3InterpolatedFarFieldInstrumentResponseFunction(FarFieldInstrumentResponseFunctionInterface):
 
+    photon_type = PhotonWithDirectionAndEnergyInSCFrameInterface
+    event_type = EmCDSEventInSCFrameInterface
+
     def __init__(self, response: FullDetectorResponse,
                  batch_size = 100000):
 
-        self._prob = response.to_dr().project('NuLambda', 'Ei', 'Em', 'Phi', 'PsiChi')
+        # Get the differential effective area, which is still integrated on each bin at this point
+        # FarFieldInstrumentResponseFunctionInterface uses cm2
+        # First convert and then drop the units
+        self._diff_area = response.to_dr().project('NuLambda', 'Ei', 'Em', 'Phi', 'PsiChi').to(u.cm * u.cm, copy=False).to(None, copy = False, update = False)
 
-        self._area_eff = self._prob.project('NuLambda', 'Ei')
+        # Now fix units for the axes
+        # PhotonWithDirectionAndEnergyInSCFrameInterface has energy in keV
+        # EmCDSEventInSCFrameInterface has energy in keV, phi in rad
+        # NuLambda and PsiChi don't have units since these are HealpixAxis. They take SkyCoords
+        # Copy the axes the first time since they are shared with the response:FullDetectorResponse input
+        self._diff_area.axes['Ei'] = self._diff_area.axes['Ei'].to(u.keV).to(None, copy = False, update = False)
+        self._diff_area.axes['Em'] = self._diff_area.axes['Em'].to(u.keV).to(None, copy = False, update = False)
+        self._diff_area.axes['Phi'] = self._diff_area.axes['Phi'].to(u.rad).to(None, copy = False, update = False)
 
-        # expand_dims removes units
-        self._prob /= Quantity(self._prob.axes.expand_dims(self._area_eff, ('NuLambda', 'Ei')), self._area_eff.unit, copy=False)
+        # Integrate to get the total effective area
+        self._area = self._diff_area.project('NuLambda', 'Ei')
 
-        self._prob.to('', copy=False)
-        self._area_eff = self._area_eff.to(u.cm*u.cm, copy=False)
+        # Now make it differential by dividing by the phasespace
+        # EmCDSEventInSCFrameInterface energy and phi units have already been taken
+        # care off. Only PsiChi remains, which is a direction in the sphere, therefore per steradians
+        energy_phase_space =  self._diff_area.axes['Ei'].widths
+        phi_phase_space = self._diff_area.axes['Phi'].widths
+        psichi_phase_space = self._diff_area.axes['PsiChi'].pixarea().to_value(u.sr)
+
+        self._diff_area /= self._diff_area.axes.expand_dims(energy_phase_space, 'Em')
+        self._diff_area /= self._diff_area.axes.expand_dims(phi_phase_space, 'Phi')
+        self._diff_area /= psichi_phase_space
 
         self._batch_size = batch_size
 
@@ -43,26 +64,24 @@ class UnpolarizedDC3InterpolatedFarFieldInstrumentResponseFunction(FarFieldInstr
 
         for photon_chunk in itertools_batched(photons, self._batch_size):
 
-            lon, lat, energy = np.asarray([[photon.direction_lon_radians,
+            lon, lat, energy_keV = np.asarray([[photon.direction_lon_radians,
                                              photon.direction_lat_radians,
                                              photon.energy_keV] for photon in photon_chunk], dtype=float).transpose()
 
             direction = SkyCoord(lon, lat, unit = u.rad, frame = SpacecraftFrame())
-            energy = Quantity(energy, u.keV)
 
-            for area_eff in self._area_eff.interp(direction, energy):
-                yield area_eff.value
+            for area_eff in self._area.interp(direction, energy_keV):
+                yield area_eff
 
-
-    def event_probability(self, query: Iterable[Tuple[PhotonWithDirectionAndEnergyInSCFrameInterface, EmCDSEventInSCFrameInterface]]) -> Iterable[float]:
+    def differential_effective_area_cm2(self, query: Iterable[Tuple[PhotonWithDirectionAndEnergyInSCFrameInterface, EmCDSEventInSCFrameInterface]]) -> Iterable[float]:
         """
-        Return the probability density of measuring a given event given a photon.
+        Return the differential effective area (probability density of measuring a given event given a photon times the effective area)
         """
 
         for query_chunk in itertools_batched(query, self._batch_size):
 
             # Psi is colatitude (complementary angle)
-            lon_ph, lat_ph, energy_i, energy_m, phi, psi_comp, chi  = \
+            lon_ph, lat_ph, energy_i_keV, energy_m_keV, phi_rad, psi_comp, chi  = \
                 np.asarray([[photon.direction_lon_radians,
                              photon.direction_lat_radians,
                              photon.energy_keV,
@@ -73,12 +92,7 @@ class UnpolarizedDC3InterpolatedFarFieldInstrumentResponseFunction(FarFieldInstr
                             ] for photon,event in query_chunk], dtype=float).transpose()
 
             direction_ph = SkyCoord(lon_ph, lat_ph, unit = u.rad, frame = SpacecraftFrame())
-            energy_i = Quantity(energy_i, u.keV)
-            energy_m = Quantity(energy_m, u.keV)
-            phi = Quantity(phi, u.rad)
             psichi = SkyCoord(chi, psi_comp, unit=u.rad, frame=SpacecraftFrame())
 
-            # Prob not guaranteed to sum up to 1. We should take self._prob.slice instead.
-            # I think this is faster though, and a good approximation.
-            for prob in self._prob.interp(direction_ph, energy_i, energy_m, phi, psichi):
-                yield prob
+            for diff_area in self._diff_area.interp(direction_ph, energy_i_keV, energy_m_keV, phi_rad, psichi):
+                yield diff_area

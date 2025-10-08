@@ -43,8 +43,9 @@ class UnbinnedThreeMLPointSourceResponseTrapz(UnbinnedThreeMLSourceResponseInter
         # Other implementation inputs
         self._data = data
         self._irf = irf
-        self._energies_keV = energies.to_value(u.keV)
         self._sc_ori = sc_history
+        # Energies will later use with a PhotonWithEnergyInterface, with uses keV
+        self._energies_keV = energies.to_value(u.keV)
 
         # This can be computed once and for all
         # Trapezoidal rule weights to integrate in Ei
