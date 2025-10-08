@@ -2,6 +2,9 @@
 # coding: utf-8
 
 import logging
+
+from cosipy.threeml.unbinned_model_folding import UnbinnedThreeMLModelFolding
+
 logging.basicConfig(format='%(asctime)s - %(levelname)s - %(message)s',
                     level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -20,7 +23,7 @@ from cosipy.response.FullDetectorResponse import FullDetectorResponse
 from cosipy.threeml.psr_fixed_ei import UnbinnedThreeMLPointSourceResponseTrapz
 from cosipy.util import fetch_wasabi_file
 
-from cosipy.statistics import PoissonLikelihood
+from cosipy.statistics import PoissonLikelihood, UnbinnedLikelihood
 from cosipy.background_estimation import FreeNormBinnedBackground
 from cosipy.interfaces import ThreeMLPluginInterface
 from cosipy.response import BinnedThreeMLModelFolding, BinnedInstrumentResponse, BinnedThreeMLPointSourceResponse
@@ -68,6 +71,9 @@ def main():
     fetch_wasabi_file('COSI-SMEX/DC2/Data/Orientation/20280301_3_month_with_orbital_info.ori',
                       output=str(sc_orientation_path), checksum='416fcc296fc37a056a069378a2d30cb2')
 
+    bkg_data_path = data_path / "Total_BG_3months_binned_data_filtered_with_SAAcut_SAAreducedHEPD01_DC3binning.hdf5"
+    fetch_wasabi_file('COSI-SMEX/cosipy_tutorials/crab_spectral_fit_galactic_frame/bkg_binned_data.hdf5',
+                    output=str(bkg_data_path), checksum = '54221d8556eb4ef520ef61da8083e7f4')
 
     profile.enable()
     # orientation history
@@ -120,20 +126,31 @@ def main():
                          b=b,  # Latitude (deg)
                          spectral_shape=spectrum)  # Spectral model
 
-    # Optional: free the position parameters
-    # source.position.l.free = True
-    # source.position.b.free = True
-
     model = Model(
         source)  # Model with single source. If we had multiple sources, we would do Model(source1, source2, ...)
 
-    psr.set_source(source)
-    logger.info("Updating PSR cache...")
-    psr._update_cache()
-    logger.info("Updating PSR cache DONE")
 
-    print(psr.ncounts)
-    print(np.fromiter(psr.expectation_density(), dtype = float))
+    # Set model folding
+    response = UnbinnedThreeMLModelFolding(data, psr)
+
+    # response.set_model(model) # optional. Will be called by likelihood
+    # print(response.ncounts())
+    # print(np.fromiter(response.expectation_density(), dtype = float))
+
+    # Set background
+    bkg = BinnedData(data_path / "background.yaml")
+    bkg.load_binned_data_from_hdf5(binned_data=bkg_data_path)
+
+
+    like_fun = UnbinnedLikelihood(response, bkg)
+
+    cosi = ThreeMLPluginInterface('cosi', like_fun)
+
+    plugins = DataList(cosi) # If we had multiple instruments, we would do e.g. DataList(cosi, lat, hawc, ...)
+
+    like = JointLikelihood(model, plugins, verbose = False)
+
+    like.fit()
 
     profile.disable()
     profile.dump_stats("prof_interfaces.prof")

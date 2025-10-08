@@ -179,7 +179,6 @@ class UnbinnedThreeMLPointSourceResponseTrapz(UnbinnedThreeMLSourceResponseInter
         self._last_convolved_source_dict = source_dict
         self._last_convolved_source_skycoord = coord.copy()
 
-    @property
     def ncounts(self) -> float:
         """
         Total expected counts

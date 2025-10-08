@@ -1,7 +1,10 @@
 import copy
+from typing import Dict
+
+from numba.typed.dictobject import DictModel
 
 from cosipy.interfaces import BinnedThreeMLModelFoldingInterface, BinnedThreeMLSourceResponseInterface, \
-    BinnedDataInterface, DataInterface
+    BinnedDataInterface, DataInterface, ThreeMLSourceResponseInterface
 
 from astromodels import Model
 from astromodels.sources import PointSource, ExtendedSource
@@ -10,7 +13,80 @@ from histpy import Axes, Histogram
 
 __all__ = ["BinnedThreeMLModelFolding"]
 
-class BinnedThreeMLModelFolding(BinnedThreeMLModelFoldingInterface):
+class ThreeMLModelFoldingCacheSourceResponsesMixin:
+    """
+    Avoid duplicating code that is the same for the binned and unbinned case
+
+    Needs:
+    self._model,
+    """
+    _model: Model
+    _source_responses: Dict[str, ThreeMLSourceResponseInterface]
+    _psr: ThreeMLSourceResponseInterface
+    _esr: ThreeMLSourceResponseInterface
+    _cached_model_dict: dict
+
+    def _cache_source_responses(self):
+        """
+        Create a copy of the PSR and ESR for each source
+
+        Returns True if there was any update
+
+        Updates _cached_model_dict and _source_responses
+        """
+
+        # See this issue for the caveats of comparing models
+        # https://github.com/threeML/threeML/issues/645
+        current_model_dict = self._model.to_dict()
+
+        # TODO: currently Model.__eq__ seems broken. It returns. True even
+        #  if the internal parameters changed. Caching the expected value
+        #  is not implemented. Remove the "False and" when fixed
+        if self._cached_model_dict is not None and self._cached_model_dict == current_model_dict:
+            # Nothing to do
+            return False
+
+        # This accounts for the possibility of some sources being added or
+        # removed from the model.
+        new_source_responses = {}
+
+        for name, source in self._model.sources.items():
+
+            if name in self._source_responses:
+                # Use cache
+                new_source_responses[name] = self._source_responses[name]
+                continue
+
+            if isinstance(source, PointSource):
+
+                if self._psr is None:
+                    raise RuntimeError("The model includes a point source but no point source response was provided")
+
+                psr_copy = self._psr.copy()
+                psr_copy.set_source(source)
+                new_source_responses[name] = psr_copy
+            elif isinstance(source, ExtendedSource):
+
+                if self._esr is None:
+                    raise RuntimeError("The model includes an extended source but no extended source response was provided")
+
+                esr_copy = self._esr.copy()
+                esr_copy.set_source(source)
+                new_source_responses[name] = esr_copy
+            else:
+                raise RuntimeError(f"The model contains the source {name} "
+                                   f"of type {type(source)}. I don't know "
+                                   "how to handle it!")
+
+        self._source_responses = new_source_responses
+
+        # See this issue for the caveats of comparing models
+        # https://github.com/threeML/threeML/issues/645
+        self._cached_model_dict = current_model_dict
+
+        return True
+
+class BinnedThreeMLModelFolding(BinnedThreeMLModelFoldingInterface, ThreeMLModelFoldingCacheSourceResponsesMixin):
 
     def __init__(self,
                  data: BinnedDataInterface,
@@ -58,48 +134,6 @@ class BinnedThreeMLModelFolding(BinnedThreeMLModelFoldingInterface):
 
         self._model = model
 
-    def _cache_source_responses(self):
-        """
-        Create a copy of the PSR and ESR for each source
-        Returns
-        -------
-
-        """
-
-        # This accounts for the possibility of some sources being added or
-        # removed from the model.
-        new_source_responses = {}
-
-        for name,source in self._model.sources.items():
-
-            if name in self._source_responses:
-                # Used cache
-                new_source_responses[name] = self._source_responses[name]
-                continue
-
-            if isinstance(source, PointSource):
-
-                if self._psr is None:
-                    raise RuntimeError("The model includes a point source but no point source response was provided")
-
-                psr_copy = self._psr.copy()
-                psr_copy.set_source(source)
-                new_source_responses[name] = psr_copy
-            elif isinstance(source, ExtendedSource):
-
-                if self._esr is None:
-                    raise RuntimeError("The model includes an extended source but no extended source response was provided")
-
-                esr_copy = self._esr.copy()
-                esr_copy.set_source(source)
-                new_source_responses[name] = esr_copy
-            else:
-                raise RuntimeError(f"The model contains the source {name} "
-                                   f"of type {type(source)}. I don't know "
-                                   "how to handle it!")
-
-        self._source_responses = new_source_responses
-
     def expectation(self, axes:Axes, copy:bool = True)->Histogram:
         """
 
@@ -116,19 +150,10 @@ class BinnedThreeMLModelFolding(BinnedThreeMLModelFoldingInterface):
         if self._model is None:
             raise RuntimeError("Call set_data() and set_model() first")
 
-        # See this issue for the caveats of comparing models
-        # https://github.com/threeML/threeML/issues/645
-        current_model_dict = self._model.to_dict()
+        # Create a copy of the PSR and ESR for each source
+        model_changed = self._cache_source_responses()
 
-        # If nothing has changed in the model, we can use the cached expectation
-        # as is.
-        # If the model has changed but the axes haven't, we can at least reuse
-        # it and prevent new memory allocation, we just need to zero it out
-
-        # TODO: currently Model.__eq__ seems broken. It returns. True even
-        #  if the internal parameters changed. Caching the expected value
-        #  is not implemented. Remove the "False and" when fixed
-        if self._cached_model_dict is not None and self._cached_model_dict == current_model_dict:
+        if not model_changed:
             if copy:
                 return self._expectation.copy()
             else:
@@ -136,16 +161,9 @@ class BinnedThreeMLModelFolding(BinnedThreeMLModelFoldingInterface):
         else:
             self._expectation.clear()
 
-        # Create a copy of the PSR and ESR for each source
-        self._cache_source_responses()
-
         # Convolve all sources with the response
         for source_name,psr in self._source_responses.items():
             self._expectation += psr.expectation(axes)
-
-        # See this issue for the caveats of comparing models
-        # https://github.com/threeML/threeML/issues/645
-        self._cached_model_dict = current_model_dict
 
         if copy:
             return self._expectation.copy()
