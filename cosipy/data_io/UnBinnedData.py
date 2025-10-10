@@ -36,7 +36,7 @@ class UnBinnedData(DataIO):
         Parameters
         ----------
 	    input_name : str, optional
-            Prefix of input file (default is None, in which case the 
+            Path of input file (default is None, in which case the 
 	        input file name is taken from the yaml file).
         output_name : str, optional
             Prefix of output file (default is None, in which case no 
