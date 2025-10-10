@@ -28,16 +28,16 @@ logger = logging.getLogger(__name__)
 class UnBinnedData(DataIO):
     """Handles unbinned data."""
 
-    def read_tra(self,input_name=None,output_name=None, run_test=False, use_ori=False,
+    def read_tra(self, input_name=None, output_name=None, run_test=False, use_ori=False,
             event_min=None, event_max=None):
         
         """Reads MEGAlib .tra (or .tra.gz) file and creates cosi datset.
         
         Parameters
         ----------
-	input_name : str, optional
+	    input_name : str, optional
             Prefix of input file (default is None, in which case the 
-	    input file name is taken from the yaml file).
+	        input file name is taken from the yaml file).
         output_name : str, optional
             Prefix of output file (default is None, in which case no 
             output is written). 
