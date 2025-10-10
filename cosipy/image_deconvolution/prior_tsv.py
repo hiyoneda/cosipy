@@ -86,7 +86,7 @@ class PriorTSV(PriorBase):
         Returns
         -------
         numpy.ndarray
-            Gradient of the log prior, with the same units as the model.
+            Gradient of the log prior, in units inverse to the model.
         """
         if self.model_class == AllSkyImageModel:
 

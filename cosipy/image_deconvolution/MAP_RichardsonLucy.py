@@ -53,7 +53,7 @@ class MAP_RichardsonLucy(RichardsonLucySimple):
             value: 1.0
     """
 
-    prior_classes = {"TSV": PriorTSV, "Entropy": PriorEntropy}
+    prior_classes = {"TSV": PriorTSV, "entropy": PriorEntropy}
 
     def __init__(self, initial_model, dataset, mask, parameter):
 

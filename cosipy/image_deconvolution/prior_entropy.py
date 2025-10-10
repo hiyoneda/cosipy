@@ -28,7 +28,7 @@ class PriorEntropy(PriorBase):
 
     def log_prior(self, model):
         """
-        Calculate the logarithm of the TSV prior probability.
+        Calculate the logarithm of the entropy prior probability.
 
         Parameters
         ----------
@@ -38,17 +38,17 @@ class PriorEntropy(PriorBase):
         Returns
         -------
         float
-            The logarithm of the TSV prior probability.
+            The logarithm of the entropy prior probability.
         """
         if self.model_class == AllSkyImageModel:
 
-            image_ratio = (model/self.prior_map).to('').value
+            image_ratio = (model/self.prior_map).contents.to('').value
             
-            return self.coefficient * np.sum(model.value * (1 - np.log(image_ratio)))
+            return self.coefficient * np.sum(model.contents.value * (1 - np.log(image_ratio)))
     
     def grad_log_prior(self, model): 
         """
-        Calculate the gradient of the log TSV prior.
+        Calculate the gradient of the log entropy prior.
 
         Parameters
         ----------
@@ -58,10 +58,10 @@ class PriorEntropy(PriorBase):
         Returns
         -------
         numpy.ndarray
-            Gradient of the log prior, with the same units as the model.
+            Gradient of the log prior, in units inverse to the model.
         """
         if self.model_class == AllSkyImageModel:
 
-            image_ratio = (model/self.prior_map).to('').value
+            image_ratio = (model/self.prior_map).contents.to('').value
 
-            return -1 * self.coefficient * np.log(image_ratio)
+            return -1 * self.coefficient * np.log(image_ratio) / model.unit
