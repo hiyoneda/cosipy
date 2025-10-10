@@ -3,6 +3,9 @@
 
 import logging
 
+from histpy import Histogram
+
+from cosipy.background_estimation.free_norm_threeml_binned_bkg import FreeNormBackgroundInterpolatedDensityTimeTagEmCDS
 from cosipy.threeml.unbinned_model_folding import UnbinnedThreeMLModelFolding
 
 logging.basicConfig(format='%(asctime)s - %(levelname)s - %(message)s',
@@ -48,6 +51,8 @@ import os
 
 def main():
 
+    use_bkg = False
+
     profile = cProfile.Profile()
 
     # Download all data
@@ -71,9 +76,9 @@ def main():
     fetch_wasabi_file('COSI-SMEX/DC2/Data/Orientation/20280301_3_month_with_orbital_info.ori',
                       output=str(sc_orientation_path), checksum='416fcc296fc37a056a069378a2d30cb2')
 
-    bkg_data_path = data_path / "Total_BG_3months_binned_data_filtered_with_SAAcut_SAAreducedHEPD01_DC3binning.hdf5"
+    binned_bkg_data_path = data_path / "bkg_binned_data.hdf5"
     fetch_wasabi_file('COSI-SMEX/cosipy_tutorials/crab_spectral_fit_galactic_frame/bkg_binned_data.hdf5',
-                    output=str(bkg_data_path), checksum = '54221d8556eb4ef520ef61da8083e7f4')
+                    output=str(binned_bkg_data_path), checksum = '54221d8556eb4ef520ef61da8083e7f4')
 
     profile.enable()
     # orientation history
@@ -92,9 +97,30 @@ def main():
     selector = TimeSelector(tstart = sc_orientation.tstart, tstop = sc_orientation.tstop)
 
     logger.info("Loading data...")
-    data = TimeTagEmCDSEventDataInSCFrameFromDC3Fits(crab_data_path, bkg_data_path,
-                                                     selection=selector)
+    if use_bkg:
+        data = TimeTagEmCDSEventDataInSCFrameFromDC3Fits([crab_data_path, bkg_data_path],
+                                                      selection=selector)
+    else:
+        data = TimeTagEmCDSEventDataInSCFrameFromDC3Fits(crab_data_path,
+                                                         selection=selector)
+
     logger.info("Loading data DONE")
+
+    # Set background
+
+    if use_bkg:
+        bkg = BinnedData(data_path / "background.yaml")
+        bkg.load_binned_data_from_hdf5(binned_data=str(binned_bkg_data_path))
+        bkg_dist = bkg.binned_data.project('Em', 'Phi', 'PsiChi')
+
+        # Workaround to avoid inf values. Our bkg should be smooth, but currently it's not.
+        bkg_dist += sys.float_info.min
+
+        logger.info("Setting bkg...")
+        bkg = FreeNormBackgroundInterpolatedDensityTimeTagEmCDS(data, bkg_dist, sc_orientation, copy = False)
+        logger.info("Setting bkg DONE")
+    else:
+        bkg = None
 
     # Prepare point source response, which convolved the IRF with the SC orientation
     psr = UnbinnedThreeMLPointSourceResponseTrapz(data, irf, sc_orientation, dr.axes['Ei'].centers)
@@ -104,7 +130,7 @@ def main():
     b = -5.78
 
     index = -1.99
-    piv = 500. * u.keV
+    piv = 1 * u.MeV
     K = 0.048977e-3 / u.cm / u.cm / u.s / u.keV
 
     spectrum = Powerlaw()
@@ -112,7 +138,10 @@ def main():
     spectrum.index.min_value = -3
     spectrum.index.max_value = -1
 
-    spectrum.index.value = index
+    # Fix it for testing purposes
+    # spectrum.index.value = -2
+    # spectrum.index.free = False
+
     spectrum.K.value = K.value
     spectrum.piv.value = piv.value
 
@@ -131,25 +160,58 @@ def main():
 
 
     # Set model folding
-    response = UnbinnedThreeMLModelFolding(data, psr)
+    response = UnbinnedThreeMLModelFolding(psr)
 
     # response.set_model(model) # optional. Will be called by likelihood
     # print(response.ncounts())
     # print(np.fromiter(response.expectation_density(), dtype = float))
 
-    # Set background
-    bkg = BinnedData(data_path / "background.yaml")
-    bkg.load_binned_data_from_hdf5(binned_data=bkg_data_path)
-
-
+    # Setup likelihood
     like_fun = UnbinnedLikelihood(response, bkg)
 
-    cosi = ThreeMLPluginInterface('cosi', like_fun)
+    cosi = ThreeMLPluginInterface('cosi', like_fun, response, bkg)
+
+    # Nuisance parameter guess, bounds, etc.
+    if use_bkg:
+        cosi.bkg_parameter['bkg_norm'] = Parameter("bkg_norm",  # background parameter
+                                          1,  # initial value of parameter
+                                          unit = u.Hz,
+                                          min_value=0,  # minimum value of parameter
+                                          max_value=100,  # maximum value of parameter
+                                          delta=0.05,  # initial step used by fitting engine
+                                          )
 
     plugins = DataList(cosi) # If we had multiple instruments, we would do e.g. DataList(cosi, lat, hawc, ...)
 
     like = JointLikelihood(model, plugins, verbose = False)
 
+
+    # Grid
+    if use_bkg:
+        loglike = Histogram([np.geomspace(2e-6, 2e-4, 30),
+                                   np.geomspace(.1, 10, 31)], labels=['K', 'B'])
+
+        for i, k in enumerate(loglike.axes['K'].centers):
+            for j, b in enumerate(loglike.axes['B'].centers):
+                spectrum.K.value = k
+                cosi.bkg_parameter['bkg_norm'].value = b
+
+                loglike[i, j] = cosi.get_log_like()
+
+        loglike.plot()
+    else:
+        loglike = Histogram([np.geomspace(2e-6, 2e-4, 30)], labels=['K'], axis_scale='log')
+
+        for i, k in enumerate(loglike.axes['K'].centers):
+            spectrum.K.value = k
+
+            loglike[i] = cosi.get_log_like()
+
+        loglike.plot()
+
+    plt.show()
+
+    # Run
     like.fit()
 
     profile.disable()

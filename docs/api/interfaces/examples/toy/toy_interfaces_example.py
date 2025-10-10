@@ -13,7 +13,6 @@ from cosipy import SpacecraftHistory
 from cosipy.event_selection.time_selection import TimeSelector
 from cosipy.interfaces.background_interface import BackgroundDensityInterface
 from cosipy.interfaces.data_interface import EventDataInterface, DataInterface, TimeTagEventDataInterface
-from cosipy.interfaces.event import EventMetadata
 from cosipy.interfaces.event_selection import EventSelectorInterface
 
 from cosipy.statistics import PoissonLikelihood, UnbinnedLikelihood
@@ -66,15 +65,10 @@ class ToyEvent(TimeTagEventInterface, EventInterface):
         self._x = x
         self._jd1 = time.jd1
         self._jd2 = time.jd2
-        self._metadata = EventMetadata()
 
     @property
     def id(self):
         return self._id
-
-    @property
-    def metadata(self) -> EventMetadata:
-        return self._metadata
 
     @property
     def x(self):
@@ -194,7 +188,10 @@ class ToyBkg(BinnedBackgroundInterface, BackgroundDensityInterface):
         self._norm = 1
 
         self._sel_fraction = (duration/(1*u.day)).to_value('')
-        self._unit_expectation_density = self._sel_fraction/(toy_axis.hi_lim - toy_axis.lo_lim)
+        self._probability = self._sel_fraction / (toy_axis.hi_lim - toy_axis.lo_lim)
+
+    def event_type(self) -> Type[EventInterface]:
+        return ToyEvent
 
     def set_parameters(self, **parameters:u.Quantity) -> None:
         self._norm = parameters['norm'].value
@@ -202,12 +199,12 @@ class ToyBkg(BinnedBackgroundInterface, BackgroundDensityInterface):
     def ncounts(self) -> float:
         return self._norm * self._sel_fraction
 
-    def expectation_density(self, start:Optional[int] = None, stop:Optional[int] = None) -> Iterable[float]:
+    def event_probability(self, start:Optional[int] = None, stop:Optional[int] = None) -> Iterable[float]:
 
-        density = self._norm * self._unit_expectation_density
+        prob = self._probability
 
         for _ in itertools.islice(self._data, start, stop):
-            yield density
+            yield prob
 
     @property
     def parameters(self) -> Dict[str, u.Quantity]:
@@ -234,6 +231,10 @@ class ToyPointSourceResponse(BinnedThreeMLSourceResponseInterface, UnbinnedThree
         self._unit_expectation = Histogram(toy_axis,
                                            contents= self._sel_fraction * np.diff(norm.cdf(toy_axis.edges)))
 
+    @property
+    def event_type(self) -> Type[EventInterface]:
+        return ToyEvent
+
     def ncounts(self) -> float:
 
         if self._source is None:
@@ -244,19 +245,16 @@ class ToyPointSourceResponse(BinnedThreeMLSourceResponseInterface, UnbinnedThree
         ns_events = self._sel_fraction * self._source.spectrum.main.shape.k.value
         return ns_events
 
-    def expectation_density(self, start:Optional[int] = None, stop:Optional[int] = None) -> Iterable[float]:
+    def event_probability(self, start:Optional[int] = None, stop:Optional[int] = None) -> Iterable[float]:
 
-        # I expect in the real case it'll be more efficient to compute
-        # (ncounts, ncounts*prob) than (ncounts, prob)
-
-        cache = self.ncounts()*norm.pdf([event.x for event in itertools.islice(self._data, start, stop)])
+        cache = norm.pdf([event.x for event in itertools.islice(self._data, start, stop)])
 
         for n in cache:
             yield n
 
         # Alternative version without cache (slower)
         # for event in itertools.islice(self._data, start, stop):
-        #     yield self.ncounts()*norm.pdf(event.x)
+        #     yield norm.pdf(event.x)
 
 
     def set_source(self, source: Source):
@@ -296,6 +294,10 @@ class ToyModelFolding(BinnedThreeMLModelFoldingInterface, UnbinnedThreeMLModelFo
         self._psr = psr
         self._psr_copies = {}
 
+    @property
+    def event_type(self):
+        return ToyEvent
+
     def ncounts(self) -> float:
 
         ncounts = 0
@@ -305,12 +307,12 @@ class ToyModelFolding(BinnedThreeMLModelFoldingInterface, UnbinnedThreeMLModelFo
 
         return ncounts
 
-    def expectation_density(self, start:Optional[int] = None, stop:Optional[int] = None) -> Iterable[float]:
+    def event_probability(self, start:Optional[int] = None, stop:Optional[int] = None) -> Iterable[float]:
 
         self._cache_psr_copies()
 
-        for expectations in zip(*[p.expectation_density(start, stop) for p in self._psr_copies.values()]):
-            yield np.sum(expectations)
+        for prob in zip(*[p.event_probability(start, stop) for p in self._psr_copies.values()]):
+            yield np.sum(prob)
 
     def set_model(self, model: Model):
 

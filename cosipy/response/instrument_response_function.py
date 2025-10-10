@@ -87,8 +87,8 @@ class UnpolarizedDC3InterpolatedFarFieldInstrumentResponseFunction(FarFieldInstr
                              photon.energy_keV,
                              event.energy_keV,
                              event.scattering_angle_rad,
-                             event.scattered_lat_rad,
-                             event.scattered_lon_rad,
+                             event.scattered_lat_rad_sc,
+                             event.scattered_lon_rad_sc,
                             ] for photon,event in query_chunk], dtype=float).transpose()
 
             direction_ph = SkyCoord(lon_ph, lat_ph, unit = u.rad, frame = SpacecraftFrame())

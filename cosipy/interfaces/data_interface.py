@@ -8,8 +8,8 @@ import astropy.units as u
 from scoords import SpacecraftFrame
 
 from . import EventWithEnergyInterface
-from .event import EventInterface, TimeTagEventInterface, ComptonDataSpaceEventInterface, \
-    ComptonDataSpaceInSCFrameEventInterface, TimeTagEmCDSEventInSCFrameInterface
+from .event import EventInterface, TimeTagEventInterface, \
+    ComptonDataSpaceInSCFrameEventInterface, TimeTagEmCDSEventInSCFrameInterface, EventWithScatteringAngleInterface
 from histpy import Histogram, Axes
 
 from astropy.time import Time
@@ -30,9 +30,7 @@ __all__ = ["DataInterface",
 
 @runtime_checkable
 class DataInterface(Protocol):
-
-    # Type returned by __iter__ in the event data case
-    event_type = ClassVar[Type]
+    pass
 
 @runtime_checkable
 class BinnedDataInterface(DataInterface, Protocol):
@@ -53,10 +51,11 @@ class BinnedDataInterface(DataInterface, Protocol):
 
         """
 
-
-
 @runtime_checkable
 class EventDataInterface(DataInterface, Protocol):
+
+    # Type returned by __iter__
+    event_type = ClassVar[Type[EventInterface]]
 
     def __iter__(self) -> Iterator[EventInterface]:
         """
@@ -81,7 +80,7 @@ class EventDataInterface(DataInterface, Protocol):
         return sum(1 for _ in iter(self))
 
     @property
-    def ids(self) -> Iterable[int]:
+    def id(self) -> Iterable[int]:
         return [e.id for e in self]
 
 @runtime_checkable
@@ -117,16 +116,14 @@ class EventDataWithEnergyInterface(EventDataInterface, Protocol):
         """
         return Quantity(self.energy_rad, u.rad)
 
+
 @runtime_checkable
-class ComptonDataSpaceEventDataInterface(EventDataInterface, Protocol):
+class EventDataWithScatteringAngleInterface(EventDataInterface, Protocol):
 
-    def __iter__(self) -> Iterator[ComptonDataSpaceEventInterface]:...
-
-    @property
-    def frame(self) -> BaseCoordinateFrame: ...
+    def __iter__(self) -> Iterator[EventWithScatteringAngleInterface]:...
 
     @property
-    def scattering_angle_rad(self) -> Iterable[float]:...
+    def scattering_angle_rad(self) -> Iterable[float]: ...
 
     @property
     def scattering_angle(self) -> Angle:
@@ -135,33 +132,32 @@ class ComptonDataSpaceEventDataInterface(EventDataInterface, Protocol):
         """
         return Angle(self.scattering_angle_rad, u.rad)
 
-    @property
-    def scattered_lon_rad(self) -> Iterable[float]: ...
+@runtime_checkable
+class ComptonDataSpaceInSCFrameEventDataInterface(EventDataWithScatteringAngleInterface, Protocol):
+
+    def __iter__(self) -> Iterator[ComptonDataSpaceInSCFrameEventInterface]:...
 
     @property
-    def scattered_lat_rad(self) -> Iterable[float]: ...
+    def scattered_lon_rad_sc(self) -> Iterable[float]: ...
 
     @property
-    def scattered_direction(self) -> SkyCoord:
+    def scattered_lat_rad_sc(self) -> Iterable[float]: ...
+
+    @property
+    def scattered_direction_sc(self) -> SkyCoord:
         """
         Add fancy energy quantity
         """
-        return SkyCoord(self.scattered_lon_rad,
-                        np.pi/2 - self.scattered_lat_rad,
+        return SkyCoord(self.scattered_lon_rad_sc,
+                        np.pi / 2 - self.scattered_lat_rad_sc,
                         unit = u.rad,
-                        frame = self.frame)
+                        frame = SpacecraftFrame())
 
 @runtime_checkable
 class EventDataInSCFrameInterface(EventDataInterface, Protocol):
 
     @property
     def frame(self) -> SpacecraftFrame:...
-
-@runtime_checkable
-class ComptonDataSpaceInSCFrameEventDataInterface(EventDataInSCFrameInterface,
-                                                  ComptonDataSpaceEventDataInterface,
-                                                  Protocol):
-    def __iter__(self) -> Iterator[ComptonDataSpaceInSCFrameEventInterface]:...
 
 class TimeTagEmCDSEventDataInSCFrameInterface(TimeTagEventDataInterface,
                                               EventDataWithEnergyInterface,

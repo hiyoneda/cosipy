@@ -17,7 +17,7 @@ import pandas as pd
 
 from .scatt_map import SpacecraftAttitudeMap
 
-from typing import Union
+from typing import Union, Optional
 
 import logging
 logger = logging.getLogger(__name__)
@@ -324,12 +324,14 @@ class SpacecraftHistory:
 
         return cum_livetime
 
-    def cumulative_livetime(self, time: Time) -> u.Quantity:
+    def cumulative_livetime(self, time: Optional[Time] = None) -> u.Quantity:
         """
         Get the cumulative live obstime up to this obstime.
 
         The live obstime in between the internal timestamp is
         assumed constant.
+
+        All by edfault
 
         Parameters
         ----------
@@ -340,6 +342,10 @@ class SpacecraftHistory:
         -------
         Cummulative live obstime, with units.
         """
+
+        if time is None:
+            # All
+            return np.sum(self.livetime)
 
         points, weights = self.interp_weights(time)
 

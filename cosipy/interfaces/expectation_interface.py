@@ -1,4 +1,6 @@
-from typing import Protocol, runtime_checkable, Dict, Any, Generator, Iterable, Optional, Union, Iterator
+import operator
+from typing import Protocol, runtime_checkable, Dict, Any, Generator, Iterable, Optional, Union, Iterator, ClassVar, \
+    Type
 
 import histpy
 import numpy as np
@@ -37,16 +39,34 @@ class BinnedExpectationInterface(ExpectationInterface, Protocol):
 
 @runtime_checkable
 class ExpectationDensityInterface(ExpectationInterface, Protocol):
+    """
+    This interface doesn't take an EventDataInterface or Iterable[EventInterface]
+    because that would complicate caching. The stream of events is assumed
+    constant after selection.
+    """
+
+    # The event class that the instance handles
+    @property
+    def event_type(self) -> Type[EventInterface]:
+        """
+        The event class that the implementation can handle
+        """
 
     def ncounts(self) -> float:
         """
         Total expected counts
         """
 
-    def expectation_density(self, start:Optional[int] = None, stop:Optional[int] = None) -> Iterable[float]:
+    def event_probability(self, start:Optional[int] = None, stop:Optional[int] = None) -> Iterable[float]:
         """
-        Return the expected number of counts density from the start-th event
-        to the stop-th event.
+        Return the probability of obtaining the observed set of measurement of each event,
+        given that the event was detected. It equals the expectation density times ncounts
+
+        The units of the output the inverse of the phase space of the event_type data space.
+        e.g. if the event measured energy in keV, the units of output of this function are implicitly 1/keV
+
+        This is provided as a helper function assuming the child classes implemented expectation_density
+
 
         Parameters
         ----------
@@ -55,5 +75,45 @@ class ExpectationDensityInterface(ExpectationInterface, Protocol):
         stop: None|int
             Until the end by default
         """
+
+        # Guard to avoid infinite recursion in incomplete child classes
+        cls = type(self)
+        if (
+                cls.event_probability is ExpectationDensityInterface.event_probability
+                and
+                cls.expectation_density is ExpectationDensityInterface.expectation_density):
+            raise NotImplementedError("Implement event_probability and/or expectation_density")
+
+        ncounts = self.ncounts()
+        return [expectation/ncounts for expectation in self.expectation_density(start, stop)]
+
+    def expectation_density(self, start:Optional[int] = None, stop:Optional[int] = None) -> Iterable[float]:
+        """
+        Return the expected number of counts density from the start-th event
+        to the stop-th event. This equals the event probabiliy times the number of events
+
+        This is provided as a helper function assuming the child classes implemented event_probability
+
+        Parameters
+        ----------
+        start
+        stop
+
+        Returns
+        -------
+
+        """
+        # Guard to avoid infinite recursion in incomplete child classes
+        cls = type(self)
+        if (
+                cls.event_probability is ExpectationDensityInterface.event_probability
+                and
+                cls.expectation_density is ExpectationDensityInterface.expectation_density):
+            raise NotImplementedError("Implement event_probability and/or expectation_density")
+
+        ncounts = self.ncounts()
+        return [prob*ncounts for prob in self.event_probability(start, stop)]
+
+
 
 

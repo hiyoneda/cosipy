@@ -92,6 +92,11 @@ class UnbinnedLikelihood(UnbinnedLikelihoodInterface):
 
         self._nobservations = nobservations
 
+        # Log L = -Ntot + sum_i (dN/dOmega)_i
+        # (dN/dOmega)_i is the expectation density, not a derivative
+        # (dN/dOmega)_i = Ntot*P_i, where P_i is the event probability
+        # Alternatively
+        # Log L = Ntot(Nevents - 1) + sum_i P_i
         log_like = density_log_sum - ntot
 
         return log_like

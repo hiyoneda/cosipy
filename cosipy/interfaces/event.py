@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
-from typing import Sequence, Union, Protocol
+from symtable import Class
+from typing import Sequence, Union, Protocol, ClassVar
 
 import numpy as np
 from astropy.coordinates import Angle, SkyCoord, BaseCoordinateFrame
@@ -16,31 +17,14 @@ __all__ = [
     "EventWithEnergyInterface",
 ]
 
-class EventMetadata:
-
-    def __init__(self):
-        self._metadata = {}
-
-    def __getitem__(self, key):
-        return self._metadata[key]
-
-    def __setitem__(self, key, value):
-        self._metadata[key] = value
-        setattr(self, key, value)
-
-    def __delitem__(self, key):
-        if key in self._metadata:
-            del self._metadata[key]
-            delattr(self, key)
-
-    def __repr__(self):
-        return f"{self.__class__.__name__}({self._metadata})"
-
 @runtime_checkable
 class EventInterface(Protocol):
     """
     Derived classes implement all accessors
     """
+
+    # This makes sure that all PDFs have the same units
+    data_space_units = ClassVar[Union[u.Unit, None]]
 
     @property
     def id(self) -> int:
@@ -50,11 +34,10 @@ class EventInterface(Protocol):
         No necessarily in sequential order
         """
 
-    @property
-    def metadata(self) -> EventMetadata:...
-
 @runtime_checkable
 class TimeTagEventInterface(EventInterface, Protocol):
+
+    data_space_units = u.s
 
     @property
     def jd1(self) -> float:...
@@ -72,6 +55,8 @@ class TimeTagEventInterface(EventInterface, Protocol):
 @runtime_checkable
 class EventWithEnergyInterface(EventInterface, Protocol):
 
+    data_space_units = u.keV
+
     @property
     def energy_keV(self) -> float:...
 
@@ -83,13 +68,13 @@ class EventWithEnergyInterface(EventInterface, Protocol):
         return Quantity(self.energy_keV, u.keV)
 
 @runtime_checkable
-class ComptonDataSpaceEventInterface(EventInterface, Protocol):
+class EventWithScatteringAngleInterface(EventInterface, Protocol):
 
-    @property
-    def frame(self) -> BaseCoordinateFrame:...
+    data_space_units = u.rad
 
     @property
     def scattering_angle_rad(self) -> float: ...
+
 
     @property
     def scattering_angle(self) -> Angle:
@@ -98,47 +83,39 @@ class ComptonDataSpaceEventInterface(EventInterface, Protocol):
         """
         return Angle(self.scattering_angle_rad, u.rad)
 
-    @property
-    def scattered_lon_rad(self) -> float: ...
+
+@runtime_checkable
+class ComptonDataSpaceInSCFrameEventInterface(EventWithScatteringAngleInterface, Protocol):
+
+    data_space_units = EventWithScatteringAngleInterface.data_space_units * u.sr
 
     @property
-    def scattered_lat_rad(self) -> float: ...
+    def scattered_lon_rad_sc(self) -> float: ...
 
     @property
-    def scattered_direction(self) -> SkyCoord:
+    def scattered_lat_rad_sc(self) -> float: ...
+
+    @property
+    def scattered_direction_sc(self) -> SkyCoord:
         """
         Add fancy energy quantity
         """
-        return SkyCoord(self.scattered_lon_rad,
-                        np.pi/2 - self.scattered_lat_rad,
+        return SkyCoord(self.scattered_lon_rad_sc,
+                        np.pi / 2 - self.scattered_lat_rad_sc,
                         unit=u.rad,
-                        frame=self.frame)
-
-
-@runtime_checkable
-class EventInSCFrameInterface(EventInterface, Protocol):
-
-    @property
-    def frame(self) -> SpacecraftFrame:...
+                        frame=SpacecraftFrame())
 
 @runtime_checkable
-class ComptonDataSpaceInSCFrameEventInterface(EventInSCFrameInterface,
-                                              ComptonDataSpaceEventInterface,
-                                              Protocol):
-    pass
-
-@runtime_checkable
-class EmCDSEventInSCFrameInterface(EventInSCFrameInterface,
-                                   EventWithEnergyInterface,
-                                   ComptonDataSpaceEventInterface,
+class EmCDSEventInSCFrameInterface(EventWithEnergyInterface,
+                                   ComptonDataSpaceInSCFrameEventInterface,
                                    Protocol):
-    pass
+    data_space_units = ComptonDataSpaceInSCFrameEventInterface.data_space_units * EventWithEnergyInterface.data_space_units
 
 @runtime_checkable
 class TimeTagEmCDSEventInSCFrameInterface(TimeTagEventInterface,
                                           EmCDSEventInSCFrameInterface,
                                           Protocol):
-    pass
+    data_space_units = EmCDSEventInSCFrameInterface.data_space_units * TimeTagEventInterface.data_space_units
 
 
 

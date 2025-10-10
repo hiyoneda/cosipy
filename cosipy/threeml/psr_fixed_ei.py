@@ -1,5 +1,5 @@
 import copy
-from typing import Optional, Iterable
+from typing import Optional, Iterable, Type
 
 import numpy as np
 from astromodels import PointSource
@@ -10,9 +10,9 @@ from histpy import Axis
 
 from cosipy import SpacecraftHistory
 from cosipy.data_io.EmCDSUnbinnedData import EmCDSEventInSCFrame
-from cosipy.interfaces import UnbinnedThreeMLSourceResponseInterface
+from cosipy.interfaces import UnbinnedThreeMLSourceResponseInterface, EventInterface
 from cosipy.interfaces.data_interface import TimeTagEmCDSEventDataInSCFrameInterface
-from cosipy.interfaces.event import EmCDSEventInSCFrameInterface
+from cosipy.interfaces.event import EmCDSEventInSCFrameInterface, TimeTagEmCDSEventInSCFrameInterface
 from cosipy.interfaces.instrument_response_interface import FarFieldInstrumentResponseFunctionInterface
 from cosipy.response.photon_types import PhotonWithDirectionAndEnergyInSCFrame
 
@@ -71,20 +71,21 @@ class UnbinnedThreeMLPointSourceResponseTrapz(UnbinnedThreeMLSourceResponseInter
 
         # For integral for nevents
         # int Aeff(t, Ei) F(Ei) dt dEi
-        # Will need to multiply by F(Ei) and sum.
-        # It includes the trapezoidal rule weights
-        # and the time integral based on source position
-        # and SC history
+        # Will need to multiply by _trapz_weights*F(Ei) and sum.
         # Once per Ei
-        self._nevents_weights = None # In cm2*s*keV
+        self._exposure = None # In cm2*s
 
         # axis 0: events
         # axis 1: energy_i samples
-        self._event_prob_weights = None
+        self._event_prob_weights = None # in cm2/keV
 
         # Integrated over Ei
         self._nevents = None
         self._event_prob = None
+
+    @property
+    def event_type(self) -> Type[EventInterface]:
+        return TimeTagEmCDSEventInSCFrameInterface
 
     def set_source(self, source: Source):
         """
@@ -102,7 +103,7 @@ class UnbinnedThreeMLPointSourceResponseTrapz(UnbinnedThreeMLSourceResponseInter
         self._last_convolved_source_dict = None
         self._last_convolved_source_skycoord = None
         self._nevents = None
-        self._nevents_weights = None
+        self._exposure = None
         self._event_prob = None
         self._event_prob_weights = None
 
@@ -142,7 +143,7 @@ class UnbinnedThreeMLPointSourceResponseTrapz(UnbinnedThreeMLSourceResponseInter
             # Nothing has changed
             return
 
-        if (self._nevents_weights is None) or (self._event_prob_weights is None) or coord != self._last_convolved_source_skycoord:
+        if (self._exposure is None) or (self._event_prob_weights is None) or coord != self._last_convolved_source_skycoord:
             # Updating the location is very cost intensive. Only do if necessary
 
             # Compute nevents integral by integrating though the SC history
@@ -155,26 +156,30 @@ class UnbinnedThreeMLPointSourceResponseTrapz(UnbinnedThreeMLSourceResponseInter
             # For each SC timestamp, get the effective area for each energy point, store it as temporary array,
             # and multiply by livetime.
             # Sum up the exposure (one per energy point) without saving it to memory
+            # TODO: account for Earth occultation
             exposure = sum([dt*np.fromiter(self._irf.effective_area_cm2([PhotonWithDirectionAndEnergyInSCFrame(c.lon.rad, c.lat.rad, e)
                                                                          for e in self._energies_keV]), dtype = float)
                             for c,dt in zip(sc_coord_sph,self._sc_ori.livetime.to_value(u.s))])
 
-            self._nevents_weights = exposure * self._trapz_weights
+            self._exposure = exposure # cm2 * s
 
             # Get the probability for each event for the source location and each Ei
-            sc_coord_vec = self._attitude_at_event_times.rot[:-1].apply(coord_vec)
+            # TODO: account for livetime and Earth occultation
+            sc_coord_vec = self._attitude_at_event_times.rot.apply(coord_vec)
             sc_coord_sph = UnitSphericalRepresentation.from_cartesian(CartesianRepresentation(*sc_coord_vec.transpose()))
-            self._event_prob_weights = np.fromiter(self._irf.event_probability([(PhotonWithDirectionAndEnergyInSCFrame(coord.lon.rad, coord.lat.rad, energy), event)
+            self._event_prob_weights = np.fromiter(self._irf.differential_effective_area_cm2([(PhotonWithDirectionAndEnergyInSCFrame(coord.lon.rad, coord.lat.rad, energy), event)
                                                                                 for coord,event in zip(sc_coord_sph, self._data) \
                                                                                 for energy in self._energies_keV]),
-                                                   dtype = float)
+                                                   dtype = float) # cm2 / keV.rad.sr
 
             self._event_prob_weights = self._event_prob_weights.reshape((sc_coord_sph.size, self._energies_keV.size))
 
-        # 3ML default units as cm, s and keV
-        flux_values = self._source(self._energies_keV)
-        self._nevents = np.sum(self._nevents_weights * flux_values)
-        self._event_prob = np.sum((self._event_prob_weights * flux_values[None, :]), axis=1)
+        flux_values = self._source(self._energies_keV) #1/cm2/s/keV (3Ml default)
+        weight_flux_values = flux_values * self._trapz_weights #1/cm2/s
+        self._nevents = np.sum(self._exposure * weight_flux_values) # unit-less
+
+        self._event_prob = np.sum((self._event_prob_weights * weight_flux_values[None, :]), axis=1) # 1/keV.s.rad.sr
+        self._event_prob /= self._nevents
 
         self._last_convolved_source_dict = source_dict
         self._last_convolved_source_skycoord = coord.copy()
@@ -189,7 +194,7 @@ class UnbinnedThreeMLPointSourceResponseTrapz(UnbinnedThreeMLSourceResponseInter
         return self._nevents
 
 
-    def expectation_density(self, start:Optional[int] = None, stop:Optional[int] = None) -> Iterable[float]:
+    def event_probability(self, start:Optional[int] = None, stop:Optional[int] = None) -> Iterable[float]:
         """
         Return the expected number of counts density from the start-th event
         to the stop-th event.

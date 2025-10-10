@@ -190,7 +190,9 @@ def main():
 
     data = crab_bkg.get_em_cds()
 
-    bkg = FreeNormBinnedBackground(bkg_dist)
+    bkg = FreeNormBinnedBackground(bkg_dist,
+                                   sc_history=sc_orientation,
+                                   copy = False)
 
     # Currently using the same NnuLambda, Ei and Pol axes as the underlying FullDetectorResponse,
     # matching the behavior of v0.3. This is all the current BinnedInstrumentResponse can do.

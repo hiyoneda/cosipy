@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Iterable, Iterator, Optional, Tuple
+from typing import Iterable, Iterator, Optional, Tuple, Union, List
 
 import numpy as np
 from astropy.coordinates import BaseCoordinateFrame, Angle, SkyCoord, UnitSphericalRepresentation
@@ -10,8 +10,8 @@ from scoords import SpacecraftFrame
 
 from cosipy import UnBinnedData
 from cosipy.interfaces import EventWithEnergyInterface, EventDataInterface, EventDataWithEnergyInterface
-from cosipy.interfaces.data_interface import ComptonDataSpaceEventDataInterface, TimeTagEmCDSEventDataInSCFrameInterface
-from cosipy.interfaces.event import ComptonDataSpaceEventInterface, TimeTagEmCDSEventInSCFrameInterface, \
+from cosipy.interfaces.data_interface import  TimeTagEmCDSEventDataInSCFrameInterface
+from cosipy.interfaces.event import  TimeTagEmCDSEventInSCFrameInterface, \
     EmCDSEventInSCFrameInterface
 
 import astropy.units as u
@@ -56,11 +56,11 @@ class EmCDSEventInSCFrame(EmCDSEventInSCFrameInterface):
         return self._scatt_angle
 
     @property
-    def scattered_lon_rad(self) -> float:
+    def scattered_lon_rad_sc(self) -> float:
         return self._scatt_lon
 
     @property
-    def scattered_lat_rad(self) -> float:
+    def scattered_lat_rad_sc(self) -> float:
         return self._scatt_lat
 
 class TimeTagEmCDSEventInSCFrame(EmCDSEventInSCFrame, TimeTagEmCDSEventInSCFrameInterface):
@@ -157,8 +157,8 @@ class TimeTagEmCDSEventDataInSCFrameFromArrays(TimeTagEmCDSEventDataInSCFrameInt
                 new_jd2.append(event.jd2)
                 new_energy.append(event.energy_keV)
                 new_scatt_angle.append(event.scattering_angle_rad)
-                new_scatt_lat.append(event.scattered_lat_rad)
-                new_scatt_lon.append(event.scattered_lon_rad)
+                new_scatt_lat.append(event.scattered_lat_rad_sc)
+                new_scatt_lon.append(event.scattered_lon_rad_sc)
                 nevents +=  1
 
             self._nevents = nevents
@@ -200,7 +200,7 @@ class TimeTagEmCDSEventDataInSCFrameFromArrays(TimeTagEmCDSEventDataInSCFrameInt
         return self._jd2
 
     @property
-    def energy_rad(self) -> Iterable[float]:
+    def energy_keV(self) -> Iterable[float]:
         return self._energy
 
     @property
@@ -208,16 +208,16 @@ class TimeTagEmCDSEventDataInSCFrameFromArrays(TimeTagEmCDSEventDataInSCFrameInt
         return self._scatt_angle
 
     @property
-    def scattered_lon_rad(self) -> Iterable[float]:
+    def scattered_lon_rad_sc(self) -> Iterable[float]:
         return self._scatt_lon
 
     @property
-    def scattered_lat_rad(self) -> Iterable[float]:
+    def scattered_lat_rad_sc(self) -> Iterable[float]:
         return self._scatt_angle
 
 class TimeTagEmCDSEventDataInSCFrameFromDC3Fits(TimeTagEmCDSEventDataInSCFrameFromArrays):
 
-    def __init__(self, *data_path: Tuple[Path],
+    def __init__(self, data_path: Union[Path, List[Path]],
                  selection:EventSelectorInterface = None):
 
         time = np.empty(0)
@@ -226,9 +226,12 @@ class TimeTagEmCDSEventDataInSCFrameFromDC3Fits(TimeTagEmCDSEventDataInSCFrameFr
         psi = np.empty(0)
         chi = np.empty(0)
 
+        if isinstance(data_path, (str, Path)):
+            data_path = [Path(data_path)]
+
         for file in data_path:
             # get_dict_from_fits is really a static method, no config file needed
-            data_dict = UnBinnedData.get_dict_from_fits(None, file)
+            data_dict = UnBinnedData.get_dict_from_fits(None, str(file))
 
             time = np.append(time, data_dict['TimeTags'])
             energy = np.append(energy, data_dict['Energies'])
