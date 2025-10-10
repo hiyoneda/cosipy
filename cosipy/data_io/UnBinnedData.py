@@ -94,6 +94,7 @@ class UnBinnedData(DataIO):
             self.data_file = input_name
             
         start_time = time.time()
+				
         # Initialise empty lists:
             
         # Total photon energy
