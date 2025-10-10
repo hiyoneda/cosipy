@@ -1,6 +1,4 @@
 # Imports:
-from abc import ABC
-
 import numpy as np
 from astropy.table import Table
 from astropy.io import fits
@@ -9,8 +7,7 @@ import h5py
 import time
 import cosipy
 from cosipy.data_io import DataIO
-from cosipy.interfaces.data_interface import TimeTagEventData, EventDataWithEnergy
-from cosipy.spacecraftfile import SpacecraftHistory
+from cosipy.spacecraftfile import SpacecraftFile
 import gzip
 import astropy.coordinates as astro_co
 import astropy.units as u
@@ -25,7 +22,6 @@ import subprocess
 import gc
 import os
 import time
-
 logger = logging.getLogger(__name__)
 
 
@@ -98,7 +94,6 @@ class UnBinnedData(DataIO):
             self.data_file = input_name
             
         start_time = time.time()
-
         # Initialise empty lists:
             
         # Total photon energy
@@ -450,7 +445,7 @@ class UnBinnedData(DataIO):
         """
 
         # Get ori info:
-        ori = SpacecraftHistory.open(self.ori_file)
+        ori = SpacecraftFile.parse_from_file(self.ori_file)
         time_tags = ori._load_time
         x_pointings = ori.x_pointings
         z_pointings = ori.z_pointings
@@ -851,7 +846,7 @@ class UnBinnedData(DataIO):
             self.cosi_dataset = self.get_dict(unbinned_data)
 
         # Get ori info:
-        ori = SpacecraftHistory.open(self.ori_file)
+        ori = SpacecraftFile.parse_from_file(self.ori_file)
         
         # Get bad time intervals:
         bti = self.find_bad_intervals(ori._time, ori.livetime)
@@ -870,5 +865,3 @@ class UnBinnedData(DataIO):
             self.write_unbinned_output(output_name)
 
         return
-
-
