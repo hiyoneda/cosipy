@@ -150,7 +150,7 @@ class UnbinnedThreeMLPointSourceResponseTrapz(UnbinnedThreeMLSourceResponseInter
             # This only computes the weights based on the source location.
             # Once we know the source source spectrum, we can integrate over Ei
             coord_vec = coord.transform_to(self._sc_ori.attitude.frame).cartesian.xyz.value
-            sc_coord_vec = self._sc_ori.attitude.rot[:-1].apply(coord_vec)
+            sc_coord_vec = self._sc_ori.attitude.rot[:-1].inv().apply(coord_vec)
             sc_coord_sph = UnitSphericalRepresentation.from_cartesian(CartesianRepresentation(*sc_coord_vec.transpose()))
 
             # For each SC timestamp, get the effective area for each energy point, store it as temporary array,
@@ -165,7 +165,7 @@ class UnbinnedThreeMLPointSourceResponseTrapz(UnbinnedThreeMLSourceResponseInter
 
             # Get the probability for each event for the source location and each Ei
             # TODO: account for livetime and Earth occultation
-            sc_coord_vec = self._attitude_at_event_times.rot.apply(coord_vec)
+            sc_coord_vec = self._attitude_at_event_times.rot.inv().apply(coord_vec)
             sc_coord_sph = UnitSphericalRepresentation.from_cartesian(CartesianRepresentation(*sc_coord_vec.transpose()))
             self._event_prob_weights = np.fromiter(self._irf.differential_effective_area_cm2([(PhotonWithDirectionAndEnergyInSCFrame(coord.lon.rad, coord.lat.rad, energy), event)
                                                                                 for coord,event in zip(sc_coord_sph, self._data) \

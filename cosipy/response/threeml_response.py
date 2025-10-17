@@ -35,6 +35,9 @@ class ThreeMLModelFoldingCacheSourceResponsesMixin:
         Updates _cached_model_dict and _source_responses
         """
 
+        if self._model is None:
+            raise RuntimeError("Call set_model() first.")
+
         # See this issue for the caveats of comparing models
         # https://github.com/threeML/threeML/issues/645
         current_model_dict = self._model.to_dict()

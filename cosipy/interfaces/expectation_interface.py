@@ -1,6 +1,6 @@
 import operator
 from typing import Protocol, runtime_checkable, Dict, Any, Generator, Iterable, Optional, Union, Iterator, ClassVar, \
-    Type
+    Type, Tuple
 
 import histpy
 import numpy as np
@@ -114,6 +114,37 @@ class ExpectationDensityInterface(ExpectationInterface, Protocol):
         ncounts = self.ncounts()
         return [prob*ncounts for prob in self.event_probability(start, stop)]
 
+class SumExpectationDensity(ExpectationDensityInterface):
+    """
+    Convenience class to sum multiple ExpectationDensityInterface implementation
+    """
+
+    def __init__(self, *expectations:Tuple[ExpectationDensityInterface]):
+        self._expectations = expectations
+
+        self._event_type = expectations[0].event_type
+
+        for ex in expectations:
+            if ex.event_type is not self._event_type:
+                raise TypeError("All expectations should have the same event type")
+
+    @property
+    def event_type(self) -> Type[EventInterface]:
+        """
+        The event class that the implementation can handle
+        """
+        return self._event_type
+
+    def ncounts(self) -> float:
+        """
+        Total expected counts
+        """
+        return sum(ex.ncounts() for ex in self._expectations)
+
+    def expectation_density(self, start: Optional[int] = None, stop: Optional[int] = None) -> Iterable[float]:
+
+        for exdensity in zip(*[ex.expectation_density(start, stop) for ex in self._expectations]):
+            yield sum(exdensity)
 
 
 

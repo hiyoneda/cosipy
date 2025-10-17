@@ -22,8 +22,8 @@ __all__ = ['UnbinnedLikelihood',
            'PoissonLikelihood']
 
 class UnbinnedLikelihood(UnbinnedLikelihoodInterface):
-    def __init__(self, response:ExpectationDensityInterface,
-                 bkg:BackgroundDensityInterface = None,
+    def __init__(self,
+                 expectation:ExpectationDensityInterface,
                  batch_size:int = 100000):
         """
         Will get the number of events from the response and bkg expectation_density iterators
@@ -34,15 +34,10 @@ class UnbinnedLikelihood(UnbinnedLikelihoodInterface):
         bkg
         """
 
-        self._bkg = bkg
-        self._response = response
+        self._expectation = expectation
         self._nobservations = None
 
         self._batch_size = batch_size
-
-    @property
-    def has_bkg(self):
-        return self._bkg is not None
 
     @property
     def nobservations(self) -> int:
@@ -52,31 +47,14 @@ class UnbinnedLikelihood(UnbinnedLikelihoodInterface):
         """
 
         if self._nobservations is None:
-            self._nobservations = sum(1 for _ in self._get_density_iter())
+            self._nobservations = sum(1 for _ in  self._expectation.expectation_density())
 
         return self._nobservations
 
-    def _get_density_iter(self):
-
-        if self.has_bkg:
-
-            signal_density = self._response.expectation_density()
-            bkg_density = self._bkg.expectation_density()
-
-            return map(operator.add, signal_density, bkg_density)
-
-        else:
-
-            return self._response.expectation_density()
-
     def get_log_like(self) -> float:
 
-        # Compute expectation including background
-
-        ntot = self._response.ncounts()
-
-        if self.has_bkg:
-            ntot += self._bkg.ncounts()
+        # Total number of events
+        ntot = self._expectation.ncounts()
 
         # It's faster to compute all log values at once, but requires keeping them in memory
         # Doing it by chunk is a compromise. We might need to adjust the chunk_size
@@ -84,7 +62,7 @@ class UnbinnedLikelihood(UnbinnedLikelihoodInterface):
         nobservations = 0
         density_log_sum = 0
 
-        for density_iter_chunk in itertools_batched(self._get_density_iter(), self._batch_size):
+        for density_iter_chunk in itertools_batched(self._expectation.expectation_density(), self._batch_size):
 
             density = np.fromiter(density_iter_chunk, dtype=float)
             density_log_sum += np.sum(np.log(density))
@@ -95,8 +73,6 @@ class UnbinnedLikelihood(UnbinnedLikelihoodInterface):
         # Log L = -Ntot + sum_i (dN/dOmega)_i
         # (dN/dOmega)_i is the expectation density, not a derivative
         # (dN/dOmega)_i = Ntot*P_i, where P_i is the event probability
-        # Alternatively
-        # Log L = Ntot(Nevents - 1) + sum_i P_i
         log_like = density_log_sum - ntot
 
         return log_like

@@ -14,6 +14,7 @@ from cosipy.event_selection.time_selection import TimeSelector
 from cosipy.interfaces.background_interface import BackgroundDensityInterface
 from cosipy.interfaces.data_interface import EventDataInterface, DataInterface, TimeTagEventDataInterface
 from cosipy.interfaces.event_selection import EventSelectorInterface
+from cosipy.interfaces.expectation_interface import SumExpectationDensity
 
 from cosipy.statistics import PoissonLikelihood, UnbinnedLikelihood
 
@@ -54,11 +55,15 @@ toy_axis = Axis(np.linspace(-5, 5), label = 'x')
 nevents_signal = 1000
 nevents_bkg = 1000
 nevents_tot = nevents_signal + nevents_bkg
+use_bkg = True
+use_signal = True
 
 class ToyEvent(TimeTagEventInterface, EventInterface):
     """
     Unit-less 1D data of a measurement called "x" (could be anything)
     """
+
+    data_space_units = u.s
 
     def __init__(self, index:int, x:float, time:Time):
         self._id = index
@@ -83,8 +88,7 @@ class ToyEvent(TimeTagEventInterface, EventInterface):
         return self._jd2
 
 class ToyData(DataInterface):
-
-    event_type = ToyEvent
+    pass
 
 class ToyEventDataLoader(ToyData):
     # This simulates reading event from file
@@ -93,13 +97,20 @@ class ToyEventDataLoader(ToyData):
     def __init__(self):
         rng = np.random.default_rng()
 
-        self._x = np.append(rng.normal(size=nevents_signal),
-                            rng.uniform(toy_axis.lo_lim, toy_axis.hi_lim, size=nevents_bkg))
+        signal = rng.normal(size=nevents_signal)
+        bkg = rng.uniform(toy_axis.lo_lim, toy_axis.hi_lim, size=nevents_bkg)
+
+        if use_signal and use_bkg:
+            self._x = np.append(signal,bkg)
+        elif use_bkg:
+            self._x = bkg
+        elif use_signal:
+            self._x = signal
 
         self._tstart = Time("2000-01-01T00:00:00")
         self._tstop = Time("2000-01-02T00:00:00")
 
-        dt = np.random.uniform(size=nevents_tot)
+        dt = np.random.uniform(size=self._x.size)
         dt_sort = np.argsort(dt)
         self._x = self._x[dt_sort]
         dt = dt[dt_sort]
@@ -113,6 +124,8 @@ class ToyEventDataLoader(ToyData):
 
 class ToyEventData(TimeTagEventDataInterface, ToyData):
     # Random data. Normal signal on top of uniform bkg
+
+    event_type = ToyEvent
 
     def __init__(self, loader:ToyEventDataLoader, selector:EventSelectorInterface = None):
 
@@ -183,32 +196,31 @@ class ToyBkg(BinnedBackgroundInterface, BackgroundDensityInterface):
     def __init__(self, data: ToyEventData, duration:Quantity):
 
         self._data = data
+        self._duration = duration.to_value(u.s)
         self._unit_expectation = Histogram(toy_axis)
-        self._unit_expectation[:] = 1 / self._unit_expectation.nbins
-        self._norm = 1
+        self._unit_expectation[:] = self._duration / self._unit_expectation.nbins
+        self._norm = 1 # Hz
 
-        self._sel_fraction = (duration/(1*u.day)).to_value('')
-        self._probability = self._sel_fraction / (toy_axis.hi_lim - toy_axis.lo_lim)
+        self._unit_expectation_density = self._duration / (toy_axis.hi_lim - toy_axis.lo_lim)
 
+    @property
     def event_type(self) -> Type[EventInterface]:
         return ToyEvent
 
     def set_parameters(self, **parameters:u.Quantity) -> None:
-        self._norm = parameters['norm'].value
+        self._norm = parameters['norm'].to_value(u.Hz)
 
     def ncounts(self) -> float:
-        return self._norm * self._sel_fraction
+        return self._norm * self._duration
 
-    def event_probability(self, start:Optional[int] = None, stop:Optional[int] = None) -> Iterable[float]:
-
-        prob = self._probability
+    def expectation_density(self, start:Optional[int] = None, stop:Optional[int] = None) -> Iterable[float]:
 
         for _ in itertools.islice(self._data, start, stop):
-            yield prob
+            yield self._norm * self._unit_expectation_density
 
     @property
     def parameters(self) -> Dict[str, u.Quantity]:
-        return {'norm': u.Quantity(self._norm)}
+        return {'norm': u.Quantity(self._norm, u.Hz)}
 
     def expectation(self, axes:Axes, copy = True) -> Histogram:
 
@@ -216,7 +228,7 @@ class ToyBkg(BinnedBackgroundInterface, BackgroundDensityInterface):
             raise ValueError("Wrong axes. I have fixed axes.")
 
         # Always a copy
-        return self._unit_expectation * self._norm * self._sel_fraction
+        return self._unit_expectation * self._norm
 
 class ToyPointSourceResponse(BinnedThreeMLSourceResponseInterface, UnbinnedThreeMLSourceResponseInterface):
     """
@@ -227,9 +239,9 @@ class ToyPointSourceResponse(BinnedThreeMLSourceResponseInterface, UnbinnedThree
     def __init__(self, data: ToyEventData, duration:Quantity):
         self._data = data
         self._source = None
-        self._sel_fraction = (duration/(1*u.day)).to_value('')
+        self._duration = duration.to_value(u.s)
         self._unit_expectation = Histogram(toy_axis,
-                                           contents= self._sel_fraction * np.diff(norm.cdf(toy_axis.edges)))
+                                           contents= self._duration * np.diff(norm.cdf(toy_axis.edges)))
 
     @property
     def event_type(self) -> Type[EventInterface]:
@@ -242,20 +254,20 @@ class ToyPointSourceResponse(BinnedThreeMLSourceResponseInterface, UnbinnedThree
 
         # Get the latest values of the flux
         # Remember that _model can be modified externally between calls.
-        ns_events = self._sel_fraction * self._source.spectrum.main.shape.k.value
+        # This response doesn't have effective area or energy sensitivity. We're just using K as a rate
+        ns_events = self._duration * self._source.spectrum.main.shape.k.as_quantity.to_value(1/(u.s * u.keV * u.cm * u.cm))
         return ns_events
 
     def event_probability(self, start:Optional[int] = None, stop:Optional[int] = None) -> Iterable[float]:
 
         cache = norm.pdf([event.x for event in itertools.islice(self._data, start, stop)])
 
-        for n in cache:
-            yield n
+        for prob in cache:
+            yield prob
 
         # Alternative version without cache (slower)
         # for event in itertools.islice(self._data, start, stop):
         #     yield norm.pdf(event.x)
-
 
     def set_source(self, source: Source):
 
@@ -274,10 +286,8 @@ class ToyPointSourceResponse(BinnedThreeMLSourceResponseInterface, UnbinnedThree
 
         # Get the latest values of the flux
         # Remember that _model can be modified externally between calls.
-        ns_events = self._source.spectrum.main.shape.k.value
-
         # Always copies
-        return self._unit_expectation * ns_events
+        return self._unit_expectation * self._source.spectrum.main.shape.k.as_quantity.to_value(1/(u.s * u.keV * u.cm * u.cm))
 
     def copy(self) -> "ToyPointSourceResponse":
         # We are not caching any results, so it's safe to do shallow copy without
@@ -307,12 +317,16 @@ class ToyModelFolding(BinnedThreeMLModelFoldingInterface, UnbinnedThreeMLModelFo
 
         return ncounts
 
-    def event_probability(self, start:Optional[int] = None, stop:Optional[int] = None) -> Iterable[float]:
+    def expectation_density(self, start:Optional[int] = None, stop:Optional[int] = None) -> Iterable[float]:
 
         self._cache_psr_copies()
 
-        for prob in zip(*[p.event_probability(start, stop) for p in self._psr_copies.values()]):
-            yield np.sum(prob)
+        if not self._psr_copies:
+            for _ in itertools.islice(self._data, start, stop):
+                yield 0
+        else:
+            for expectation in zip(*[p.expectation_density(start, stop) for p in self._psr_copies.values()]):
+                yield np.sum(expectation)
 
     def set_model(self, model: Model):
 
@@ -378,25 +392,27 @@ def main():
 
     psr = ToyPointSourceResponse(data = event_data, duration = duration)
     response = ToyModelFolding(data = event_data, psr = psr)
-    bkg = ToyBkg(data = event_data, duration = duration)
+
+    if use_bkg:
+        bkg = ToyBkg(data = event_data, duration = duration)
+        expectation_density = SumExpectationDensity(response, bkg)
+    else:
+        bkg = None
+        expectation_density = response
 
     ## Source model
     ## We'll just use the K value in u.cm / u.cm / u.s / u.keV
     spectrum = Constant()
-    spectrum.k.value = 1
 
-    polarized = False
-
-    if polarized:
-        polarization = LinearPolarization(10, 10)
-        polarization.degree.value = 0.
-        polarization.angle.value = 10
-
-        spectral_component = SpectralComponent('arbitrary_spectrum_name', spectrum, polarization)
-        source = PointSource('arbitrary_source_name', 0, 0, components=[spectral_component])
+    if use_signal:
+        spectrum.k.value = .01
     else:
+        spectrum.k.value = 0
+        spectrum.k.free = False
 
-        source = PointSource("arbitrary_source_name",
+    spectrum.k.units = 1/u.s/u.keV/u.cm/u.cm
+
+    source = PointSource("arbitrary_source_name",
                              l=0, b=0,  # Doesn't matter
                              spectral_shape=spectrum)
 
@@ -412,7 +428,7 @@ def main():
 
     # Fit
     if unbinned:
-        like_fun = UnbinnedLikelihood(response, bkg)
+        like_fun = UnbinnedLikelihood(expectation_density)
     else:
         like_fun = PoissonLikelihood(binned_data, response, bkg)
 
@@ -425,7 +441,14 @@ def main():
     # Before the fit, you can set the parameters initial values, bounds, etc.
     # This is passed to the minimizer.
     # In addition to model. Nuisance.
-    cosi.bkg_parameter['norm'].value = 1
+    if bkg is not None:
+        cosi.bkg_parameter['norm'] = Parameter("norm",  # background parameter
+                                      1,  # initial value of parameter
+                                      unit = u.Hz,
+                                      min_value=0,  # minimum value of parameter
+                                      max_value=1,  # maximum value of parameter
+                                      delta=0.001,  # initial step used by fitting engine
+                                      free = True)
 
     plugins = DataList(cosi)
     like = JointLikelihood(model, plugins)
@@ -439,14 +462,22 @@ def main():
 
         fig, ax = plt.subplots()
         binned_data.data.plot(ax)
-        expectation = response.expectation(binned_data.axes)
-        if bkg is not None:
-            expectation = expectation + bkg.expectation(binned_data.axes)
-        expectation.plot(ax)
+
+        if unbinned:
+            x = [e.x for e in event_data]
+            widths = toy_axis.widths[toy_axis.find_bin(x)]
+            expectation_density_list = np.fromiter(expectation_density.expectation_density(), dtype=float)
+            ax.scatter(x, expectation_density_list * widths, s=1, color='green')
+        else:
+            expectation = response.expectation(binned_data.axes)
+            if bkg is not None:
+                expectation = expectation + bkg.expectation(binned_data.axes)
+            expectation.plot(ax)
+
         plt.show()
 
         # Grid
-        loglike = Histogram([np.linspace(.9*nevents_signal, 1.1*nevents_signal, 30), np.linspace(.9*nevents_bkg, 1.1*nevents_bkg, 31)], labels = ['s', 'b'])
+        loglike = Histogram([np.linspace(.006, .016, 31), np.linspace(.006, .016, 31)], labels = ['s', 'b'])
 
         for i,s in enumerate(loglike.axes['s'].centers):
             for j,b in enumerate(loglike.axes['b'].centers):

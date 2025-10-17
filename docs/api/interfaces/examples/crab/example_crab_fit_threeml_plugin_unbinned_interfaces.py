@@ -3,9 +3,11 @@
 
 import logging
 
-from histpy import Histogram
+from astropy.utils.metadata.utils import dtype
+from histpy import Histogram, HealpixAxis
 
 from cosipy.background_estimation.free_norm_threeml_binned_bkg import FreeNormBackgroundInterpolatedDensityTimeTagEmCDS
+from cosipy.interfaces.expectation_interface import SumExpectationDensity
 from cosipy.threeml.unbinned_model_folding import UnbinnedThreeMLModelFolding
 
 logging.basicConfig(format='%(asctime)s - %(levelname)s - %(message)s',
@@ -98,11 +100,12 @@ def main():
 
     logger.info("Loading data...")
     if use_bkg:
-        data = TimeTagEmCDSEventDataInSCFrameFromDC3Fits([crab_data_path, bkg_data_path],
-                                                      selection=selector)
+        data_file = [crab_data_path, bkg_data_path]
     else:
-        data = TimeTagEmCDSEventDataInSCFrameFromDC3Fits(crab_data_path,
-                                                         selection=selector)
+        data_file = crab_data_path
+
+    data = TimeTagEmCDSEventDataInSCFrameFromDC3Fits(data_file,
+                                                     selection=selector)
 
     logger.info("Loading data DONE")
 
@@ -129,9 +132,9 @@ def main():
     l = 184.56
     b = -5.78
 
-    index = -1.99
+    index = -2.26
     piv = 1 * u.MeV
-    K = 0.048977e-3 / u.cm / u.cm / u.s / u.keV
+    K = 3e-6 / u.cm / u.cm / u.s / u.keV
 
     spectrum = Powerlaw()
 
@@ -139,8 +142,7 @@ def main():
     spectrum.index.max_value = -1
 
     # Fix it for testing purposes
-    # spectrum.index.value = -2
-    # spectrum.index.free = False
+    spectrum.index.free = True
 
     spectrum.K.value = K.value
     spectrum.piv.value = piv.value
@@ -167,7 +169,41 @@ def main():
     # print(np.fromiter(response.expectation_density(), dtype = float))
 
     # Setup likelihood
-    like_fun = UnbinnedLikelihood(response, bkg)
+    if use_bkg:
+        expectation_density = SumExpectationDensity(response, bkg)
+    else:
+        expectation_density = response
+
+    # Test plots. REMOVE
+    response.set_model(model)
+    exdenlist = np.fromiter(expectation_density.expectation_density(), dtype=float)
+
+    # plot expectation density energy
+    energy = np.fromiter([e.energy_keV for e in data], dtype = float)
+    fig,ax = plt.subplots()
+    ax.scatter(energy, exdenlist)
+    ax.set_xscale('log')
+    ax.set_yscale('log')
+    h = Histogram(np.geomspace(200,2000))
+    h.fill(energy)
+    h /= h.axis.widths
+    h *= np.max(exdenlist) / np.max(h)
+    h.plot(ax)
+    plt.show()
+
+    # plot expectation density phi
+    phi = np.fromiter([e.scattering_angle_rad for e in data], dtype = float)
+    phi *= 180/3.1416
+    fig,ax = plt.subplots()
+    ax.scatter(phi, exdenlist)
+    h = Histogram(np.linspace(0,180))
+    h.fill(phi)
+    h /= h.axis.widths
+    h *= np.max(exdenlist) / np.max(h)
+    h.plot(ax)
+    plt.show()
+
+    like_fun = UnbinnedLikelihood(expectation_density)
 
     cosi = ThreeMLPluginInterface('cosi', like_fun, response, bkg)
 
@@ -185,6 +221,78 @@ def main():
 
     like = JointLikelihood(model, plugins, verbose = False)
 
+    # Run
+    print(data.nevents, expectation_density.ncounts())
+    like.fit()
+
+    results = like.results
+
+    # Plot the fitted and injected spectra
+
+    # In[14]:
+
+
+    fig, ax = plt.subplots()
+
+    alpha_inj = -1.99
+    beta_inj = -2.32
+    E0_inj = 531. * (alpha_inj - beta_inj) * u.keV
+    xp_inj = E0_inj * (alpha_inj + 2) / (alpha_inj - beta_inj)
+    piv_inj = 100. * u.keV
+    K_inj = 7.56e-4 / u.cm / u.cm / u.s / u.keV
+
+    spectrum_inj = Band()
+
+    spectrum_inj.alpha.min_value = -2.14
+    spectrum_inj.alpha.max_value = 3.0
+    spectrum_inj.beta.min_value = -5.0
+    spectrum_inj.beta.max_value = -2.15
+    spectrum_inj.xp.min_value = 1.0
+
+    spectrum_inj.alpha.value = alpha_inj
+    spectrum_inj.beta.value = beta_inj
+    spectrum_inj.xp.value = xp_inj.value
+    spectrum_inj.K.value = K_inj.value
+    spectrum_inj.piv.value = piv_inj.value
+
+    spectrum_inj.xp.unit = xp_inj.unit
+    spectrum_inj.K.unit = K_inj.unit
+    spectrum_inj.piv.unit = piv_inj.unit
+
+    energy = np.geomspace(100 * u.keV, 10 * u.MeV).to_value(u.keV)
+
+    flux_lo = np.zeros_like(energy)
+    flux_median = np.zeros_like(energy)
+    flux_hi = np.zeros_like(energy)
+    flux_inj = np.zeros_like(energy)
+
+    parameters = {par.name: results.get_variates(par.path)
+                  for par in results.optimized_model["source"].parameters.values()
+                  if par.free}
+
+    results_err = results.propagate(results.optimized_model["source"].spectrum.main.shape.evaluate_at, **parameters)
+
+    for i, e in enumerate(energy):
+        flux = results_err(e)
+        flux_median[i] = flux.median
+        flux_lo[i], flux_hi[i] = flux.equal_tail_interval(cl=0.68)
+        flux_inj[i] = spectrum_inj.evaluate_at(e)
+
+    ax.plot(energy, energy * energy * flux_median, label="Best fit")
+    ax.fill_between(energy, energy * energy * flux_lo, energy * energy * flux_hi, alpha=.5, label="Best fit (errors)")
+    ax.plot(energy, energy * energy * flux_inj, color='black', ls=":", label="Injected")
+
+    ax.set_xscale("log")
+    ax.set_yscale("log")
+
+    ax.set_xlabel("Energy (keV)")
+    ax.set_ylabel(r"$E^2 \frac{dN}{dE}$ (keV cm$^{-2}$ s$^{-1}$)")
+
+    ax.legend()
+
+    ax.set_ylim(.1,100)
+
+    plt.show()
 
     # Grid
     if use_bkg:
@@ -211,8 +319,6 @@ def main():
 
     plt.show()
 
-    # Run
-    like.fit()
 
     profile.disable()
     profile.dump_stats("prof_interfaces.prof")
