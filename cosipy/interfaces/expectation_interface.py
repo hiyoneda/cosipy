@@ -119,8 +119,9 @@ class SumExpectationDensity(ExpectationDensityInterface):
     Convenience class to sum multiple ExpectationDensityInterface implementation
     """
 
-    def __init__(self, *expectations:Tuple[ExpectationDensityInterface]):
-        self._expectations = expectations
+    def __init__(self, *expectations:Tuple[ExpectationDensityInterface, None]):
+        # Remove None. Accept None for convenience
+        self._expectations = tuple(ex for ex in expectations if ex is not None)
 
         self._event_type = expectations[0].event_type
 
