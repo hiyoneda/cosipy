@@ -66,9 +66,9 @@ class FreeNormBackground(BackgroundInterface):
         for label,dist in self._distributions.items():
             dist_norm = np.sum(dist)
             if copy:
-                self._distributions[label] = dist*(self._livetime/dist_norm)
+                self._distributions[label] = dist/dist_norm
             else:
-                dist *= (self._livetime/dist_norm)
+                dist /= dist_norm
 
         # These will be densify anyway since _expectation is dense
         # And histpy doesn't yet handle this operation efficiently
@@ -197,7 +197,7 @@ class FreeNormBinnedBackground(FreeNormBackground, BinnedBackgroundInterface):
 
         # Compute expectation
         for norm,bkg in zip(self.norms.values(), self._distributions.values()):
-            self._expectation += bkg * norm
+            self._expectation += bkg * norm * self._livetime
 
         # Cache. Regular copy is enough since norm values are float en not mutable
         self._last_norm_values = self.norms.copy()
@@ -210,6 +210,7 @@ class FreeNormBinnedBackground(FreeNormBackground, BinnedBackgroundInterface):
 
 class FreeNormBackgroundInterpolatedDensityTimeTagEmCDS(FreeNormBackground, BackgroundDensityInterface):
 
+    @property
     def event_type(self) -> Type[EventInterface]:
         return TimeTagEmCDSEventInSCFrameInterface
 
@@ -229,7 +230,7 @@ class FreeNormBackgroundInterpolatedDensityTimeTagEmCDS(FreeNormBackground, Back
         # Energy: keV
         # Phi: rad
         # PsiChi: sr (for the phase space. The axis is a HealpixAxis)
-        # Time: seconds (already in super())
+        # Time: seconds (taken into account by the norm (a rate) unit)
 
         psichi_frame = None
 
@@ -272,15 +273,16 @@ class FreeNormBackgroundInterpolatedDensityTimeTagEmCDS(FreeNormBackground, Back
             times = Time(jd1, jd2, format = 'jd')
 
             # Transform local to inertial
-            attitudes = sc_history.interp_attitude(times).transform_to(psichi_frame)
             sc_psichi_coord = SkyCoord(psichi_lon, psichi_lat, unit=u.rad, frame=SpacecraftFrame())
             sc_psichi_vec = sc_psichi_coord.cartesian.xyz.value
-            inertial_psichi_vec = attitudes.rot.inv().apply(sc_psichi_vec.transpose())
+            attitudes = sc_history.interp_attitude(times).transform_to(psichi_frame)
+            inertial_psichi_vec = attitudes.rot.apply(sc_psichi_vec.transpose())
             inertial_psichi_sph = UnitSphericalRepresentation.from_cartesian(CartesianRepresentation(*inertial_psichi_vec.transpose()))
             inertial_psichi_coord = SkyCoord(inertial_psichi_sph, frame = psichi_frame)
 
             for label,dist in self._distributions.items():
-                self._prob[self.labels.index(label)].extend(dist.interp(energy, phi, inertial_psichi_coord))
+                prob = dist.interp(energy, phi, inertial_psichi_coord)
+                self._prob[self.labels.index(label)].extend(prob)
 
         self._prob = np.asarray(self._prob)
 

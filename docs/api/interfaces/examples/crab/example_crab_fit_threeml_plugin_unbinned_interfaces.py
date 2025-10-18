@@ -5,6 +5,7 @@ import logging
 
 from astropy.utils.metadata.utils import dtype
 from histpy import Histogram, HealpixAxis
+from mhealpy import HealpixMap
 
 from cosipy.background_estimation.free_norm_threeml_binned_bkg import FreeNormBackgroundInterpolatedDensityTimeTagEmCDS
 from cosipy.interfaces.expectation_interface import SumExpectationDensity
@@ -39,7 +40,8 @@ from scoords import SpacecraftFrame
 
 from astropy.time import Time
 import astropy.units as u
-from astropy.coordinates import SkyCoord, Galactic, Angle
+from astropy.coordinates import SkyCoord, Galactic, Angle, UnitSphericalRepresentation, CartesianRepresentation, \
+    angular_separation
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -53,7 +55,7 @@ import os
 
 def main():
 
-    use_bkg = False
+    use_bkg = True
 
     profile = cProfile.Profile()
 
@@ -74,9 +76,9 @@ def main():
         output=str(dr_path),
         checksum='eb72400a1279325e9404110f909c7785')
 
-    sc_orientation_path = data_path / "20280301_3_month_with_orbital_info.ori"
-    fetch_wasabi_file('COSI-SMEX/DC2/Data/Orientation/20280301_3_month_with_orbital_info.ori',
-                      output=str(sc_orientation_path), checksum='416fcc296fc37a056a069378a2d30cb2')
+    sc_orientation_path = data_path / "DC3_final_530km_3_month_with_slew_1sbins_GalacticEarth_SAA.ori"
+    fetch_wasabi_file('COSI-SMEX/DC3/Data/Orientation/DC3_final_530km_3_month_with_slew_1sbins_GalacticEarth_SAA.ori',
+                      output=str(sc_orientation_path), checksum='b87fd41b6c28a5c0c51448ce2964e57c')
 
     binned_bkg_data_path = data_path / "bkg_binned_data.hdf5"
     fetch_wasabi_file('COSI-SMEX/cosipy_tutorials/crab_spectral_fit_galactic_frame/bkg_binned_data.hdf5',
@@ -121,6 +123,7 @@ def main():
 
         logger.info("Setting bkg...")
         bkg = FreeNormBackgroundInterpolatedDensityTimeTagEmCDS(data, bkg_dist, sc_orientation, copy = False)
+        bkg.set_norm(5*u.Hz)
         logger.info("Setting bkg DONE")
     else:
         bkg = None
@@ -179,29 +182,86 @@ def main():
     exdenlist = np.fromiter(expectation_density.expectation_density(), dtype=float)
 
     # plot expectation density energy
-    energy = np.fromiter([e.energy_keV for e in data], dtype = float)
-    fig,ax = plt.subplots()
-    ax.scatter(energy, exdenlist)
-    ax.set_xscale('log')
-    ax.set_yscale('log')
-    h = Histogram(np.geomspace(200,2000))
-    h.fill(energy)
-    h /= h.axis.widths
-    h *= np.max(exdenlist) / np.max(h)
-    h.plot(ax)
-    plt.show()
+    # energy = np.fromiter([e.energy_keV for e in data], dtype = float)
+    # fig,ax = plt.subplots()
+    # ax.scatter(energy, exdenlist)
+    # ax.set_xscale('log')
+    # ax.set_yscale('log')
+    # h = Histogram(np.geomspace(50,5000))
+    # h.fill(energy)
+    # h /= h.axis.widths
+    # h *= np.max(exdenlist) / np.max(h)
+    # h.plot(ax)
+    # plt.show()
 
     # plot expectation density phi
     phi = np.fromiter([e.scattering_angle_rad for e in data], dtype = float)
     phi *= 180/3.1416
+    # fig,ax = plt.subplots()
+    # ax.scatter(phi, exdenlist)
+    # h = Histogram(np.linspace(0,180))
+    # h.fill(phi)
+    # h /= h.axis.widths
+    # h *= np.max(exdenlist) / np.max(h)
+    # h.plot(ax)
+    # plt.show()
+
+    # Plot ARM
+    attitudes = sc_orientation.interp_attitude(data.time)
+
+    # psichi_sc = data.scattered_direction_sc.represent_as(UnitSphericalRepresentation)
+    # coord_vec = source.position.sky_coord.transform_to(sc_orientation.attitude.frame).cartesian.xyz.value
+    # sc_coord_vec = attitudes.rot.inv().apply(coord_vec)
+    # sc_coord_sph = UnitSphericalRepresentation.from_cartesian(CartesianRepresentation(*sc_coord_vec.transpose()))
+    # arm = angular_separation(sc_coord_sph.lon, sc_coord_sph.lat, psichi_sc.lon, psichi_sc.lat).to_value(u.deg) - phi
+    #
+
+    psichi_sc = data.scattered_direction_sc.represent_as(UnitSphericalRepresentation)
+    psichi_sc_vec = psichi_sc.to_cartesian().xyz.value
+    psichi_gal_vec = attitudes.rot.apply(psichi_sc_vec.transpose())
+    psichi_coord = SkyCoord(CartesianRepresentation(*psichi_gal_vec.transpose()), frame = attitudes.frame)
+    arm = source.position.sky_coord.separation(psichi_coord).to_value(u.deg) - phi
+
+    h = Histogram(np.linspace(-90,90,360))
+
     fig,ax = plt.subplots()
-    ax.scatter(phi, exdenlist)
-    h = Histogram(np.linspace(0,180))
-    h.fill(phi)
+    ax.scatter(arm, exdenlist)
+
+    h.fill(arm)
+
+    h_ex = Histogram(h.axis)
+    h_ex.fill(arm, weight=exdenlist)
+    h_ex /= h # Mean
+
     h /= h.axis.widths
-    h *= np.max(exdenlist) / np.max(h)
-    h.plot(ax)
+    h *= np.nanmax(h_ex) / np.max(h) # Normalize
+
+    h.plot(ax, color = 'green')
+    h_ex.plot(ax, color='red')
+
     plt.show()
+
+    # Plot CDS
+    # fig = plt.figure()
+    # ax = fig.add_subplot(1, 1, 1, projection='mollview')
+    #
+    # sc = ax.scatter(psichi_coord.l.deg, psichi_coord.b.deg, transform=ax.get_transform('world'),
+    #                 c = phi ,
+    #                 cmap='inferno',
+    #                 s=2, vmin=0, vmax=180)
+    #
+    # ax.scatter(source.position.sky_coord.l.deg, source.position.sky_coord.b.deg, transform=ax.get_transform('world'), marker='x', s=100, c='red')
+    #
+    # fig.colorbar(sc, fraction=.02, label="$\phi$ [deg]")
+    #
+    # m = HealpixMap(nside=128, coordsys='galactic')
+    # m[:] = source.position.sky_coord.separation(m.pix2skycoord(np.arange(m.npix))).to_value(u.deg)
+    # img = m.get_wcs_img(ax, coord='C') #Use C for a "bug" in healpy (doesn't work the same as plot()
+    # ax.contour(img, levels=np.arange(0, 180, 10), cmap='inferno',
+    #                 vmin=0, vmax=180)
+    # plt.show()
+
+
 
     like_fun = UnbinnedLikelihood(expectation_density)
 
@@ -210,7 +270,7 @@ def main():
     # Nuisance parameter guess, bounds, etc.
     if use_bkg:
         cosi.bkg_parameter['bkg_norm'] = Parameter("bkg_norm",  # background parameter
-                                          1,  # initial value of parameter
+                                          2.5,  # initial value of parameter
                                           unit = u.Hz,
                                           min_value=0,  # minimum value of parameter
                                           max_value=100,  # maximum value of parameter
@@ -296,8 +356,8 @@ def main():
 
     # Grid
     if use_bkg:
-        loglike = Histogram([np.geomspace(2e-6, 2e-4, 30),
-                                   np.geomspace(.1, 10, 31)], labels=['K', 'B'])
+        loglike = Histogram([np.geomspace(5e-6, 15e-6, 30),
+                                   np.geomspace(4, 5, 31)], labels=['K', 'B'], axis_scale='log')
 
         for i, k in enumerate(loglike.axes['K'].centers):
             for j, b in enumerate(loglike.axes['B'].centers):
@@ -306,7 +366,6 @@ def main():
 
                 loglike[i, j] = cosi.get_log_like()
 
-        loglike.plot()
     else:
         loglike = Histogram([np.geomspace(2e-6, 2e-4, 30)], labels=['K'], axis_scale='log')
 
@@ -315,7 +374,7 @@ def main():
 
             loglike[i] = cosi.get_log_like()
 
-        loglike.plot()
+    ax, plot = loglike.plot(vmin = np.max(loglike) - 25, vmax = np.max(loglike))
 
     plt.show()
 

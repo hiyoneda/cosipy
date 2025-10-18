@@ -172,7 +172,7 @@ class TimeTagEmCDSEventDataInSCFrameFromArrays(TimeTagEmCDSEventDataInSCFrameInt
             self._scatt_lon = np.asarray(new_scatt_lon)
 
     def __getitem__(self, i: int) -> TimeTagEmCDSEventInSCFrameInterface:
-        return TimeTagEmCDSEventInSCFrame(self._jd1[i], self._jd2[i], self._energy[i], self._scatt_angle[i],
+        return TimeTagEmCDSEventInSCFrame(self._jd1[i], self._jd2[i], self._energy[i], self._scatt_angle[i], self._scatt_lon[i], self._scatt_lat[i],
                                           self._id[i])
 
     @property
@@ -213,7 +213,7 @@ class TimeTagEmCDSEventDataInSCFrameFromArrays(TimeTagEmCDSEventDataInSCFrameInt
 
     @property
     def scattered_lat_rad_sc(self) -> Iterable[float]:
-        return self._scatt_angle
+        return self._scatt_lat
 
 class TimeTagEmCDSEventDataInSCFrameFromDC3Fits(TimeTagEmCDSEventDataInSCFrameFromArrays):
 
@@ -237,7 +237,7 @@ class TimeTagEmCDSEventDataInSCFrameFromDC3Fits(TimeTagEmCDSEventDataInSCFrameFr
             energy = np.append(energy, data_dict['Energies'])
             phi = np.append(phi, data_dict['Phi'])
             psi = np.append(psi, data_dict['Psi local'])
-            chi = np.append(psi, data_dict['Chi local'])
+            chi = np.append(chi, data_dict['Chi local'])
 
         # Time sort
         tsort = np.argsort(time)

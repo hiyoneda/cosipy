@@ -149,7 +149,7 @@ class ComptonDataSpaceInSCFrameEventDataInterface(EventDataWithScatteringAngleIn
         Add fancy energy quantity
         """
         return SkyCoord(self.scattered_lon_rad_sc,
-                        np.pi / 2 - self.scattered_lat_rad_sc,
+                        self.scattered_lat_rad_sc,
                         unit = u.rad,
                         frame = SpacecraftFrame())
 
