@@ -196,7 +196,8 @@ class FreeNormBinnedBackground(FreeNormBackground, BinnedBackgroundInterface):
             self._expectation.clear()
 
         # Compute expectation
-        for norm,bkg in zip(self.norms.values(), self._distributions.values()):
+        for label,bkg in self._distributions.items():
+            norm = self._norms[self.labels.index(label)]
             self._expectation += bkg * norm * self._livetime
 
         # Cache. Regular copy is enough since norm values are float en not mutable

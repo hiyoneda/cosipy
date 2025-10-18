@@ -220,6 +220,7 @@ def main():
     # Nuisance parameter guess, bounds, etc.
     cosi.bkg_parameter['bkg_norm'] = Parameter("bkg_norm",  # background parameter
                                       1,  # initial value of parameter
+                                      unit = u.Hz,
                                       min_value=0,  # minimum value of parameter
                                       max_value=5,  # maximum value of parameter
                                       delta=0.05,  # initial step used by fitting engine

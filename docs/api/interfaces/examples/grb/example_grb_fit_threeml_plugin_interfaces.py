@@ -107,7 +107,9 @@ def main():
     # ============ Interfaces ==============
     data = binned_data.get_em_cds()
 
-    bkg = FreeNormBinnedBackground(bkg_dist)
+    bkg = FreeNormBinnedBackground(bkg_dist,
+                                   sc_history=ori,
+                                   copy = False)
 
     instrument_response = BinnedInstrumentResponse(dr)
 
@@ -134,7 +136,8 @@ def main():
 
     # Nuisance parameter guess, bounds, etc.
     cosi.bkg_parameter['bkg_norm'] = Parameter("bkg_norm",  # background parameter
-                                      0.1,  # initial value of parameter
+                                      1,
+                                      unit  = u.Hz,# initial value of parameter
                                       min_value=0,  # minimum value of parameter
                                       max_value=5,  # maximum value of parameter
                                       delta=1e-3,  # initial step used by fitting engine

@@ -84,7 +84,6 @@ def main():
     fetch_wasabi_file('COSI-SMEX/cosipy_tutorials/crab_spectral_fit_galactic_frame/bkg_binned_data.hdf5',
                     output=str(binned_bkg_data_path), checksum = '54221d8556eb4ef520ef61da8083e7f4')
 
-    profile.enable()
     # orientation history
     tstart = Time("2028-03-01 01:35:00.117")
     tstop = Time("2028-03-01 02:35:00.117")
@@ -178,8 +177,8 @@ def main():
         expectation_density = response
 
     # Test plots. REMOVE
-    response.set_model(model)
-    exdenlist = np.fromiter(expectation_density.expectation_density(), dtype=float)
+    # response.set_model(model)
+    # exdenlist = np.fromiter(expectation_density.expectation_density(), dtype=float)
 
     # plot expectation density energy
     # energy = np.fromiter([e.energy_keV for e in data], dtype = float)
@@ -195,8 +194,8 @@ def main():
     # plt.show()
 
     # plot expectation density phi
-    phi = np.fromiter([e.scattering_angle_rad for e in data], dtype = float)
-    phi *= 180/3.1416
+    # phi = np.fromiter([e.scattering_angle_rad for e in data], dtype = float)
+    # phi *= 180/3.1416
     # fig,ax = plt.subplots()
     # ax.scatter(phi, exdenlist)
     # h = Histogram(np.linspace(0,180))
@@ -207,7 +206,7 @@ def main():
     # plt.show()
 
     # Plot ARM
-    attitudes = sc_orientation.interp_attitude(data.time)
+    # attitudes = sc_orientation.interp_attitude(data.time)
 
     # psichi_sc = data.scattered_direction_sc.represent_as(UnitSphericalRepresentation)
     # coord_vec = source.position.sky_coord.transform_to(sc_orientation.attitude.frame).cartesian.xyz.value
@@ -216,30 +215,30 @@ def main():
     # arm = angular_separation(sc_coord_sph.lon, sc_coord_sph.lat, psichi_sc.lon, psichi_sc.lat).to_value(u.deg) - phi
     #
 
-    psichi_sc = data.scattered_direction_sc.represent_as(UnitSphericalRepresentation)
-    psichi_sc_vec = psichi_sc.to_cartesian().xyz.value
-    psichi_gal_vec = attitudes.rot.apply(psichi_sc_vec.transpose())
-    psichi_coord = SkyCoord(CartesianRepresentation(*psichi_gal_vec.transpose()), frame = attitudes.frame)
-    arm = source.position.sky_coord.separation(psichi_coord).to_value(u.deg) - phi
-
-    h = Histogram(np.linspace(-90,90,360))
-
-    fig,ax = plt.subplots()
-    ax.scatter(arm, exdenlist)
-
-    h.fill(arm)
-
-    h_ex = Histogram(h.axis)
-    h_ex.fill(arm, weight=exdenlist)
-    h_ex /= h # Mean
-
-    h /= h.axis.widths
-    h *= np.nanmax(h_ex) / np.max(h) # Normalize
-
-    h.plot(ax, color = 'green')
-    h_ex.plot(ax, color='red')
-
-    plt.show()
+    # psichi_sc = data.scattered_direction_sc.represent_as(UnitSphericalRepresentation)
+    # psichi_sc_vec = psichi_sc.to_cartesian().xyz.value
+    # psichi_gal_vec = attitudes.rot.apply(psichi_sc_vec.transpose())
+    # psichi_coord = SkyCoord(CartesianRepresentation(*psichi_gal_vec.transpose()), frame = attitudes.frame)
+    # arm = source.position.sky_coord.separation(psichi_coord).to_value(u.deg) - phi
+    #
+    # h = Histogram(np.linspace(-90,90,360))
+    #
+    # fig,ax = plt.subplots()
+    # ax.scatter(arm, exdenlist)
+    #
+    # h.fill(arm)
+    #
+    # h_ex = Histogram(h.axis)
+    # h_ex.fill(arm, weight=exdenlist)
+    # h_ex /= h # Mean
+    #
+    # h /= h.axis.widths
+    # h *= np.nanmax(h_ex) / np.max(h) # Normalize
+    #
+    # h.plot(ax, color = 'green')
+    # h_ex.plot(ax, color='red')
+    #
+    # plt.show()
 
     # Plot CDS
     # fig = plt.figure()
@@ -283,7 +282,10 @@ def main():
 
     # Run
     print(data.nevents, expectation_density.ncounts())
+    profile.enable()
     like.fit()
+    profile.disable()
+    profile.dump_stats("prof_interfaces.prof")
 
     results = like.results
 
@@ -377,10 +379,6 @@ def main():
     ax, plot = loglike.plot(vmin = np.max(loglike) - 25, vmax = np.max(loglike))
 
     plt.show()
-
-
-    profile.disable()
-    profile.dump_stats("prof_interfaces.prof")
 
     return
 
