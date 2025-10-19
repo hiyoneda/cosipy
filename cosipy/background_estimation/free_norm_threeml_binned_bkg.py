@@ -287,27 +287,16 @@ class FreeNormBackgroundInterpolatedDensityTimeTagEmCDS(FreeNormBackground, Back
 
         self._prob = np.asarray(self._prob)
 
-    def ncounts(self) -> float:
+    def expected_counts(self) -> float:
         """
         Total expected counts
         """
         return self._livetime * self._norm
 
-    def expectation_density(self, start: Optional[int] = None, stop: Optional[int] = None) -> Iterable[float]:
+    def expectation_density(self) -> Iterable[float]:
         """
         Return the expected number of counts density from the start-th event
         to the stop-th event. This equals the event probabiliy times the number of events
-
-        This is provided as a helper function assuming the child classes implemented event_probability
-
-        Parameters
-        ----------
-        start
-        stop
-
-        Returns
-        -------
-
         """
 
         # Multiply each probability by the norm, and then sum

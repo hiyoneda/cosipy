@@ -281,7 +281,7 @@ def main():
     like = JointLikelihood(model, plugins, verbose = False)
 
     # Run
-    print(data.nevents, expectation_density.ncounts())
+    print(data.nevents, expectation_density.expected_counts())
     profile.enable()
     like.fit()
     profile.disable()

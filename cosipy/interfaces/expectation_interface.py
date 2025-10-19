@@ -52,12 +52,12 @@ class ExpectationDensityInterface(ExpectationInterface, Protocol):
         The event class that the implementation can handle
         """
 
-    def ncounts(self) -> float:
+    def expected_counts(self) -> float:
         """
         Total expected counts
         """
 
-    def event_probability(self, start:Optional[int] = None, stop:Optional[int] = None) -> Iterable[float]:
+    def event_probability(self) -> Iterable[float]:
         """
         Return the probability of obtaining the observed set of measurement of each event,
         given that the event was detected. It equals the expectation density times ncounts
@@ -66,14 +66,6 @@ class ExpectationDensityInterface(ExpectationInterface, Protocol):
         e.g. if the event measured energy in keV, the units of output of this function are implicitly 1/keV
 
         This is provided as a helper function assuming the child classes implemented expectation_density
-
-
-        Parameters
-        ----------
-        start : None | int
-            From beginning by default
-        stop: None|int
-            Until the end by default
         """
 
         # Guard to avoid infinite recursion in incomplete child classes
@@ -84,10 +76,10 @@ class ExpectationDensityInterface(ExpectationInterface, Protocol):
                 cls.expectation_density is ExpectationDensityInterface.expectation_density):
             raise NotImplementedError("Implement event_probability and/or expectation_density")
 
-        ncounts = self.ncounts()
-        return [expectation/ncounts for expectation in self.expectation_density(start, stop)]
+        ncounts = self.expected_counts()
+        return [expectation/ncounts for expectation in self.expectation_density()]
 
-    def expectation_density(self, start:Optional[int] = None, stop:Optional[int] = None) -> Iterable[float]:
+    def expectation_density(self) -> Iterable[float]:
         """
         Return the expected number of counts density from the start-th event
         to the stop-th event. This equals the event probabiliy times the number of events
@@ -111,8 +103,8 @@ class ExpectationDensityInterface(ExpectationInterface, Protocol):
                 cls.expectation_density is ExpectationDensityInterface.expectation_density):
             raise NotImplementedError("Implement event_probability and/or expectation_density")
 
-        ncounts = self.ncounts()
-        return [prob*ncounts for prob in self.event_probability(start, stop)]
+        ncounts = self.expected_counts()
+        return [prob*ncounts for prob in self.event_probability()]
 
 class SumExpectationDensity(ExpectationDensityInterface):
     """
@@ -120,7 +112,7 @@ class SumExpectationDensity(ExpectationDensityInterface):
     """
 
     def __init__(self, *expectations:Tuple[ExpectationDensityInterface, None]):
-        # Remove None. Accept None for convenience
+        # Allow None for convenience, we  should remove it
         self._expectations = tuple(ex for ex in expectations if ex is not None)
 
         self._event_type = expectations[0].event_type
@@ -136,15 +128,15 @@ class SumExpectationDensity(ExpectationDensityInterface):
         """
         return self._event_type
 
-    def ncounts(self) -> float:
+    def expected_counts(self) -> float:
         """
         Total expected counts
         """
-        return sum(ex.ncounts() for ex in self._expectations)
+        return sum(ex.expected_counts() for ex in self._expectations)
 
-    def expectation_density(self, start: Optional[int] = None, stop: Optional[int] = None) -> Iterable[float]:
+    def expectation_density(self) -> Iterable[float]:
 
-        for exdensity in zip(*[ex.expectation_density(start, stop) for ex in self._expectations]):
+        for exdensity in zip(*[ex.expectation_density() for ex in self._expectations]):
             yield sum(exdensity)
 
 

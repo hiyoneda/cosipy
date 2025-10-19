@@ -197,7 +197,7 @@ class ToyBkg(BinnedBackgroundInterface, BackgroundDensityInterface):
     def set_parameters(self, **parameters:u.Quantity) -> None:
         self._norm = parameters['norm'].to_value(u.Hz)
 
-    def ncounts(self) -> float:
+    def expected_counts(self) -> float:
         return self._norm * self._duration
 
     def expectation_density(self, start:Optional[int] = None, stop:Optional[int] = None) -> Iterable[float]:
@@ -234,7 +234,7 @@ class ToyPointSourceResponse(BinnedThreeMLSourceResponseInterface, UnbinnedThree
     def event_type(self) -> Type[EventInterface]:
         return ToyEvent
 
-    def ncounts(self) -> float:
+    def expected_counts(self) -> float:
 
         if self._source is None:
             raise RuntimeError("Set a source first")
@@ -295,12 +295,12 @@ class ToyModelFolding(BinnedThreeMLModelFoldingInterface, UnbinnedThreeMLModelFo
     def event_type(self):
         return ToyEvent
 
-    def ncounts(self) -> float:
+    def expected_counts(self) -> float:
 
         ncounts = 0
 
         for source_name,psr in self._psr_copies.items():
-            ncounts += psr.ncounts()
+            ncounts += psr.expected_counts()
 
         return ncounts
 
@@ -312,7 +312,7 @@ class ToyModelFolding(BinnedThreeMLModelFoldingInterface, UnbinnedThreeMLModelFo
             for _ in itertools.islice(self._data, start, stop):
                 yield 0
         else:
-            for expectation in zip(*[p.expectation_density(start, stop) for p in self._psr_copies.values()]):
+            for expectation in zip(*[p.expectation_density() for p in self._psr_copies.values()]):
                 yield np.sum(expectation)
 
     def set_model(self, model: Model):

@@ -54,7 +54,7 @@ class UnbinnedLikelihood(UnbinnedLikelihoodInterface):
     def get_log_like(self) -> float:
 
         # Total number of events
-        ntot = self._expectation.ncounts()
+        ntot = self._expectation.expected_counts()
 
         # It's faster to compute all log values at once, but requires keeping them in memory
         # Doing it by chunk is a compromise. We might need to adjust the chunk_size

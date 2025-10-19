@@ -184,7 +184,7 @@ class UnbinnedThreeMLPointSourceResponseTrapz(UnbinnedThreeMLSourceResponseInter
         self._last_convolved_source_dict = source_dict
         self._last_convolved_source_skycoord = coord.copy()
 
-    def ncounts(self) -> float:
+    def expected_counts(self) -> float:
         """
         Total expected counts
         """
@@ -194,7 +194,7 @@ class UnbinnedThreeMLPointSourceResponseTrapz(UnbinnedThreeMLSourceResponseInter
         return self._nevents
 
 
-    def event_probability(self, start:Optional[int] = None, stop:Optional[int] = None) -> Iterable[float]:
+    def event_probability(self) -> Iterable[float]:
         """
         Return the expected number of counts density from the start-th event
         to the stop-th event.
@@ -209,4 +209,4 @@ class UnbinnedThreeMLPointSourceResponseTrapz(UnbinnedThreeMLSourceResponseInter
 
         self._update_cache()
 
-        return self._event_prob[start:stop]
+        return self._event_prob

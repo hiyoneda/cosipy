@@ -68,7 +68,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 from threeML import Band, PointSource, Model, JointLikelihood, DataList
-from astromodels import Parameter
+from astromodels import Parameter, Powerlaw
 
 from pathlib import Path
 
@@ -222,7 +222,7 @@ def main():
                                       1,  # initial value of parameter
                                       unit = u.Hz,
                                       min_value=0,  # minimum value of parameter
-                                      max_value=5,  # maximum value of parameter
+                                      max_value=100,  # maximum value of parameter
                                       delta=0.05,  # initial step used by fitting engine
                                       )
 
@@ -266,16 +266,13 @@ def main():
     spectrum.alpha.delta = 0.01
     spectrum.beta.delta = 0.01
 
-    source = PointSource("source",                     # Name of source (arbitrary, but needs to be unique)
-                         l = l,                        # Longitude (deg)
-                         b = b,                        # Latitude (deg)
-                         spectral_shape = spectrum)    # Spectral model
+    source = PointSource("source",  # Name of source (arbitrary, but needs to be unique)
+                         l=l,  # Longitude (deg)
+                         b=b,  # Latitude (deg)
+                         spectral_shape=spectrum)  # Spectral model
 
-    # Optional: free the position parameters
-    #source.position.l.free = True
-    #source.position.b.free = True
-
-    model = Model(source)  # Model with single source. If we had multiple sources, we would do Model(source1, source2, ...)
+    model = Model(
+        source)  # Model with single source. If we had multiple sources, we would do Model(source1, source2, ...)
 
     # Optional: if you want to call get_log_like manually, then you also need to set the model manually
     # 3ML does this internally during the fit though
@@ -405,6 +402,8 @@ def main():
     ax.set_ylabel(r"$E^2 \frac{dN}{dE}$ (keV cm$^{-2}$ s$^{-1}$)")
 
     ax.legend()
+
+    ax.set_ylim(.1,100)
 
     plt.show()
 

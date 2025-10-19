@@ -47,16 +47,16 @@ class UnbinnedThreeMLModelFolding(UnbinnedThreeMLModelFoldingInterface, ThreeMLM
         """
         self._model = model
 
-    def ncounts(self) -> float:
+    def expected_counts(self) -> float:
         """
         Total expected counts
         """
 
         self._cache_source_responses()
 
-        return sum(s.ncounts() for s in self._source_responses.values())
+        return sum(s.expected_counts() for s in self._source_responses.values())
 
-    def event_probability(self, start:Optional[int] = None, stop:Optional[int] = None) -> Iterable[float]:
+    def event_probability(self) -> Iterable[float]:
         """
         Return the expected number of counts density from the start-th event
         to the stop-th event.
@@ -71,7 +71,7 @@ class UnbinnedThreeMLModelFolding(UnbinnedThreeMLModelFoldingInterface, ThreeMLM
 
         self._cache_source_responses()
 
-        sources_expectation_iter = itertools.product(*(s.expectation_density(start, stop) for s in self._source_responses.values()))
-        ncounts = self.ncounts()
+        sources_expectation_iter = itertools.product(*(s.expectation_density() for s in self._source_responses.values()))
+        ncounts = self.expected_counts()
 
         return [sum(expectations)/ncounts for expectations in sources_expectation_iter]
