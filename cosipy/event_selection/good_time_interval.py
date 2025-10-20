@@ -14,12 +14,6 @@ class GoodTimeInterval():
             Start times of GTI intervals
         stops : astropy.time.Time (array)
             Stop times of GTI intervals
-
-        Notes
-        -----
-        Currently, unix + utc is assumed. 
-        When the default time format/system is fixed,
-        this class should be modified.
         """
         # Check that starts and stops have the same scale
         if not np.all(starts.scale == stops.scale):
@@ -28,6 +22,10 @@ class GoodTimeInterval():
         # Check that starts and stops have the same format
         if starts.format != stops.format:
             raise ValueError(f"Time format mismatch between starts ({starts.format}) and stops ({stops.format})")
+        
+        # Check that starts and stops have the same length 
+        if len(starts) != len(stops):
+            raise ValueError(f"Length mismatch between starts ({len(starts)}) and stops ({len(stops)})")
         
         self.starts = starts
         self.stops = stops
@@ -102,7 +100,7 @@ class GoodTimeInterval():
         # Check time scale
         if time.scale != self.starts.scale:
             raise ValueError(f"Time scale mismatch. Expected {self.starts.scale.upper()}, "
-                           f"got {time.scale.upper()}")
+                             f"got {time.scale.upper()}")
         
         # Get values using the format attribute
         time_format = self.starts.format
@@ -130,7 +128,7 @@ class GoodTimeInterval():
             
             return result, indices
     
-    def save_as_fits(self, filename, overwrite=False, output_format='unix', output_unit='s'):
+    def save_as_fits(self, filename, overwrite=False, output_format='unix'):
         """
         Save GTI data to a FITS file.
         
@@ -142,8 +140,6 @@ class GoodTimeInterval():
             If True, overwrite existing file (default: False)
         output_format : str, optional
             Time format for output (e.g., 'unix', 'mjd'). Default: 'unix'
-        output_unit : str, optional
-            Time unit for output. Default: 's'
         """
         # Get values in the specified output format using getattr
         if not hasattr(self.starts, output_format):
@@ -158,6 +154,9 @@ class GoodTimeInterval():
         # Create primary HDU
         primary_hdu = fits.PrimaryHDU()
         primary_hdu.header['TIMESYS'] = output_scale.upper()
+        output_unit = 's'
+        if output_format in ['jd', 'mjd']:
+            output_unit = 'd'
         primary_hdu.header['TIMEUNIT'] = output_unit
         
         # Define table columns
@@ -169,6 +168,7 @@ class GoodTimeInterval():
         table_hdu.header['EXTNAME'] = 'GTI'
         table_hdu.header['TIMESYS'] = output_scale.upper()
         table_hdu.header['TIMEUNIT'] = output_unit
+        table_hdu.header['TIMEFORMAT'] = output_format
         
         # Create HDUList and write to FITS file
         hdul = fits.HDUList([primary_hdu, table_hdu])
@@ -180,8 +180,6 @@ class GoodTimeInterval():
         Load GTI from a FITS file.
         
         Reads time format and scale from FITS header.
-        Currently supports UNIX time format.
-        TODO: Add support for MJD, MET (MJDREFI/MJDREFF) formats.
         
         Parameters
         ----------
@@ -206,13 +204,9 @@ class GoodTimeInterval():
             infile.close()
             raise ValueError("GTI table not found in FITS file")
         
-        # Read time system from header
-        time_scale = gti_hdu.header.get('TIMESYS', 'UTC').lower()
-        time_unit = gti_hdu.header.get('TIMEUNIT', 's')
-        
-        # TODO: Auto-detect time format from header or data
-        # For now, assume UNIX time
-        time_format = 'unix'
+        # Read time system/format from header
+        time_scale = gti_hdu.header.get('TIMESYS', 'utc').lower()
+        time_format = gti_hdu.header.get('TIMEFORMAT', 'unix').lower()
         
         # Read start and stop times as arrays
         starts = Time(gti_hdu.data['TSTART'], format=time_format, scale=time_scale)
