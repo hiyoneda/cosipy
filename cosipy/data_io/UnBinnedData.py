@@ -28,13 +28,16 @@ logger = logging.getLogger(__name__)
 class UnBinnedData(DataIO):
     """Handles unbinned data."""
 
-    def read_tra(self, output_name=None, run_test=False, use_ori=False,
+    def read_tra(self, input_name=None, output_name=None, run_test=False, use_ori=False,
             event_min=None, event_max=None):
         
         """Reads MEGAlib .tra (or .tra.gz) file and creates cosi datset.
         
         Parameters
         ----------
+	    input_name : str, optional
+            Path of input file (default is None, in which case the 
+	        input file name is taken from the yaml file).
         output_name : str, optional
             Prefix of output file (default is None, in which case no 
             output is written). 
@@ -87,9 +90,11 @@ class UnBinnedData(DataIO):
         This method sets the instance attribute, cosi_dataset, 
         but it does not explicitly return this.  
         """
-   
+        if input_name != None:
+            self.data_file = input_name
+            
         start_time = time.time()
-
+				
         # Initialise empty lists:
             
         # Total photon energy
