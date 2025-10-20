@@ -865,5 +865,3 @@ class UnBinnedData(DataIO):
             self.write_unbinned_output(output_name)
 
         return
-
-
