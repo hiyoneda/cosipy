@@ -85,8 +85,9 @@ def main():
                     output=str(binned_bkg_data_path), checksum = '54221d8556eb4ef520ef61da8083e7f4')
 
     # orientation history
-    tstart = Time("2028-03-01 01:35:00.117")
-    tstop = Time("2028-03-01 02:35:00.117")
+    # About 1 full orbit ~1.7 hr
+    tstart = Time("2028-03-01 02:00:00.117")
+    tstop = Time("2028-03-01 03:42:00.117")
     sc_orientation = SpacecraftHistory.open(sc_orientation_path)
     sc_orientation = sc_orientation.select_interval(tstart, tstop)
 
@@ -128,7 +129,9 @@ def main():
         bkg = None
 
     # Prepare point source response, which convolved the IRF with the SC orientation
-    psr = UnbinnedThreeMLPointSourceResponseTrapz(data, irf, sc_orientation, dr.axes['Ei'].centers)
+    ei_samples = np.geomspace(100, 5000, 100)*u.keV
+    psr = UnbinnedThreeMLPointSourceResponseTrapz(data, irf, sc_orientation,
+                                                  ei_samples)
 
     # Prepare the model
     l = 184.56
