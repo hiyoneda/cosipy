@@ -1,3 +1,6 @@
+import logging
+logger = logging.getLogger(__name__)
+
 import numpy as np
 from astropy.time import Time
 from astropy.io import fits
@@ -21,14 +24,6 @@ class GoodTimeInterval():
         if tstop_list.isscalar == True:
             tstop_list = Time([tstop_list])
 
-        # Check that starts and stops have the same scale
-        if not np.all(tstart_list.scale == tstop_list.scale):
-            raise ValueError(f"Time scale mismatch between starts ({tstart_list.scale}) and stops ({tstop_list.scale})")
-        
-        # Check that starts and stops have the same format
-        if tstart_list.format != tstop_list.format:
-            raise ValueError(f"Time format mismatch between starts ({tstart_list.format}) and stops ({tstop_list.format})")
-        
         # Check that starts and stops have the same length 
         if len(tstart_list) != len(tstop_list):
             raise ValueError(f"Length mismatch between starts ({len(tstart_list)}) and stops ({len(tstop_list)})")
@@ -112,14 +107,13 @@ class GoodTimeInterval():
         
         # Use the scale from the stored Time objects
         output_scale = self._tstart_list.scale
-        
-        # Create primary HDU
-        primary_hdu = fits.PrimaryHDU()
-        primary_hdu.header['TIMESYS'] = output_scale.upper()
+
         output_unit = 's'
         if output_format in ['jd', 'mjd']:
             output_unit = 'd'
-        primary_hdu.header['TIMEUNIT'] = output_unit
+        
+        # Create primary HDU
+        primary_hdu = fits.PrimaryHDU()
         
         # Define table columns
         col1 = fits.Column(name='TSTART', format='D', unit=output_unit, array=start_times)
@@ -164,11 +158,11 @@ class GoodTimeInterval():
         
         if gti_hdu is None:
             infile.close()
-            raise ValueError("GTI table not found in FITS file")
+            logger.error("GTI table not found in FITS file")
         
         # Read time system/format from header
-        time_scale = gti_hdu.header.get('TIMESYS', 'utc').lower()
-        time_format = gti_hdu.header.get('TIMEFORMAT', 'unix').lower()
+        time_scale = gti_hdu.header.get('TIMESYS').lower()
+        time_format = gti_hdu.header.get('TIMEFORMAT').lower()
         
         # Read start and stop times as arrays
         tstart_list = Time(gti_hdu.data['TSTART'], format=time_format, scale=time_scale)
@@ -176,3 +170,88 @@ class GoodTimeInterval():
         
         infile.close()
         return cls(tstart_list, tstop_list)
+
+    @classmethod
+    def intersection(cls, *gti_list):
+        """
+        Find the intersection of multiple GTI objects.
+        
+        Returns a new GTI object containing only time intervals that overlap
+        in all input GTI objects.
+        
+        Assumes all GTI objects are sorted by start time (guaranteed by sort() in __init__).
+        
+        Parameters
+        ----------
+        *gti_list : GoodTimeInterval
+            Variable number of GTI objects to intersect
+            
+        Returns
+        -------
+        GoodTimeInterval
+            New GTI object with intersected intervals
+            
+        Examples
+        --------
+        >>> gti1 = GoodTimeInterval(tstart1, tstop1)
+        >>> gti2 = GoodTimeInterval(tstart2, tstop2)
+        >>> gti3 = GoodTimeInterval(tstart3, tstop3)
+        >>> intersected = GoodTimeInterval.intersection(gti1, gti2, gti3)
+        """
+        if len(gti_list) == 0:
+            raise ValueError("At least one GTI object is required")
+        
+        if len(gti_list) == 1:
+            # Return a copy of the single GTI
+            gti = gti_list[0]
+            return cls(gti.tstart_list.copy(), gti.tstop_list.copy())
+        
+        # Start with intervals from the first GTI
+        current_starts = list(gti_list[0].tstart_list)
+        current_stops = list(gti_list[0].tstop_list)
+        
+        # Iteratively intersect with each subsequent GTI
+        for gti in gti_list[1:]:
+            new_starts = []
+            new_stops = []
+            
+            i = 0  # Index for current intervals
+            j = 0  # Index for gti intervals
+            
+            # Two-pointer approach for sorted intervals
+            while i < len(current_starts) and j < len(gti):
+                start1, stop1 = current_starts[i], current_stops[i]
+                start2, stop2 = gti[j]
+                
+                # Check if intervals overlap
+                if start1 < stop2 and start2 < stop1:
+                    # Calculate intersection
+                    max_start = max(start1, start2)
+                    min_stop = min(stop1, stop2)
+                    
+                    if max_start < min_stop:
+                        new_starts.append(max_start)
+                        new_stops.append(min_stop)
+                
+                # Move the pointer for the interval that ends first
+                if stop1 <= stop2:
+                    i += 1
+                else:
+                    j += 1
+            
+            # Update current intervals for next iteration
+            current_starts = new_starts
+            current_stops = new_stops
+            
+            # If no overlaps found, we can stop early
+            if len(current_starts) == 0:
+                break
+        
+        # Handle case with no overlapping intervals
+        if len(current_starts) == 0:
+            # Return empty GTI with appropriate time format
+            empty_time = Time([], format=gti_list[0].tstart_list.format, 
+                             scale=gti_list[0].tstart_list.scale)
+            return cls(empty_time, empty_time.copy())
+        
+        return cls(Time(current_starts), Time(current_stops))
