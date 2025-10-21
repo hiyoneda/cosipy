@@ -861,36 +861,3 @@ class UnBinnedData(DataIO):
             self.write_unbinned_output(output_name)
 
         return
-
-    def filter_good_data_with_gti(self, gti, unbinned_data=None, output_name=None):
-    
-        """Extract entries that fall within given good time intervals.
-
-        Parameters
-        ----------
-        gti: :py:class:`cosipy.event_selection.GoodTimeInterval`
-            Good time intervals
-        unbinned_data : str, optional
-            Name of unbinned dictionary file.
-        output_name : str, optional
-            Prefix of output file (default is None, in which case no 
-            file is saved).
-        """
-        # Option to read in unbinned data file:
-        if unbinned_data:
-            self.cosi_dataset = self.get_dict(unbinned_data)
-
-        # Get indices for good photons:
-        from astropy.time import Time
-        time_keep_index, time_keep_gti_index = gti.is_in_gti(Time(self.cosi_dataset['TimeTags'], format = 'unix', scale = 'utc'))
-
-        # Apply cuts to dictionary:
-        for key in self.cosi_dataset:
-            self.cosi_dataset[key] = self.cosi_dataset[key][time_keep_index]
-
-        # Write unbinned data to file (either fits or hdf5):
-        if output_name != None:
-            logger.info("Saving file...")
-            self.write_unbinned_output(output_name)
-
-        return
