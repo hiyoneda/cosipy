@@ -198,7 +198,8 @@ def test_inject_extended_source():
     # Get the data of the injected source
     injected = injector.inject_extended_source(
         source_model=model,
-        make_spectrum_plot=False,
+        make_spectrum_plot=True,
+        make_PsiChi_plot=True,
         data_save_path=None,
         project_axes=None,
     )
