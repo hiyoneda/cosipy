@@ -449,7 +449,7 @@ class PolarizationStokes():
 
         self._data_counts = self.get_data_counts()
 
-        self._data_azimuthal_angles = self.calculate_azimuthal_scattering_angles(self._data, show_plots=True)
+        self._data_azimuthal_angles = self.calculate_azimuthal_scattering_angles(self._data, show_plots=False)
 
         self._background = background
         
@@ -600,7 +600,7 @@ class PolarizationStokes():
                 psichi = SkyCoord(lat=(np.pi/2) - expectation.axes['PsiChi'].pix2ang(i)[0], lon=expectation.axes['PsiChi'].pix2ang(i)[1], unit=u.rad, frame=self._convention.frame)
                 azimuthal_angle = PolarizationAngle.from_scattering_direction(psichi, self._source_vector, self._convention)
                 azimuthal_angle_bins.append(azimuthal_angle.angle)
-        
+
         else:
             logger.info('>>> Convolving spectrum in ICRS frame...')
             scatt_map = self._ori.get_scatt_map(nside=self._response.nside*2, target_coord=self._source_vector, coordsys='galactic')
