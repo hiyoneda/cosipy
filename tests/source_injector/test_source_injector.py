@@ -243,6 +243,7 @@ def test_inject_extended_source_saving():
     injected = injector.inject_extended_source(
         source_model=model,
         make_spectrum_plot=False,
+        make_PsiChi_plot=False,
         data_save_path=file_path,
         project_axes=None,
     )
