@@ -8,22 +8,45 @@ from cosipy.interfaces import TimeTagEventInterface, EventInterface
 from cosipy.interfaces.event_selection import EventSelectorInterface
 from cosipy.util.iterables import itertools_batched
 
-from .good_time_interval import GoodTimeInterval
 
-class EventSelectorGTI(EventSelectorInterface):
+class MultiTimeSelector(EventSelectorInterface):
 
-    def __init__(self, gti:GoodTimeInterval, batch_size:int = 10000):
+    def __init__(self, tstart_list:Time = None, tstop_list:Time = None, batch_size:int = 10000):
         """
         Assumes events are time-ordered
+
+        Parameters
+        ----------
+        tstart_list:
+        tstop_list:
+        batch_size:
+        """
+        if tstart_list.isscalar == True:
+            tstart_list = Time([tstart_list])
+        if tstop_list.isscalar == True:
+            tstop_list = Time([tstop_list])
+
+        self._tstart_list = tstart_list
+        self._tstop_list = tstop_list
+
+        self._batch_size = batch_size
+    
+    @classmethod
+    def load_GTI(cls, gti, batch_size:int = 10000):
+        """
+        Instantiate a multi time selector from a good time intervals.
 
         Parameters
         ----------
         gti:
         batch_size:
         """
-        self._gti = gti
+        tstart_list = gti.tstart_list
+        tstop_list = gti.tstop_list
 
-        self._batch_size = batch_size
+        selector = cls(tstart_list, tstop_list, batch_size)
+
+        return selector
 
     def _select(self, event:TimeTagEventInterface) -> bool:
         # Single event
@@ -51,7 +74,10 @@ class EventSelectorGTI(EventSelectorInterface):
 
                 time = Time(jd1, jd2, format = 'jd')
 
-                selected, gti_index = self._gti.is_in_gti(time)
+                indices = np.searchsorted(self._tstart_list, time, side='right') - 1
+                valid = (indices >= 0) & (indices < len(self._tstop_list))
+                result = np.zeros(len(time), dtype=bool)
+                result[valid] = time[valid] <= self._tstop_list[indices[valid]]
 
-                for sel in selected:
+                for sel in result:
                     yield sel
