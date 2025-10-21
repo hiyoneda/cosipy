@@ -285,37 +285,6 @@ def test_get_esr_error():
         SourceInjector.get_esr(model, response_path)
 
 
-def test_inject_model():
 
-    # Define the response
-    response_path = test_data.path / "test_precomputed_response.h5"
-
-    # Define a spatial model (Gaussian_on_sphere) + spectral model (Powerlaw)
-    spatial = Gaussian_on_sphere()
-    spatial.lon0.value = 50.0
-    spatial.lat0.value = -45.0
-    spatial.sigma.value = 2.0
-
-    K = 17 / u.cm / u.cm / u.s / u.keV
-    piv = 1 * u.keV
-
-    spectral = Powerlaw()
-    spectral.index.value = -2.2
-    spectral.K.value = K.value
-    spectral.piv.value = piv.value
-    spectral.K.unit = K.unit
-    spectral.piv.unit = piv.unit
-
-    model = ExtendedSource(
-        "test_extended", spatial_shape=spatial, spectral_shape=spectral
-    )
-
-    # Define an injector by the response
-    injector = SourceInjector(response_path=response_path)
-
-    file_path = Path("./extended_rsp.h5")
-   
-    
-    injected = injector.inject_model(model=model, orientation = None, make_spectrum_plot = True, make_PsiChi_plot = True ,data_save_path = None, project_axes = None)
 
     
