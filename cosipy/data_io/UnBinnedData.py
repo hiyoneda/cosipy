@@ -78,7 +78,8 @@ class UnBinnedData(DataIO):
                         'Psi local':psi_loc,\
                         'Distance':dist,\
                         'Chi galactic':chi_gal,\
-                        'Psi galactic':psi_gal}\
+                        'Psi galactic':psi_gal,\
+                        'CO seq':CO_seq}\
             Arrays contain unbinned photon data. 
         
         Notes
@@ -126,6 +127,10 @@ class UnBinnedData(DataIO):
         dg_y = []
         dg_z = []
 
+        # Compton seq
+        CO_seq = []
+
+        
         # Define electron rest energy, which is used in calculation
         # of Compton scattering angle.
         c_E0 = 510.9989500015 # keV
@@ -210,6 +215,7 @@ class UnBinnedData(DataIO):
                         erg.pop()
                         phi.pop()
                         tt.pop()
+						CO_seq.pop()
                         # Not all sims include ori info,
                         # so also need to check before pop:
                         if len(lonX) != 0:
@@ -280,6 +286,11 @@ class UnBinnedData(DataIO):
                 lonZ.append(this_lonZ)
                 latZ.append(this_latZ)
             
+            
+            #number of interaction
+            if this_line[0] == "SQ":
+                CO_seq.append(int(this_line[1]))
+            
             # Interaction position information: 
             if (this_line[0] == "CH"):
                 
@@ -323,7 +334,8 @@ class UnBinnedData(DataIO):
         dg_x = np.array(dg_x)
         dg_y = np.array(dg_y)
         dg_z = np.array(dg_z)
- 
+        CO_seq = np.array(CO_seq)
+        
         # Check if the input data has pointing information, 
         # if not, set dummy values:
         if (use_ori == False) & (len(lonZ)==0):
@@ -410,7 +422,8 @@ class UnBinnedData(DataIO):
                         'Psi local':psi_loc,
                         'Distance':dist,
                         'Chi galactic':chi_gal,
-                        'Psi galactic':psi_gal} 
+                        'Psi galactic':psi_gal,
+                       'Compton Seq':CO_seq} 
         self.cosi_dataset = cosi_dataset
 
         # Option to write unbinned data to file (either fits or hdf5):
@@ -550,7 +563,7 @@ class UnBinnedData(DataIO):
 
         # Data units:
         units=['keV','s','rad','rad',
-                'rad','rad','rad','rad','cm','deg','deg']
+                'rad','rad','rad','rad','cm','deg','deg','']
             
         # For fits output: 
         if self.unbinned_output == 'fits':
@@ -723,6 +736,47 @@ class UnBinnedData(DataIO):
 
         return
 
+    def select_data_COseq(self, seqmin, seqmax, output_name=None, unbinned_data=None):
+
+        """Applies CO sequence cuts [seqmin,seqmax) to unbinnned data dictionary. 
+        
+        Parameters
+        ----------
+        seqmin :  int
+            Minimum number of interaction.
+        seqmax :  int
+            Maximum number of interaction.
+        unbinned_data : str, optional
+            Name of unbinned dictionary file.
+        output_name : str, optional
+            Prefix of output file (default is None, in which case no 
+            file is saved).
+        """
+        
+        logger.info("Making data selections on Compton Sequence...")
+
+        # Option to read in unbinned data file:
+        if unbinned_data:
+            self.cosi_dataset = self.get_dict(unbinned_data)
+
+        # Get energy cut index:
+        COseq_array = self.cosi_dataset["Compton Seq"]
+        COseq_cut_index = (COseq_array >= seqmin) & (COseq_array < seqmax)
+    
+        # Apply cuts to dictionary:
+        for key in self.cosi_dataset:
+
+            self.cosi_dataset[key] = self.cosi_dataset[key][COseq_cut_index]
+
+        # Write unbinned data to file (either fits or hdf5):
+        if output_name != None:
+            logger.info("Saving file...")
+            self.write_unbinned_output(output_name)
+
+        return
+
+
+        
     def combine_unbinned_data(self, input_files, output_name=None):
 
         """Combines input unbinned data files.
