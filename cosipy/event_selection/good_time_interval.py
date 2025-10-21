@@ -4,40 +4,52 @@ from astropy.io import fits
 
 class GoodTimeInterval():
     
-    def __init__(self, starts, stops):
+    def __init__(self, tstart_list, tstop_list):
         """
         Initialize GTI object.
         
         Parameters
         ----------
-        starts : astropy.time.Time (array)
+        tstart_list : astropy.time.Time (array)
             Start times of GTI intervals
-        stops : astropy.time.Time (array)
+        tstop_list : astropy.time.Time (array)
             Stop times of GTI intervals
-
-        Notes
-        -----
-        Currently, unix + utc is assumed. 
-        When the default time format/system is fixed,
-        this class should be modified.
         """
+        # Check that starts and stops are scalar
+        if tstart_list.isscalar == True:
+            tstart_list = Time([tstart_list])
+        if tstop_list.isscalar == True:
+            tstop_list = Time([tstop_list])
+
         # Check that starts and stops have the same scale
-        if not np.all(starts.scale == stops.scale):
-            raise ValueError(f"Time scale mismatch between starts ({starts.scale}) and stops ({stops.scale})")
+        if not np.all(tstart_list.scale == tstop_list.scale):
+            raise ValueError(f"Time scale mismatch between starts ({tstart_list.scale}) and stops ({tstop_list.scale})")
         
         # Check that starts and stops have the same format
-        if starts.format != stops.format:
-            raise ValueError(f"Time format mismatch between starts ({starts.format}) and stops ({stops.format})")
+        if tstart_list.format != tstop_list.format:
+            raise ValueError(f"Time format mismatch between starts ({tstart_list.format}) and stops ({tstop_list.format})")
         
-        self.starts = starts
-        self.stops = stops
+        # Check that starts and stops have the same length 
+        if len(tstart_list) != len(tstop_list):
+            raise ValueError(f"Length mismatch between starts ({len(tstart_list)}) and stops ({len(tstop_list)})")
+        
+        self._tstart_list = tstart_list
+        self._tstop_list = tstop_list
         
         # Sort by start time
         self.sort()
+
+    @property
+    def tstart_list(self):
+        return self._tstart_list
+    
+    @property
+    def tstop_list(self):
+        return self._tstop_list
     
     def __len__(self):
         """Return the number of GTI intervals."""
-        return len(self.starts)
+        return len(self._tstart_list)
     
     def __getitem__(self, index):
         """
@@ -51,9 +63,9 @@ class GoodTimeInterval():
         Returns
         -------
         tuple of (Time, Time)
-            (starts, stops) for the indexed interval(s)
+            (tstart_list, tstop_list) for the indexed interval(s)
         """
-        return self.starts[index], self.stops[index]
+        return self._tstart_list[index], self._tstop_list[index]
     
     def __iter__(self):
         """
@@ -64,7 +76,7 @@ class GoodTimeInterval():
         tuple of (Time, Time)
             Each (start, stop) pair
         """
-        for start, stop in zip(self.starts, self.stops):
+        for start, stop in zip(self._tstart_list, self._tstop_list):
             yield start, stop
         
     def sort(self):
@@ -74,63 +86,11 @@ class GoodTimeInterval():
         Modifies the GTI in place.
         Stops are sorted according to the start time order.
         """
-        sort_idx = np.argsort(self.starts)
-        self.starts = self.starts[sort_idx]
-        self.stops = self.stops[sort_idx]
+        sort_idx = np.argsort(self._tstart_list)
+        self._tstart_list = self._tstart_list[sort_idx]
+        self._tstop_list = self._tstop_list[sort_idx]
     
-    def is_in_gti(self, time):
-        """
-        Check if a time (or list of times) is within any GTI interval.
-        
-        Uses binary search for efficiency, assuming GTI is sorted.
-        
-        Parameters
-        ----------
-        time : astropy.time.Time
-            Time or times to check (scalar or array)
-            Must be in the same time scale as the GTI.
-        
-        Returns
-        -------
-        bool or numpy.ndarray of bool
-            True if time is within GTI, False otherwise.
-            If input is array, returns array of booleans.
-        int or numpy.ndarray of int
-            Index of the GTI interval containing the time(s).
-            -1 if not in any GTI interval.
-        """
-        # Check time scale
-        if time.scale != self.starts.scale:
-            raise ValueError(f"Time scale mismatch. Expected {self.starts.scale.upper()}, "
-                           f"got {time.scale.upper()}")
-        
-        # Get values using the format attribute
-        time_format = self.starts.format
-        starts_value = getattr(self.starts, time_format)
-        stops_value = getattr(self.stops, time_format)
-        times_value = getattr(time, time_format)
-        
-        # Check if time is scalar or array
-        if time.isscalar:
-            # Single time
-            idx = np.searchsorted(starts_value, times_value, side='right') - 1
-            if idx >= 0 and idx < len(stops_value):
-                if times_value <= stops_value[idx]:
-                    return True, idx
-            return False, -1
-        else:
-            # Array of times - vectorized with np.searchsorted
-            indices = np.searchsorted(starts_value, times_value, side='right') - 1
-            
-            # Check validity and whether times fall within GTI intervals
-            valid = (indices >= 0) & (indices < len(stops_value))
-            result = np.zeros(len(time), dtype=bool)
-            result[valid] = times_value[valid] <= stops_value[indices[valid]]
-            indices[~result] = -1
-            
-            return result, indices
-    
-    def save_as_fits(self, filename, overwrite=False, output_format='unix', output_unit='s'):
+    def save_as_fits(self, filename, overwrite=False, output_format='unix'):
         """
         Save GTI data to a FITS file.
         
@@ -142,22 +102,23 @@ class GoodTimeInterval():
             If True, overwrite existing file (default: False)
         output_format : str, optional
             Time format for output (e.g., 'unix', 'mjd'). Default: 'unix'
-        output_unit : str, optional
-            Time unit for output. Default: 's'
         """
         # Get values in the specified output format using getattr
-        if not hasattr(self.starts, output_format):
+        if not hasattr(self._tstart_list, output_format):
             raise ValueError(f"Unsupported output format: {output_format}")
         
-        start_times = getattr(self.starts, output_format)
-        stop_times = getattr(self.stops, output_format)
+        start_times = getattr(self._tstart_list, output_format)
+        stop_times = getattr(self._tstop_list, output_format)
         
         # Use the scale from the stored Time objects
-        output_scale = self.starts.scale
+        output_scale = self._tstart_list.scale
         
         # Create primary HDU
         primary_hdu = fits.PrimaryHDU()
         primary_hdu.header['TIMESYS'] = output_scale.upper()
+        output_unit = 's'
+        if output_format in ['jd', 'mjd']:
+            output_unit = 'd'
         primary_hdu.header['TIMEUNIT'] = output_unit
         
         # Define table columns
@@ -169,6 +130,7 @@ class GoodTimeInterval():
         table_hdu.header['EXTNAME'] = 'GTI'
         table_hdu.header['TIMESYS'] = output_scale.upper()
         table_hdu.header['TIMEUNIT'] = output_unit
+        table_hdu.header['TIMEFORMAT'] = output_format
         
         # Create HDUList and write to FITS file
         hdul = fits.HDUList([primary_hdu, table_hdu])
@@ -180,8 +142,6 @@ class GoodTimeInterval():
         Load GTI from a FITS file.
         
         Reads time format and scale from FITS header.
-        Currently supports UNIX time format.
-        TODO: Add support for MJD, MET (MJDREFI/MJDREFF) formats.
         
         Parameters
         ----------
@@ -206,17 +166,13 @@ class GoodTimeInterval():
             infile.close()
             raise ValueError("GTI table not found in FITS file")
         
-        # Read time system from header
-        time_scale = gti_hdu.header.get('TIMESYS', 'UTC').lower()
-        time_unit = gti_hdu.header.get('TIMEUNIT', 's')
-        
-        # TODO: Auto-detect time format from header or data
-        # For now, assume UNIX time
-        time_format = 'unix'
+        # Read time system/format from header
+        time_scale = gti_hdu.header.get('TIMESYS', 'utc').lower()
+        time_format = gti_hdu.header.get('TIMEFORMAT', 'unix').lower()
         
         # Read start and stop times as arrays
-        starts = Time(gti_hdu.data['TSTART'], format=time_format, scale=time_scale)
-        stops = Time(gti_hdu.data['TSTOP'], format=time_format, scale=time_scale)
+        tstart_list = Time(gti_hdu.data['TSTART'], format=time_format, scale=time_scale)
+        tstop_list = Time(gti_hdu.data['TSTOP'], format=time_format, scale=time_scale)
         
         infile.close()
-        return cls(starts, stops)
+        return cls(tstart_list, tstop_list)
