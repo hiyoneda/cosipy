@@ -56,7 +56,7 @@ class FreeNormBackground(BackgroundInterface):
             # Multiple label components.
             self._distributions = distribution
             self._norms = np.ones(self.ncomponents) # Hz Each component
-            self._norm = len(self.labels) # Hz. Total
+            self._norm = np.sum(self._norms) # Hz. Total
 
         self._labels = tuple(self._distributions.keys())
 
