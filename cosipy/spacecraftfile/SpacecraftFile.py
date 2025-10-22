@@ -654,7 +654,7 @@ class SpacecraftFile():
             time_weights = np.where(is_occluded[:-1], 0, self.livetime)
 
         else:
-            source = None # occultation of search was not applied
+            source = None # w/o occultation, result is not dependent on source
             time_weights = self.livetime
 
         # Get orientations as rotation vectors (center dir, angle around center)
