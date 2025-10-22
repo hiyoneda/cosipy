@@ -82,7 +82,7 @@ def main():
 
     # Define the path to the directory containing the data, detector response, orientation file, and yaml files if they have already been downloaded, or the directory to download the files into
 
-    data_path = Path("/localscratch/sgallego/linkToXauron/COSIpyData/DC3_data") # /path/to/files. Current dir by default
+    data_path = Path("") # /path/to/files. Current dir by default
 
 
     # Download the orientation file 
