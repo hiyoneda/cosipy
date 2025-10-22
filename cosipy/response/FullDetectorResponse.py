@@ -386,7 +386,6 @@ class FullDetectorResponse(HealpixBase):
                                   coord = None,
                                   scatt_map = None,
                                   earth_occ = True):
-
         """
         Convolve this response with exposure for a point source at a
         given sky location.
