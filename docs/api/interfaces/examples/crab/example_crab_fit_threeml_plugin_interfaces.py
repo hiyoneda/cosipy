@@ -98,14 +98,12 @@ def main():
 
     # In[7]:
 
-    #crab_data_path = data_path / "Binneddata_crab_powerlaw.extracted.filtered.tra.gz.fits.gz.hdf5"
     crab_data_path = data_path / "crab_standard_3months_binned_data_filtered_with_SAAcut.fits.gz.hdf5"
 
-    #fetch_wasabi_file('COSI-SMEX/cosipy_tutorials/crab_spectral_fit_galactic_frame/crab_standard_3months_binned_data_filtered_with_SAAcut.fits.gz.hdf5',
-     #                 output=str(crab_data_path), checksum = '405862396dea2be79d7892d6d5bb50d8')
+    fetch_wasabi_file('COSI-SMEX/cosipy_tutorials/crab_spectral_fit_galactic_frame/crab_standard_3months_binned_data_filtered_with_SAAcut.fits.gz.hdf5',
+                      output=str(crab_data_path), checksum = '405862396dea2be79d7892d6d5bb50d8')
 
     
-    #bkg_data_path = data_path / "Total_BG_3months_binned_data_filtered_with_SAAcut_SAAreducedHEPD01_DC3binning.hdf5"
     bkg_data_path = [ data_path / "PrimaryProtons_WithDetCstbinned_data_filtered_with_SAAcut.hdf5",
                       data_path / "PrimaryAlphas_WithDetCstbinned_data_filtered_with_SAAcut.hdf5",
                       data_path / "AlbedoPhotons_WithDetCstbinned_data_filtered_with_SAAcut.hdf5",
@@ -116,46 +114,49 @@ def main():
                       data_path / "SecondaryProtons_WithDetCstbinned_data_filtered_with_SAAcut.hdf5",
                       data_path / "SAA_3months_unbinned_data_filtered_with_SAAcut_statreduced_akaHEPD01result.hdf5"
                     ]
+    
 
    # Download the binned background data 
     
-    #fetch_wasabi_file('COSI-SMEX/cosipy_tutorials/crab_spectral_fit_galactic_frame/PrimaryProtons_WithDetCstbinned_data_filtered_with_SAAcut.hdf5',
-    #                  output=str(crab_data_path), checksum = '7597f04210e59340a0888c66fc5cbc63')
+    fetch_wasabi_file('COSI-SMEX/cosipy_tutorials/crab_spectral_fit_galactic_frame/PrimaryProtons_WithDetCstbinned_data_filtered_with_SAAcut.hdf5',
+                      output=str(crab_data_path), checksum = '7597f04210e59340a0888c66fc5cbc63')
 
-    #fetch_wasabi_file('COSI-SMEX/cosipy_tutorials/crab_spectral_fit_galactic_frame/PrimaryAlphas_WithDetCstbinned_data_filtered_with_SAAcut.hdf5',
-    #                  output=str(crab_data_path), checksum = '76a68da730622851b8e1c749248c3b40')
-
-
-    #fetch_wasabi_file('COSI-SMEX/cosipy_tutorials/crab_spectral_fit_galactic_frame/AlbedoPhotons_WithDetCstbinned_data_filtered_with_SAAcut.hdf5',
-    #                  output=str(crab_data_path), checksum = '76c58361d2c9b43b66ef2e41c18939c4')
-
-    #fetch_wasabi_file('COSI-SMEX/cosipy_tutorials/crab_spectral_fit_galactic_frame/AlbedoNeutrons_WithDetCstbinned_data_filtered_with_SAAcut.hdf5',
-    #                  output=str(crab_data_path), checksum = '8f3cb418c637b839665a4fcbd000d2eb')
-
-    #fetch_wasabi_file('COSI-SMEX/cosipy_tutorials/crab_spectral_fit_galactic_frame/CosmicPhotons_3months_binned_data_filtered_with_SAAcut.hdf5',
-    #                  output=str(crab_data_path), checksum = '93c4619b383572d318328e6380e35a70')
-
-    #fetch_wasabi_file('COSI-SMEX/cosipy_tutorials/crab_spectral_fit_galactic_frame/GalTotal_SA100_F98_3months_binned_data_filtered_with_SAAcut.hdf5',
-    #                  output=str(crab_data_path), checksum = 'd0415d4d04b040af47f23f5d08cb7d64')
-
-    #fetch_wasabi_file('COSI-SMEX/cosipy_tutorials/crab_spectral_fit_galactic_frame/SecondaryPositrons_3months_binned_data_filtered_with_SAAcut.hdf5',
-    #                 output=str(crab_data_path), checksum = '78aefa46707c98563294a898a62845c1')
-
-   #fetch_wasabi_file('COSI-SMEX/cosipy_tutorials/crab_spectral_fit_galactic_frame/SecondaryProtons_3months_binned_data_filtered_with_SAAcut.hdf5',
-    #                 output=str(crab_data_path), checksum = '5fec2212dcdbb4c43c3ac02f02524f68')
+    fetch_wasabi_file('COSI-SMEX/cosipy_tutorials/crab_spectral_fit_galactic_frame/PrimaryAlphas_WithDetCstbinned_data_filtered_with_SAAcut.hdf5',
+                      output=str(crab_data_path), checksum = '76a68da730622851b8e1c749248c3b40')
 
 
-   #fetch_wasabi_file('COSI-SMEX/cosipy_tutorials/crab_spectral_fit_galactic_frame/SAA_3months_unbinned_data_filtered_with_SAAcut_statreduced_akaHEPD01result.hdf5',
-    #                 output=str(crab_data_path), checksum = 'fc69fbbfd94cd595f57a8b11fc721169')
+    fetch_wasabi_file('COSI-SMEX/cosipy_tutorials/crab_spectral_fit_galactic_frame/AlbedoPhotons_WithDetCstbinned_data_filtered_with_SAAcut.hdf5',
+                      output=str(crab_data_path), checksum = '76c58361d2c9b43b66ef2e41c18939c4')
 
+    fetch_wasabi_file('COSI-SMEX/cosipy_tutorials/crab_spectral_fit_galactic_frame/AlbedoNeutrons_WithDetCstbinned_data_filtered_with_SAAcut.hdf5',
+                      output=str(crab_data_path), checksum = '8f3cb418c637b839665a4fcbd000d2eb')
+
+    fetch_wasabi_file('COSI-SMEX/cosipy_tutorials/crab_spectral_fit_galactic_frame/CosmicPhotons_3months_binned_data_filtered_with_SAAcut.hdf5',
+                      output=str(crab_data_path), checksum = '93c4619b383572d318328e6380e35a70')
+
+    fetch_wasabi_file('COSI-SMEX/cosipy_tutorials/crab_spectral_fit_galactic_frame/GalTotal_SA100_F98_3months_binned_data_filtered_with_SAAcut.hdf5',
+                      output=str(crab_data_path), checksum = 'd0415d4d04b040af47f23f5d08cb7d64')
+
+    fetch_wasabi_file('COSI-SMEX/cosipy_tutorials/crab_spectral_fit_galactic_frame/SecondaryPositrons_3months_binned_data_filtered_with_SAAcut.hdf5',
+                     output=str(crab_data_path), checksum = '78aefa46707c98563294a898a62845c1')
+
+    fetch_wasabi_file('COSI-SMEX/cosipy_tutorials/crab_spectral_fit_galactic_frame/SecondaryProtons_3months_binned_data_filtered_with_SAAcut.hdf5',
+                     output=str(crab_data_path), checksum = '5fec2212dcdbb4c43c3ac02f02524f68')
+
+
+    fetch_wasabi_file('COSI-SMEX/cosipy_tutorials/crab_spectral_fit_galactic_frame/SAA_3months_unbinned_data_filtered_with_SAAcut_statreduced_akaHEPD01result.hdf5',
+                     output=str(crab_data_path), checksum = 'fc69fbbfd94cd595f57a8b11fc721169')
+
+
+    
     
     # Download the response file 
 
 
     dr_path = data_path / "ResponseContinuum_JeremyUpgrade.o3.e100_10000.b10log.s10396905069491.m2284.filtered.nonsparse.binnedimaging.imagingresponse.h5"
     
-    # fetch_wasabi_file('COSI-SMEX/develop/Data/Responses/ResponseContinuum.o3.e100_10000.b10log.s10396905069491.m2284.filtered.nonsparse.binnedimaging.imagingresponse.h5',
-    #                   output=str(dr_path), checksum = '16fe005d3ab924ad98322b6579aabf2a')
+    fetch_wasabi_file('COSI-SMEX/develop/Data/Responses/ResponseContinuum.o3.e100_10000.b10log.s10396905069491.m2284.filtered.nonsparse.binnedimaging.imagingresponse.h5',
+                       output=str(dr_path), checksum = '16fe005d3ab924ad98322b6579aabf2a')
 
 
     # Read in the spacecraft orientation file
