@@ -74,7 +74,7 @@ def get_integrated_spectral_model(spectrum, energy_axis):
                 spectrum_unit = spectrum.K.unit / spectrum.a.unit
             case _:
                 try:
-                    spectrum_unit = spectrum.K.unit
+                    spectrum_unit = spectrum.k.unit
                 except:
                     raise RuntimeError("Spectrum not yet supported because units are unknown.")
 
