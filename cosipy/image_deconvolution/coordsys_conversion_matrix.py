@@ -98,11 +98,11 @@ class CoordsysConversionMatrix(Histogram):
                 x = SkyCoord(xpointing.T[0], xpointing.T[1], frame="galactic", unit="deg")
 
             attitude = Attitude.from_axes(x = x, z = z, frame = 'galactic')
-            
+
             # exposure map calculation including earth occultation
-            exposure_time_map = cls._calc_exposure_time_map(nside_model, num_pointings, earth_zenith, altitude, delta_time, 
+            exposure_time_map = cls._calc_exposure_time_map(nside_model, num_pointings, earth_zenith, altitude, delta_time,
                                                             is_nest_model = is_nest_model)
-            
+
             # ccm
             for ipix in range(hp.nside2npix(nside_model)):
                 l, b = hp.pix2ang(nside_model, ipix, nest=is_nest_model, lonlat=True)
@@ -146,12 +146,12 @@ class CoordsysConversionMatrix(Histogram):
     def _calc_exposure_time_map(cls, nside_model, num_pointings, earth_zenith, altitude, delta_time, is_nest_model = False, r_earth = 6378.0):
         """
         Calculate exposure time map considering Earth occultation.
-    
+
         This method computes an exposure time map for each pointing, identifying
         pixels that are occulted by the Earth and assigning exposure times accordingly.
         For each pointing, pixels within the Earth's angular radius are identified
         and assigned the corresponding time interval.
-    
+
         Parameters
         ----------
         nside_model : int
@@ -169,7 +169,7 @@ class CoordsysConversionMatrix(Histogram):
             If True, use nested HEALPix pixel ordering scheme. If False, use ring ordering.
         r_earth : float, default 6378.0
             Earth's radius in kilometers.
-    
+
         Returns
         -------
         numpy.ndarray
@@ -181,7 +181,7 @@ class CoordsysConversionMatrix(Histogram):
         npix_model = hp.nside2npix(nside_model)
 
         exposure_time_map = np.zeros((num_pointings, npix_model))
-            
+
         for i_pointing in range(num_pointings):
             earth_radius = np.pi - np.arcsin(r_earth / (r_earth + altitude[i_pointing])) #rad
             filling_pixel_index = hp.query_disc(nside_model, hp.ang2vec(earth_zenith[i_pointing,0], earth_zenith[i_pointing,1], lonlat = True), nest = is_nest_model, radius = earth_radius)
@@ -216,15 +216,15 @@ class CoordsysConversionMatrix(Histogram):
     def calc_exposure_map(self, full_detector_response):
         """
         Calculate the exposure map from the coordinate conversion matrix and detector response.
-    
+
         Performs a tensor dot product between the CCM and the effective area, contracting
         over the 'NuLambda' axis to transform from local spacecraft coordinates to sky coordinates.
-    
+
         Parameters
         ----------
         full_detector_response : :py:class:`cosipy.response.FullDetectorResponse`
             Full detector response
-    
+
         Returns
         -------
         :py:class:`histpy.Histogram`
@@ -232,12 +232,12 @@ class CoordsysConversionMatrix(Histogram):
             for each attitude bin, sky pixel, and energy bin.
         """
         effective_area = full_detector_response.to_dr().project(['NuLambda', 'Ei'])
-                
-        exposure_map_contents = tensordot_sparse(self.contents, self.unit, 
+
+        exposure_map_contents = tensordot_sparse(self.contents, self.unit,
                                                  effective_area.contents, axes = ([2],[0]))
         # ["ScAtt", "lb", "NuLambda"] x ["NuLambda", "Ei"]
         exposure_map_axes = [self.axes['ScAtt'], self.axes['lb'], effective_area.axes['Ei']]
-        
+
         exposure_map = Histogram(exposure_map_axes, exposure_map_contents)
 
         return exposure_map

@@ -460,7 +460,7 @@ class UnBinnedData(DataIO):
 
         # Get ori info:
         ori = SpacecraftFile.parse_from_file(self.ori_file)
-        time_tags = ori._load_time
+        time_tags = ori.get_time().to_value(format="unix")
         x_pointings = ori.x_pointings
         z_pointings = ori.z_pointings
 

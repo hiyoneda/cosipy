@@ -11,7 +11,7 @@ from astropy.coordinates import SkyCoord
 from histpy import Histogram, HealpixAxis, Axis, Axes
 from scoords import SpacecraftFrame
 
-from cosipy.spacecraftfile import SpacecraftAttitudeMap
+from cosipy.spacecraftfile import SpacecraftAxisMap
 
 class SpacecraftAttitudeExposureTable(pd.DataFrame):
     """
@@ -420,7 +420,7 @@ class SpacecraftAttitudeExposureTable(pd.DataFrame):
 
         Returns
         -------
-        :py:class:`cosipy.spacecraft.SpacecraftAttitudeMap`
+        :py:class:`cosipy.spacecraft.SpacecraftAxisMap`
 
         Notes
         -----
@@ -428,10 +428,18 @@ class SpacecraftAttitudeExposureTable(pd.DataFrame):
         but here the spacecraft attitude is described with z- and x-pointings. 
         """
     
-        map_pointing_zx = SpacecraftAttitudeMap(nside = self.nside, scheme = self.scheme, coordsys = 'galactic', labels = ['z', 'x'])
-    
-        for hp_index, exposure in zip(self['healpix_index'], self['exposure']):
-            map_pointing_zx[hp_index[0], hp_index[1]] = exposure * u.s
+        map_pointing_zx = SpacecraftAxisMap(nside = self.nside,
+                                            scheme = self.scheme,
+                                            coordsys = 'galactic',
+                                            labels = ('z', 'x'))
+
+        # HEALPix pixel indices for axes 1 and 2 (stored as a Series of 2-tuples,
+        # converted to a tuple of indices per axis)
+        pix0, pix1 = tuple(zip(*self['healpix_index']))
+
+        exposure = u.Quantity(self['exposure'].values, unit = u.s, copy=False)
+
+        map_pointing_zx.fill(pix0, pix1, weight = exposure)
         
         return map_pointing_zx
 
