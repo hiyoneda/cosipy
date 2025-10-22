@@ -594,7 +594,8 @@ class SpacecraftFile():
     def get_scatt_map(self,
                       nside,
                       target_coord = None,
-                      earth_occ = True):
+                      earth_occ = True,
+                      angle_nbins = None):
 
         """
         Bin the spacecraft attitude history into a list of discretized
@@ -617,6 +618,9 @@ class SpacecraftFile():
         earth_occ : bool, optional
             Option to include Earth occultation in scatt map calculation.
             Default is True.
+        angle_nbins : int (optional)
+            Number of bins used for the rotvec's angle. If none
+            specified, default is 8*nside
 
         Returns
         -------
@@ -662,17 +666,16 @@ class SpacecraftFile():
         # discretize rotvecs for input Attitudes
 
         dir_axis = HealpixAxis(nside=nside, coordsys=self.frame)
-        angle_axis = Axis(np.linspace(0., 2*np.pi, num=nside*8+1), unit=u.rad)
+
+        if angle_nbins is None:
+            angle_nbins = 8*nside
+
+        angle_axis = Axis(np.linspace(0., 2*np.pi, num=angle_nbins+1), unit=u.rad)
 
         r_lon, r_colat = self._cart_to_polar(rot_dirs)
         dir_bins = dir_axis.find_bin(theta=r_colat.value,
                                      phi=r_lon.value)
         angle_bins = angle_axis.find_bin(rot_angles)
-
-        dv = dir_axis.pix2vec(dir_bins)
-        av = angle_axis.centers[angle_bins]
-        att1 = Attitude.from_rotvec(np.column_stack(dv) * av[:,None],
-                                    frame = self.frame)
 
         # compute list of unique rotvec bins occurring in input,
         # along with mapping from time to rotvec bin
