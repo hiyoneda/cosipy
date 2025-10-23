@@ -28,11 +28,10 @@ class FreeNormBackground(BackgroundInterface):
     This must translate to/from regular parameters
     with arbitrary type from/to 3ML parameters
 
-    Parameter names are "{label}_norm". Default to "bkg_norm" is there was a single
-    unlabeled component
+    Default to "bkg_norm" is there was a single unlabeled component
     """
 
-    _default_label = 'bkg'
+    _default_label = 'bkg_norm'
 
     def __init__(self,
                  distribution:Union[Histogram, Dict[str, Histogram]],
@@ -52,11 +51,13 @@ class FreeNormBackground(BackgroundInterface):
             self._distributions = {self._default_label: distribution}
             self._norms = np.ones(1) # Hz. Each component
             self._norm = 1 # Hz. Total
+            self._single_component = True
         else:
             # Multiple label components.
             self._distributions = distribution
             self._norms = np.ones(self.ncomponents) # Hz Each component
             self._norm = np.sum(self._norms) # Hz. Total
+            self._single_component = False
 
         self._labels = tuple(self._distributions.keys())
 
@@ -90,10 +91,6 @@ class FreeNormBackground(BackgroundInterface):
                     raise ValueError("All background components mus have the same axes")
 
     @property
-    def _single_component(self):
-        return self.ncomponents == 1
-
-    @property
     def norm(self):
         """
         Sum of all rates
@@ -104,7 +101,7 @@ class FreeNormBackground(BackgroundInterface):
     @property
     def norms(self):
         if self._single_component:
-            return {f"{self._default_label}_norm": u.Quantity(self._norms[0], u.Hz)}
+            return {self._default_label: u.Quantity(self._norms[0], u.Hz)}
         else:
             return {l:u.Quantity(n, u.Hz, copy = False) for l,n in zip(self.labels,self._norms)}
 
@@ -124,7 +121,7 @@ class FreeNormBackground(BackgroundInterface):
 
         if self._single_component:
             if isinstance(norm, dict):
-                self._norms[0] = norm[f'{self._default_label}_norm'].to_value(u.Hz)
+                self._norms[0] = norm[self._default_label].to_value(u.Hz)
             else:
                 self._norms[0] = norm.to_value(u.Hz)
         else:
