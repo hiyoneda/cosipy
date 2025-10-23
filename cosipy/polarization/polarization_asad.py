@@ -101,15 +101,10 @@ class PolarizationASAD():
         if not isinstance(background, list):
             background = [background]
 
-        # FIXME: if we can stop truncating asads['background_scaled'], we
-        # don't need to return durations here, because we can just use
-        # asads['background_scaled'] in computing uncertainty below
-        asads, source_duration, background_duration = \
-            self.create_asads(data, background, asad_bin_edges)
+        asads = self.create_asads(data, background, asad_bin_edges)
 
         uncertainty = np.sqrt(asads['source_and_background'].bin_error.contents**2 +
-                              (asads['background'].bin_error.contents *
-                               source_duration / background_duration)**2)
+                              asads['background_scaled'].bin_error.contents**2)
         asad_corrected, sigma = self.correct_asad(asads['source'],
                                                   asads['unpolarized'],
                                                   uncertainty)
@@ -160,10 +155,6 @@ class PolarizationASAD():
         -------
         asads : dict
             Azimuthal scattering angle distributions (ASADs)
-        source_duration : float
-            Duration of source
-        background_duration : float
-            Duration of background
 
         """
 
@@ -194,11 +185,7 @@ class PolarizationASAD():
 
         asad_background, background_duration = compute_asad_from_datasets(background, bin_edges)
 
-        # FIXME: why do we truncate to int here? Seems to be a relic
-        # of old impl where computed ASAD arrays were integers.
-        # Removing truncation changes output slightly, so leaving
-        # as-is for now.
-        asad_background_scaled = (asad_background * source_duration / background_duration).astype(int)
+        asad_background_scaled = (asad_background * source_duration / background_duration)
         asad_source = asad_sb - asad_background_scaled
 
         asad_unpolarized, asads_polarized = self.create_simulated_asads(bin_edges)
@@ -213,7 +200,7 @@ class PolarizationASAD():
             'polarized' : [ Histogram(axis, contents=asad, copy_contents=False) for asad in asads_polarized ]
         }
 
-        return asads, source_duration, background_duration
+        return asads
 
     def scattering_dirs_from_unbinned_data(self, unbinned_data):
         """
