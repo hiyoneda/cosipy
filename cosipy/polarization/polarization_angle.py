@@ -120,7 +120,7 @@ class PolarizationAngle:
         Parameters
         ----------
         psichi : astropy.coordinates.SkyCoord
-            Scattered photon direction FIXME: could be a vector skycoord
+            Scattered photon direction
         source_coord : astropy.coordinates.SkyCoord
             Source direction
         convention :
