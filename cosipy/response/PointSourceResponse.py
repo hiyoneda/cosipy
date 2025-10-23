@@ -54,7 +54,7 @@ class PointSourceResponse(Histogram):
             Spectral hypothesis.
         polarization : 'astromodels.core.polarization.LinearPolarization', optional
             Polarization angle and degree. The angle is assumed to have same convention as point source response.
-        flux : np.ndarray of float, optional
+        flux : 1D Histogram, optional
             Pre-computed integrated flux of spectrum for each bin on Ei axis
 
         Returns
