@@ -78,6 +78,8 @@ import os
 
 def main():
 
+    single_bkg_fit = True
+
     # ## Download and read in binned data
 
     # Define the path to the directory containing the data, detector response, orientation file, and yaml files if they have already been downloaded, or the directory to download the files into
@@ -91,72 +93,37 @@ def main():
     # In[ ]:
 
     sc_orientation_path = data_path / "DC3_final_530km_3_month_with_slew_15sbins_GalacticEarth_SAA.ori"
-    #fetch_wasabi_file('COSI-SMEX/DC3/Data/Orientation/DC3_final_530km_3_month_with_slew_15sbins_GalacticEarth_SAA.ori',
-    #                  output=str(sc_orientation_path), checksum = 'e5e71e3528e39b855b0e4f74a1a2eebe')
+    fetch_wasabi_file('COSI-SMEX/DC3/Data/Orientation/DC3_final_530km_3_month_with_slew_15sbins_GalacticEarth_SAA.ori',
+                      output=sc_orientation_path, checksum = 'e5e71e3528e39b855b0e4f74a1a2eebe')
 
     # Download the binned Crab data 
 
     # In[7]:
 
     crab_data_path = data_path / "crab_standard_3months_binned_data_filtered_with_SAAcut.fits.gz.hdf5"
-
     fetch_wasabi_file('COSI-SMEX/cosipy_tutorials/crab_spectral_fit_galactic_frame/crab_standard_3months_binned_data_filtered_with_SAAcut.fits.gz.hdf5',
-                      output=str(crab_data_path), checksum = '405862396dea2be79d7892d6d5bb50d8')
+                      output=crab_data_path, checksum = '405862396dea2be79d7892d6d5bb50d8')
 
-    
-    bkg_data_path = [ data_path / "PrimaryProtons_WithDetCstbinned_data_filtered_with_SAAcut.hdf5",
-                      data_path / "PrimaryAlphas_WithDetCstbinned_data_filtered_with_SAAcut.hdf5",
-                      data_path / "AlbedoPhotons_WithDetCstbinned_data_filtered_with_SAAcut.hdf5",
-                      data_path / "AlbedoNeutrons_WithDetCstbinned_data_filtered_with_SAAcut.hdf5",
-                      data_path / "CosmicPhotons_3months_binned_data_filtered_with_SAAcut.hdf5",
-                      data_path / "GalTotal_SA100_F98_3months_binned_data_filtered_with_SAAcut.hdf5",
-                      data_path / "SecondaryPositrons_3months_binned_data_filtered_with_SAAcut.hdf5",
-                      data_path / "SecondaryProtons_WithDetCstbinned_data_filtered_with_SAAcut.hdf5",
-                      data_path / "SAA_3months_unbinned_data_filtered_with_SAAcut_statreduced_akaHEPD01result.hdf5"
-                    ]
-    
+    bkg_components = {"PrimaryProtons":{'filename':'PrimaryProtons_WithDetCstbinned_data_filtered_with_SAAcut.hdf5', 'checksum':'7597f04210e59340a0888c66fc5cbc63'},
+                      "PrimaryAlphas": {'filename': 'PrimaryAlphas_WithDetCstbinned_data_filtered_with_SAAcut.hdf5', 'checksum': '76a68da730622851b8e1c749248c3b40'},
+                      "AlbedoPhotons": {'filename': 'AlbedoPhotons_WithDetCstbinned_data_filtered_with_SAAcut.hdf5', 'checksum': '76c58361d2c9b43b66ef2e41c18939c4'},
+                      "AlbedoNeutrons": {'filename': 'AlbedoNeutrons_WithDetCstbinned_data_filtered_with_SAAcut.hdf5', 'checksum': '8f3cb418c637b839665a4fcbd000d2eb'},
+                      "CosmicPhotons": {'filename': 'CosmicPhotons_3months_binned_data_filtered_with_SAAcut.hdf5', 'checksum': '93c4619b383572d318328e6380e35a70'},
+                      "CosmicDiffuse": {'filename': 'GalTotal_SA100_F98_3months_binned_data_filtered_with_SAAcut.hdf5', 'checksum': 'd0415d4d04b040af47f23f5d08cb7d64'},
+                      "SecondaryPositrons": {'filename': 'SecondaryPositrons_3months_binned_data_filtered_with_SAAcut.hdf5', 'checksum': '5fec2212dcdbb4c43c3ac02f02524f68'},
+                      "SecondaryProtons": {'filename': 'SecondaryProtons_WithDetCstbinned_data_filtered_with_SAAcut.fits.gz.hdf5', 'checksum': '78aefa46707c98563294a898a62845c1'},
+                      "SAAprotons": {'filename': 'SAA_3months_unbinned_data_filtered_with_SAAcut_statreduced_akaHEPD01result.hdf5', 'checksum': 'fc69fbbfd94cd595f57a8b11fc721169'},
+                      }
 
    # Download the binned background data 
-    
-    fetch_wasabi_file('COSI-SMEX/cosipy_tutorials/crab_spectral_fit_galactic_frame/PrimaryProtons_WithDetCstbinned_data_filtered_with_SAAcut.hdf5',
-                      output=str(crab_data_path), checksum = '7597f04210e59340a0888c66fc5cbc63')
+    for bkg in bkg_components.values():
+        wasabi_path = 'COSI-SMEX/cosipy_tutorials/crab_spectral_fit_galactic_frame/'+bkg['filename']
+        fetch_wasabi_file(wasabi_path, output=data_path/bkg['filename'], checksum = bkg['checksum'])
 
-    fetch_wasabi_file('COSI-SMEX/cosipy_tutorials/crab_spectral_fit_galactic_frame/PrimaryAlphas_WithDetCstbinned_data_filtered_with_SAAcut.hdf5',
-                      output=str(crab_data_path), checksum = '76a68da730622851b8e1c749248c3b40')
-
-
-    fetch_wasabi_file('COSI-SMEX/cosipy_tutorials/crab_spectral_fit_galactic_frame/AlbedoPhotons_WithDetCstbinned_data_filtered_with_SAAcut.hdf5',
-                      output=str(crab_data_path), checksum = '76c58361d2c9b43b66ef2e41c18939c4')
-
-    fetch_wasabi_file('COSI-SMEX/cosipy_tutorials/crab_spectral_fit_galactic_frame/AlbedoNeutrons_WithDetCstbinned_data_filtered_with_SAAcut.hdf5',
-                      output=str(crab_data_path), checksum = '8f3cb418c637b839665a4fcbd000d2eb')
-
-    fetch_wasabi_file('COSI-SMEX/cosipy_tutorials/crab_spectral_fit_galactic_frame/CosmicPhotons_3months_binned_data_filtered_with_SAAcut.hdf5',
-                      output=str(crab_data_path), checksum = '93c4619b383572d318328e6380e35a70')
-
-    fetch_wasabi_file('COSI-SMEX/cosipy_tutorials/crab_spectral_fit_galactic_frame/GalTotal_SA100_F98_3months_binned_data_filtered_with_SAAcut.hdf5',
-                      output=str(crab_data_path), checksum = 'd0415d4d04b040af47f23f5d08cb7d64')
-
-    fetch_wasabi_file('COSI-SMEX/cosipy_tutorials/crab_spectral_fit_galactic_frame/SecondaryPositrons_3months_binned_data_filtered_with_SAAcut.hdf5',
-                     output=str(crab_data_path), checksum = '78aefa46707c98563294a898a62845c1')
-
-    fetch_wasabi_file('COSI-SMEX/cosipy_tutorials/crab_spectral_fit_galactic_frame/SecondaryProtons_3months_binned_data_filtered_with_SAAcut.hdf5',
-                     output=str(crab_data_path), checksum = '5fec2212dcdbb4c43c3ac02f02524f68')
-
-
-    fetch_wasabi_file('COSI-SMEX/cosipy_tutorials/crab_spectral_fit_galactic_frame/SAA_3months_unbinned_data_filtered_with_SAAcut_statreduced_akaHEPD01result.hdf5',
-                     output=str(crab_data_path), checksum = 'fc69fbbfd94cd595f57a8b11fc721169')
-
-
-    
-    
-    # Download the response file 
-
-
-    dr_path = data_path / "ResponseContinuum_JeremyUpgrade.o3.e100_10000.b10log.s10396905069491.m2284.filtered.nonsparse.binnedimaging.imagingresponse.h5"
-    
+    # Download the response file
+    dr_path = data_path / "ResponseContinuum.o3.e100_10000.b10log.s10396905069491.m2284.filtered.nonsparse.binnedimaging.imagingresponse.h5"
     fetch_wasabi_file('COSI-SMEX/develop/Data/Responses/ResponseContinuum.o3.e100_10000.b10log.s10396905069491.m2284.filtered.nonsparse.binnedimaging.imagingresponse.h5',
-                       output=str(dr_path), checksum = '16fe005d3ab924ad98322b6579aabf2a')
+                       output=str(dr_path), checksum = '7121f094be50e7bfe9b31e53015b0e85')
 
 
     # Read in the spacecraft orientation file
@@ -173,42 +140,22 @@ def main():
 
 
     crab = BinnedData(data_path / "crab.yaml")
-    #crab_bkg = BinnedData(data_path / "crab.yaml")
-    bkg_PrimaryProtons = BinnedData(data_path / "background.yaml")
-    bkg_PrimaryAlphas = BinnedData(data_path / "background.yaml")
-    bkg_AlbedoPhotons = BinnedData(data_path / "background.yaml")
-    bkg_AlbedoNeutrons = BinnedData(data_path / "background.yaml")
-    bkg_CosmicPhotons = BinnedData(data_path / "background.yaml")
-    bkg_Cosmicdiffuse = BinnedData(data_path / "background.yaml")
-    bkg_SecondaryProtons = BinnedData(data_path / "background.yaml")
-    bkg_SecondaryPositrons = BinnedData(data_path / "background.yaml")
-    bkg_SAAprotons = BinnedData(data_path / "background.yaml")
+    crab.load_binned_data_from_hdf5(binned_data=crab_data_path)
 
+    for bkg in bkg_components.values():
+        binned_data = BinnedData(data_path / "background.yaml")
+        binned_data.load_binned_data_from_hdf5(binned_data=data_path/bkg['filename'])
+        bkg['dist'] = binned_data.binned_data.project('Em', 'Phi', 'PsiChi')
 
     # Load binned .hdf5 files
 
     # In[6]:
 
-    crab.load_binned_data_from_hdf5(binned_data=crab_data_path)
-    #crab_bkg.load_binned_data_from_hdf5(binned_data=crab_bkg_data_path)
-    
-    #load all your bck files
-    bkg_PrimaryProtons.load_binned_data_from_hdf5(binned_data=bkg_data_path[0])
-    bkg_PrimaryAlphas.load_binned_data_from_hdf5(binned_data=bkg_data_path[1])
-    bkg_AlbedoPhotons.load_binned_data_from_hdf5(binned_data=bkg_data_path[2])
-    bkg_AlbedoNeutrons.load_binned_data_from_hdf5(binned_data=bkg_data_path[3])
-    bkg_CosmicPhotons.load_binned_data_from_hdf5(binned_data=bkg_data_path[4])
-    bkg_Cosmicdiffuse.load_binned_data_from_hdf5(binned_data=bkg_data_path[5])
-    bkg_SecondaryPositrons.load_binned_data_from_hdf5(binned_data=bkg_data_path[6])
-    bkg_SecondaryProtons.load_binned_data_from_hdf5(binned_data=bkg_data_path[7])
-    bkg_SAAprotons.load_binned_data_from_hdf5(binned_data=bkg_data_path[8])
 
     # Define the path to the detector response
     # ## Perform spectral fit
 
     # ============ Interfaces ==============
-
-    output_suffix = 'interfaces'
 
     dr = FullDetectorResponse.open(dr_path)
     instrument_response = BinnedInstrumentResponse(dr)
@@ -216,19 +163,18 @@ def main():
     # Set background parameter, which is used to fit the amplitude of the background, and instantiate the COSI 3ML plugin
 
     # In[8]:
+    total_bkg = None
+    for bkg in bkg_components.values():
+        if total_bkg is None:
+            total_bkg = bkg['dist']
+        else:
+            total_bkg = total_bkg + bkg['dist'] # Issues with in-place operations for sparse contents
 
-    bkg_dist = {"PrimaryProtons":bkg_PrimaryProtons.binned_data.project('Em', 'Phi', 'PsiChi'),
-                "PrimaryAlphas":bkg_PrimaryAlphas.binned_data.project('Em', 'Phi', 'PsiChi'),
-                "AlbedoPhotons":bkg_AlbedoPhotons.binned_data.project('Em', 'Phi', 'PsiChi'),
-                "AlbedoNeutrons":bkg_AlbedoNeutrons.binned_data.project('Em', 'Phi', 'PsiChi'),
-                "CosmicPhotons":bkg_CosmicPhotons.binned_data.project('Em', 'Phi', 'PsiChi'),
-                "CosmicDiffuse":bkg_Cosmicdiffuse.binned_data.project('Em', 'Phi', 'PsiChi'),
-                "SecondaryPositrons":bkg_SecondaryPositrons.binned_data.project('Em', 'Phi', 'PsiChi'),
-                "SecondaryProtons":bkg_SecondaryProtons.binned_data.project('Em', 'Phi', 'PsiChi'),
-                "SAAprotons":bkg_SAAprotons.binned_data.project('Em', 'Phi', 'PsiChi')
+    if single_bkg_fit:
+        bkg_dist = {"total_bkg":total_bkg}
+    else:
+        bkg_dist = {l: b['dist'] for l, b in bkg_components.items()}
 
-                }
-               
     # Workaround to avoid inf values. Out bkg should be smooth, but currently it's not.
     # Reproduces results before refactoring. It's not _exactly_ the same, since this fudge value was 1e-12, and
     # it was added to the expectation, not the normalized bkg
@@ -236,17 +182,7 @@ def main():
         bkg_dist[bckfile] += sys.float_info.min
 
     #combine the data + the bck like we would get for real data
-    data = EmCDSBinnedData(crab.binned_data.project('Em', 'Phi', 'PsiChi') 
-                           + bkg_PrimaryProtons.binned_data.project('Em', 'Phi', 'PsiChi')
-                           + bkg_PrimaryAlphas.binned_data.project('Em', 'Phi', 'PsiChi')
-                           + bkg_AlbedoPhotons.binned_data.project('Em', 'Phi', 'PsiChi')
-                           + bkg_AlbedoNeutrons.binned_data.project('Em', 'Phi', 'PsiChi')
-                           + bkg_CosmicPhotons.binned_data.project('Em', 'Phi', 'PsiChi')
-                           + bkg_Cosmicdiffuse.binned_data.project('Em', 'Phi', 'PsiChi')
-                           + bkg_SecondaryPositrons.binned_data.project('Em', 'Phi', 'PsiChi')
-                           + bkg_SecondaryProtons.binned_data.project('Em', 'Phi', 'PsiChi')
-                           + bkg_SAAprotons.binned_data.project('Em', 'Phi', 'PsiChi')
-                          )
+    data = EmCDSBinnedData(crab.binned_data.project('Em', 'Phi', 'PsiChi') + total_bkg)
     bkg = FreeNormBinnedBackground(bkg_dist,
                                    sc_history=sc_orientation,
                                    copy = False)
@@ -275,75 +211,14 @@ def main():
                                   bkg)
 
     # Nuisance parameter guess, bounds, etc.
-    cosi.bkg_parameter['PrimaryProtons'] = Parameter("PrimaryProtons",  # background parameter
-                                      1,  # initial value of parameter
-                                      min_value=0,  # minimum value of parameter
-                                      max_value=10,  # maximum value of parameter
-                                      delta=0.05,  # initial step used by fitting engine
-                                      unit = u.Hz
-                                      )
-
-    cosi.bkg_parameter['PrimaryAlphas'] = Parameter("PrimaryAlphas",  # background parameter
-                                      1,  # initial value of parameter
-                                      unit = u.Hz, 
-                                      min_value=0,  # minimum value of parameter
-                                      max_value=10,  # maximum value of parameter
-                                      delta=0.05,  # initial step used by fitting engine
-                                      )
-
-    cosi.bkg_parameter['AlbedoPhotons'] = Parameter("AlbedoPhotons",  # background parameter
-                                      1,  # initial value of parameter
-                                      unit = u.Hz,
-                                      min_value=0,  # minimum value of parameter
-                                      max_value=20,  # maximum value of parameter
-                                      delta=0.05,  # initial step used by fitting engine
-                                      )
-
-
-    cosi.bkg_parameter['AlbedoNeutrons'] = Parameter("AlbedoNeutrons",  # background parameter
-                                      1,  # initial value of parameter
-                                      unit = u.Hz,
-                                      min_value=0,  # minimum value of parameter
-                                      max_value=10,  # maximum value of parameter
-                                      delta=0.05,  # initial step used by fitting engine
-                                      )
-    cosi.bkg_parameter['CosmicPhotons'] = Parameter("CosmicPhotons",  # background parameter
-                                      1,  # initial value of parameter
-                                      unit = u.Hz,
-                                      min_value=0,  # minimum value of parameter
-                                      max_value=20,  # maximum value of parameter
-                                      delta=0.05,  # initial step used by fitting engine
-                                      )
-    cosi.bkg_parameter['CosmicDiffuse'] = Parameter("CosmicDiffuse",  # background parameter
-                                      1,  # initial value of parameter
-                                      unit = u.Hz,
-                                      min_value=0,  # minimum value of parameter
-                                      max_value=20,  # maximum value of parameter
-                                      delta=0.05,  # initial step used by fitting engine
-                                      )
-    cosi.bkg_parameter['SecondaryPositrons'] = Parameter("SecondaryPositrons",  # background parameter
-                                      1,  # initial value of parameter
-                                      unit = u.Hz,
-                                      min_value=0,  # minimum value of parameter
-                                      max_value=10,  # maximum value of parameter
-                                      delta=0.05,  # initial step used by fitting engine
-                                      )
-    cosi.bkg_parameter['SecondaryProtons'] = Parameter("SecondaryProtons",  # background parameter
-                                      1,  # initial value of parameter
-                                      unit = u.Hz,
-                                      min_value=0,  # minimum value of parameter
-                                      max_value=10,  # maximum value of parameter
-                                      delta=0.05,  # initial step used by fitting engine
-                                      )
-
-    cosi.bkg_parameter['SAAprotons'] = Parameter("SAAprotons",  # background parameter
-                                      1,  # initial value of parameter
-                                      unit = u.Hz,
-                                      min_value=0,  # minimum value of parameter
-                                      max_value=10,  # maximum value of parameter
-                                      delta=0.05,  # initial step used by fitting engine
-                                      )
-
+    for bkg_label in bkg_dist.keys():
+        cosi.bkg_parameter[bkg_label] = Parameter(bkg_label,  # background parameter
+                                          1,  # initial value of parameter
+                                          min_value=0,  # minimum value of parameter
+                                          max_value= 100 if single_bkg_fit else 20,  # maximum value of parameter
+                                          delta=0.05,  # initial step used by fitting engine
+                                          unit = u.Hz
+                                          )
 
     # ======== Interfaces end ==========
 
@@ -351,7 +226,6 @@ def main():
 
 
     # In[9]:
-
 
     l = 184.56
     b = -5.78
