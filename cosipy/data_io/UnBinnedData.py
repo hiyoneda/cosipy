@@ -562,8 +562,13 @@ class UnBinnedData(DataIO):
         """
 
         # Data units:
-        units=['keV','s','rad','rad',
-                'rad','rad','rad','rad','cm','deg','deg','']
+        #check for the old data structure when CO_seq was not added
+        if len(self.cosi_dataset.keys())==11:
+            units=['keV','s','rad','rad',
+                    'rad','rad','rad','rad','cm','deg','deg']
+        else:
+             units=['keV','s','rad','rad',
+                    'rad','rad','rad','rad','cm','deg','deg','']
             
         # For fits output: 
         if self.unbinned_output == 'fits':
