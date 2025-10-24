@@ -32,7 +32,7 @@ class GoodTimeInterval():
         self._tstop_list = tstop_list
         
         # Sort by start time
-        self.sort()
+        self._sort()
 
     @property
     def tstart_list(self):
@@ -74,7 +74,7 @@ class GoodTimeInterval():
         for start, stop in zip(self._tstart_list, self._tstop_list):
             yield start, stop
         
-    def sort(self):
+    def _sort(self):
         """
         Sort GTI by start time in ascending order.
         
@@ -179,7 +179,7 @@ class GoodTimeInterval():
         Returns a new GTI object containing only time intervals that overlap
         in all input GTI objects.
         
-        Assumes all GTI objects are sorted by start time (guaranteed by sort() in __init__).
+        Assumes all GTI objects are sorted by start time (guaranteed by _sort() in __init__).
         
         Parameters
         ----------
