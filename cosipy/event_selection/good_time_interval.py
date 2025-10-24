@@ -25,7 +25,7 @@ class GoodTimeInterval():
         self._tstop_list = tstop_list
         
         # Sort by start time
-        self.sort()
+        self._sort()
 
     @property
     def tstart_list(self):
@@ -35,7 +35,7 @@ class GoodTimeInterval():
     def tstop_list(self):
         return self._tstop_list
     
-    def sort(self):
+    def _sort(self):
         """
         Sort GTI by start time in ascending order.
         
