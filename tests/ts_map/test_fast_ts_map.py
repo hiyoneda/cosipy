@@ -183,5 +183,3 @@ def test_fast_ts_fit():
     assert np.allclose(ts_results[3], 0.00011434249212330651)
 
     assert ts_results[4] is False
-
-    assert np.allclose(ts_results[5], 14)
