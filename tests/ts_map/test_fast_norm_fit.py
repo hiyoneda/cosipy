@@ -28,8 +28,8 @@ def test_solve():
     fit = fnf(max_iter=1000)
     result = fit.solve(src_bkg_cds_array, bkg_cds_array, ei_cds_array)
 
-    assert result[0] == 187.3360310655543
+    assert np.isclose(result[0], 187.3360310655543)
 
-    assert result[1] == 0.02119470713546078
+    assert np.isclose(result[1], 0.02119470713546078)
 
-    assert result[2] == 0.0055665881497504646
+    assert np.isclose(result[2], 0.0055665881497504646)
