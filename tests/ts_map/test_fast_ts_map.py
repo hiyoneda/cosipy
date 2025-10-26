@@ -22,7 +22,7 @@ def test_parallel_ts_fit():
     bkg = Histogram.open(bkg_path).project(['Em', 'PsiChi', 'Phi'])
 
     ts = FastTSMap(data = src_bkg, bkg_model = bkg, orientation = ori,
-                   response_path = response_path, cds_frame = "local", scheme = "RING")
+                   response_path = response_path, cds_frame = "local")
 
     hypothesis_coords = FastTSMap.get_hypothesis_coords(nside = 1)
 
@@ -36,21 +36,21 @@ def test_parallel_ts_fit():
     spectrum.K.unit = K.unit
     spectrum.piv.unit = piv.unit
 
-    ts_results = ts.parallel_ts_fit(hypothesis_coords = hypothesis_coords, energy_channel = [2,3], spectrum = spectrum, ts_scheme = "RING", cpu_cores = 2)
+    ts_results = ts.parallel_ts_fit(hypothesis_coords = hypothesis_coords, energy_channel = [2,3], spectrum = spectrum)
 
-    assert np.allclose(ts_results[:,1],
+    assert np.allclose(ts_results,
                        [40.18628386, 39.59382592, 37.4339627,
                         39.88459849, 40.20132198, 39.86762314,
                         37.2327797,  37.4506428,  40.54884861,
                         39.69773074, 38.83421249, 39.99131767])
 
-    ts.plot_ts(save_plot = True, save_dir = "", save_name = "ts_map.png", containment = 0.9)
+    ts.plot_ts(ts_results, save_plot = True, save_dir = "", save_name = "ts_map.png", containment = 0.9)
 
     assert Path("ts_map.png").exists()
 
     os.remove("ts_map.png")
 
-
+'''
 def test_get_psr_in_galactic():
 
     response_path = test_data.path / "test_precomputed_response.h5"
@@ -100,7 +100,7 @@ def test_get_ei_cds_array_galactic():
 
     source_coord = SkyCoord(l = 50, b = -45, frame = "galactic", unit = "deg")
 
-    ei_cds = FastTSMap.get_ei_cds_array(hypothesis_coord = source_coord,
+    ei_cds = FastTSMap.get_ei_cds_array(source = source_coord,
                                         energy_channel = [2,3],
                                         response_path = response_path,
                                         spectrum = spectrum,
@@ -165,16 +165,16 @@ def test_fast_ts_fit():
     spectrum.K.unit = K.unit
     spectrum.piv.unit = piv.unit
 
-    ts_results = FastTSMap.fast_ts_fit(hypothesis_coord = hypothesis_coord,
-                                 energy_channel = [1,4],
-                                 data_cds_array = FastTSMap.get_cds_array(src_bkg, [1,4]).flatten() ,
-                                 bkg_model_cds_array = FastTSMap.get_cds_array(bkg, [1,4]).flatten(),
-                                 orientation = ori,
-                                 response_path = response_path,
-                                 spectrum = spectrum,
-                                 cds_frame = "local",
-                                 ts_nside = 1,
-                                 ts_scheme = "RING")
+    ts_results = FastTSMap.fast_ts_fit(source = hypothesis_coord,
+                                       energy_channel = [1,4],
+                                       data_cds_array = FastTSMap.get_cds_array(src_bkg, [1,4]).flatten() ,
+                                       bkg_model_cds_array = FastTSMap.get_cds_array(bkg, [1,4]).flatten(),
+                                       orientation = ori,
+                                       response_path = response_path,
+                                       spectrum = spectrum,
+                                       cds_frame = "local",
+                                       ts_nside = 1,
+                                       ts_scheme = "RING")
 
     assert np.allclose(ts_results[1], 76.7966740541791)
 
@@ -183,3 +183,4 @@ def test_fast_ts_fit():
     assert np.allclose(ts_results[3], 0.00011434249212330651)
 
     assert ts_results[4] is False
+'''

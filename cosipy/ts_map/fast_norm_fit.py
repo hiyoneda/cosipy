@@ -275,37 +275,51 @@ class FastNormFit:
 
         return norm, conv, iteration
 
-    def solve(self, data, bkg, unit_excess):
+    def solve(self, data, bkg, unit_excess, ue_sum):
         """
-        Get the maximum TS, fitted normalization and normalization error
-        (:math:`\Delta TS = 1`)
+        Compute the Poisson log-likelihood test statistic (TS)
+        associated with the best fit of observation data to the
+        background model plus a point-source with response
+        unit_excess.
 
-        .. note::
+        Each of data, bkg, and unit_excess are linear arrays
+        representing a subset of the full CDS.  Neither data
+        nor bkg may have any zero entries.  The sum of the
+        response over the *full* CDS (not just the selected
+        subset of cells) must also be provided.
 
-            The normalization error is obtained from approximating the TS
-            function as as parabola (i.e. valid in the Gaussian regime). TS
-            and norm are indeed valid in the Poisson regime.
+        This function is parallelized over CDS cells (i.e., the
+        vector width of data/bkg/unit_excess) using Numba.
+        Use numba.set_num_threads() before calling to limit
+        the number of processors used.
 
-        Args:
-            data (array): Observed counts
-            bkg (array): Background estimation. Same size as data.
-            unit_excess (array): Expected excess per normalization unit.
-                Same size as data.
+        Parameters
+        ----------
+        data : np.ndarray of float
+          Observed counts
+        bkg : np.ndarray of float
+          Background model estimates
+        unit_excess : np.ndarray of float
+          Expected excess per normalization unit
+        ue_sum: float
+          Sum of unit excess over *all* cells of CDS (not just
+          those referenced in data/bkg/unit_excess
 
-        Return:
-            (float, float, float, bool): ts, norm, norm error and status (0 = good)
+        Returns
+        ------
+        (float, float, float, bool):
+             - LL test statistic,
+             - normalization (scale factor for unit_excess, representing
+               relative brightness of source)
+             - normalization error
+             - error status (False = no error, True = error)
+             - number of Newton iterations needed to converge
+
+        The normalization error is obtained by approximating the TS
+        function as as parabola (i.e., valid in the Gaussian
+        regime). TS and norm are indeed valid in the Poisson regime.
 
         """
-
-        ue_sum = np.sum(unit_excess)
-
-        # do not process CDS bins with no observed counts (does not
-        # impact result) or no bg counts (model issue)
-        valid = np.logical_and(data > 0, bkg > 0)
-
-        data = data[valid]
-        bkg = bkg[valid]
-        unit_excess = unit_excess[valid]
 
         norm = data.dtype.type(0)
 
