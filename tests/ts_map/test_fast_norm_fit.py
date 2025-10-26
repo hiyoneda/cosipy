@@ -9,11 +9,11 @@ def test_solve():
 
     # read the signal+background CDS
     src_bkg_path = test_data.path / "ts_map_src_bkg.h5"
-    src_bkg = Histogram.open(src_bkg_path).todense().project(["Em", "PsiChi", "Phi"])
-    print(src_bkg.axes.labels)
+    src_bkg = Histogram.open(src_bkg_path).todense().project(["Em", "Phi", "PsiChi"])
+
     # read the background CDS
     bkg_path = test_data.path / "ts_map_bkg.h5"
-    bkg = Histogram.open(bkg_path).todense().project(["Em", "PsiChi", "Phi"])
+    bkg = Histogram.open(bkg_path).todense().project(["Em", "Phi", "PsiChi"])
 
     # get the cds arrays of src_bkg and bkg
     src_bkg_cds_array = FastTSMap.get_cds_array(src_bkg, [0,10])
