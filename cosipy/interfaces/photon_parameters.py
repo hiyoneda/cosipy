@@ -4,6 +4,8 @@ from astropy import units as u
 from astropy.coordinates import BaseCoordinateFrame, SkyCoord
 from scoords import SpacecraftFrame
 
+from cosipy.polarization import PolarizationConvention, PolarizationAngle, StereographicConvention
+
 
 @runtime_checkable
 class PhotonInterface(Protocol):
@@ -37,7 +39,7 @@ class PhotonWithDirectionInterface(PhotonInterface, Protocol):
     def direction_lat_radians(self) -> float: ...
 
     @property
-    def direction_direction(self) -> SkyCoord:
+    def direction(self) -> SkyCoord:
         """
         Add fancy energy quantity
         """
@@ -52,12 +54,39 @@ class PhotonInSCFrameInterface(PhotonInterface, Protocol):
     @property
     def frame(self) -> SpacecraftFrame:...
 
+@runtime_checkable
 class PhotonWithDirectionInSCFrameInterface(PhotonWithDirectionInterface,
-                                            PhotonInSCFrameInterface):
+                                            PhotonInSCFrameInterface, Protocol):
     pass
 
+@runtime_checkable
 class PhotonWithDirectionAndEnergyInSCFrameInterface(PhotonWithDirectionInSCFrameInterface,
-                                                     PhotonWithEnergyInterface):
+                                                     PhotonWithEnergyInterface, Protocol):
     pass
 
+@runtime_checkable
+class PolarizedPhotonInterface(Protocol):
+
+    def polarization_angle_rad(self) -> float: ...
+
+    def polarization_convention(self) -> PolarizationConvention:...
+
+    def polarization_angle(self) -> PolarizationAngle:
+        """
+        This convenience function only makes sense for implementations
+        that couple with PhotonWithDirectionInterface
+        """
+        raise NotImplementedError("This class does not implement the polarization_angle() convenience method.")
+
+@runtime_checkable
+class PolarizedPhotonStereographicConventionInSCInterface(PolarizedPhotonInterface, PhotonInSCFrameInterface, Protocol):
+
+    def polarization_convention(self) -> PolarizationConvention:
+        return StereographicConvention()
+
+@runtime_checkable
+class PolarizedPhotonWithDirectionAndEnergyInSCFrameStereographicConventionInterface(PhotonWithDirectionAndEnergyInSCFrameInterface, PolarizedPhotonStereographicConventionInSCInterface, Protocol):
+
+    def polarization_angle(self) -> PolarizationAngle:
+        return PolarizationAngle(self._pa * u.rad, self.direction, 'stereographic')
 
