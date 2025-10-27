@@ -122,7 +122,6 @@ class FastTSMap():
         self._cds_frame = cds_frame
 
         # open the response file
-        self._response_path = Path(response_path)
         if cds_frame == "local":
             self._response = FullDetectorResponse.open(response_path)
         else:
@@ -252,7 +251,7 @@ class FastTSMap():
             source_in_sc_frame = self._orientation.get_target_in_sc_frame(source)
 
             # get map of the time spent at each pixel in the local frame
-            dwell_time_map = self._orientation.get_dwell_map(response = self._response_path,
+            dwell_time_map = self._orientation.get_dwell_map(base = self._response,
                                                              src_path = source_in_sc_frame)
 
             # convolve response with dwell_time_map to get point source response

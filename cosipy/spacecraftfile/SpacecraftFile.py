@@ -531,8 +531,7 @@ class SpacecraftFile():
         return src_path_skycoord
 
 
-    def get_dwell_map(self, response, src_path,
-                      pa_convention = None, interp = True):
+    def get_dwell_map(self, base, src_path, interp = True):
 
         """
         Generate a dwell-time map from a source's time-weighted
@@ -542,13 +541,10 @@ class SpacecraftFile():
 
         Parameters
         ----------
-        response : str or pathlib.Path
-            The path to the response file.
+        base : HealpixBase
+            Definition of HEALPix grid for map
         src_path : astropy.coordinates.SkyCoord
-            The movement of source in the detector frame.
-        pa_convention : str, optional
-             Polarization convention of response ('RelativeX',
-             'RelativeY', or 'RelativeZ')
+            Movement of source in detector frame
         interp : bool, optional
              If True, interpolate the weights onto the HEALPix grid;
              else, just map to nearest bin. (Default: interpolate)
@@ -569,24 +565,22 @@ class SpacecraftFile():
         if len(durations) + 1 != len(src_path):
             raise ValueError("Source path must have length equal to # times in SpacecraftFile")
 
-        with FullDetectorResponse.open(response, pa_convention=pa_convention) as base:
-
-            if interp:
-                # remove the last src location. Effectively a 0th-order interpolation
-                pixels, weights = base.get_interp_weights(theta = src_path[:-1])
-                weighted_duration = weights * durations[None]
-            else:
-                pixels = base.ang2pix(theta = src_path[:-1])
-                weighted_duration = durations
-                
-            dwell_map = HealpixMap(base = base,
-                                   unit = u.second,
-                                   coordsys = SpacecraftFrame())
-
-            map_data = dwell_map.data
-
-            # sum time weights for each pixel
-            np.add.at(map_data, pixels, weighted_duration)
+        if interp:
+            # remove the last src location. Effectively a 0th-order interpolation
+            pixels, weights = base.get_interp_weights(theta = src_path[:-1])
+            weighted_duration = weights * durations[None]
+        else:
+            pixels = base.ang2pix(theta = src_path[:-1])
+            weighted_duration = durations
+            
+        dwell_map = HealpixMap(base = base,
+                               unit = u.second,
+                               coordsys = SpacecraftFrame())
+        
+        map_data = dwell_map.data
+        
+        # sum time weights for each pixel
+        np.add.at(map_data, pixels, weighted_duration)
 
         return dwell_map
 
