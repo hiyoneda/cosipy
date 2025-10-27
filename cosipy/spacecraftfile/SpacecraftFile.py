@@ -578,15 +578,15 @@ class SpacecraftFile():
             else:
                 pixels = base.ang2pix(theta = src_path[:-1])
                 weighted_duration = durations
-
-            # sum time weights for each pixel
-            map_data = np.zeros(base.npix)
-            np.add.at(map_data, pixels, weighted_duration)
-
+                
             dwell_map = HealpixMap(base = base,
-                                   data = map_data,
                                    unit = u.second,
                                    coordsys = SpacecraftFrame())
+
+            map_data = dwell_map.data
+
+            # sum time weights for each pixel
+            np.add.at(map_data, pixels, weighted_duration)
 
         return dwell_map
 
