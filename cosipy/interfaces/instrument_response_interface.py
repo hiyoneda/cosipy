@@ -76,13 +76,8 @@ class InstrumentResponseFunctionInterface(Protocol):
 
     def random_events(self, photons:Iterable[PhotonInterface]) -> Iterable[EventInterface]:
         """
-        Return a stream of random events, photon by photon.
-
-        The number of output event might be less than the number if input photons,
-        since some might not be detected
+        Return a stream of random events, one per photon
         """
-
-
 
 @runtime_checkable
 class FarFieldInstrumentResponseFunctionInterface(InstrumentResponseFunctionInterface, Protocol):
