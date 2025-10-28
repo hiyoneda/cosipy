@@ -1,17 +1,25 @@
-from typing import Iterable, Tuple
+from collections.abc import Callable
+from typing import Iterable, Tuple, Union
 
 from astropy.coordinates import Angle
 from astropy.units import Quantity
-from scipy.stats import rv_continuous, truncnorm, norm, uniform
+from more_itertools.more import sample
+from scipy.stats import rv_continuous, truncnorm, norm, uniform, randint
 from scipy.stats.sampling import SimpleRatioUniforms
 import astropy.units as u
 import numpy as np
 
 from cosipy.interfaces.event import EmCDSEventInSCFrameInterface
 from cosipy.interfaces.instrument_response_interface import FarFieldInstrumentResponseFunctionInterface
-from cosipy.interfaces.photon_parameters import PhotonInterface
-from cosipy.response.photon_types import PolarizedPhotonWithDirectionAndEnergyInSCFrameStereographicConventionInterface as PolDirESCPhoton
+from cosipy.interfaces.photon_parameters import PhotonInterface, PhotonWithDirectionAndEnergyInSCFrameInterface, \
+    PhotonWithEnergyInterface, PhotonWithDirectionInSCFrameInterface
+from cosipy.response.photon_types import \
+    PolarizedPhotonWithDirectionAndEnergyInSCFrameStereographicConventionInterface as PolDirESCPhoton, \
+    PhotonWithDirectionAndEnergyInSCFrame
 from scipy.special import erfi, erf
+
+from cosipy.util.iterables import itertools_batched
+
 
 def _to_rad(angle):
     if isinstance(angle, (Quantity, Angle)):
@@ -32,11 +40,7 @@ class _RVSMixin:
         # Faster than default _rvs for large sizes, but slow setup
         # Most of the time we'll need a new setup per energy
 
-        if size == tuple():
-            # Weird default by rv_continous
-            size = None
-
-        if size is None:
+        if size is None or size == tuple():
             return super()._rvs(*args, size=size, random_state=random_state)
         else:
 
@@ -44,7 +48,19 @@ class _RVSMixin:
 
             return rng.rvs(size=size)
 
-class KleinNishinaPolarScatteringAngleDist(rv_continuous, _RVSMixin):
+class _SimpleRVSMixin:
+    """
+    Helper mixin for custom distributions (rv_continuous subclasses)
+    using SimpleRatioUniforms
+
+    Subclasses need to define _pdf
+
+    """
+    def _rvs(self, *args, size=None, random_state=None):
+        rng = SimpleRatioUniforms(self, random_state=random_state)
+        return rng.rvs(size=size)
+
+class KleinNishinaPolarScatteringAngleDist(_RVSMixin, rv_continuous):
     """
     Klein-Nishina scattering angle distribution
     """
@@ -116,7 +132,7 @@ class KleinNishinaPolarScatteringAngleDist(rv_continuous, _RVSMixin):
 
         return B / C / self._norm
 
-class KleinNishinaAzimuthalScatteringAngleDist(rv_continuous, _RVSMixin):
+class KleinNishinaAzimuthalScatteringAngleDist(_RVSMixin, rv_continuous):
 
     def __init__(self, energy, theta, *args, **kwargs):
         """
@@ -181,7 +197,7 @@ class KleinNishinaAzimuthalScatteringAngleDist(rv_continuous, _RVSMixin):
 
         return A * self._energy_ratio_inv3 / self._norm
 
-class ARMNormDist(rv_continuous):
+class ARMNormDist(_SimpleRVSMixin, rv_continuous):
 
     def __init__(self, phi, angres, *args, **kwargs):
         """
@@ -220,11 +236,62 @@ class ARMNormDist(rv_continuous):
 
         return truncnorm.pdf(arm, -self._phi / self._angres, (np.pi - self._phi) / self._angres, 0, self._angres) * np.sin(self._phi + arm) / self._norm
 
+class ARMMultiNormDist(rv_continuous):
+
+    def __init__(self, phi, angres, angres_weights, *args, **kwargs):
+        """
+        Describe the ARM distribution by a combination of multiple [truncated] gaussians
+
+        Parameters
+        ----------
+        phi
+        angres
+        angres_weights
+        args
+        kwargs
+        """
+
+        phi = _to_rad(phi)
+        angres = _to_rad(angres)
+
+        super().__init__(0, *args, a=-phi, b= np.pi - phi, **kwargs)
+
+        angres = np.atleast_1d(angres)
+
+        weights = np.broadcast_to(angres_weights, angres.shape)
+        self._weights = weights / np.sum(weights)
+        self._dists = [ARMNormDist(phi, res) for res in angres]
+
+    def _pdf(self, arm, *args):
+
+        prob = np.zeros(np.shape(arm))
+
+        for w,dist in zip(self._weights,self._dists):
+            prob += w*dist._pdf(arm)
+
+        return prob
+
     def _rvs(self, *args, size=None, random_state=None):
 
-        rng = SimpleRatioUniforms(self, random_state=random_state)
+        if random_state is None:
+            random_state = self.random_state
 
-        return rng.rvs(size=size)
+        samples = np.empty(size)
+
+        idx = random_state.choice(np.arange(len(self._dists)), size = size, p = self._weights)
+
+        for i in range(len(self._dists)):
+
+            dist = self._dists[i]
+
+            mask = idx == i
+
+            nmask = np.count_nonzero(mask)
+
+            samples[mask] = dist._rvs(size = nmask)
+
+        return samples
+
 
 class ThresholdKleinNishinaPolarScatteringAngleDist(KleinNishinaPolarScatteringAngleDist):
 
@@ -312,7 +379,7 @@ class MeasuredEnergyDist(rv_continuous):
         Parameters
         ----------
         energy: initial energy.
-        energy_res: energy resolution as fraction of the initial energy
+        energy_res: function returning the energy resolution function of energy. Both input and output have energy units
         phi: polar scattered angle
         full_absorp_prob: probability of landing in the photopeak
         args
@@ -321,14 +388,10 @@ class MeasuredEnergyDist(rv_continuous):
 
         super().__init__(0, *args, a=0, **kwargs)
 
-        if energy_res < 0 or energy_res > 1:
-            raise ValueError(f"energy_res must be between [0,1]. Got {energy_res}")
-
         if full_absorp_prob < 0 or full_absorp_prob > 1:
             raise ValueError(f"full_absorp_prob must be between [0,1]. Got {full_absorp_prob}")
 
         eps = (energy / u.Quantity(510.99895069, u.keV)).value
-        energy = energy.value
 
         phi = _to_rad(phi)
         phi = (phi + np.pi) % (2 * np.pi) - np.pi
@@ -337,8 +400,8 @@ class MeasuredEnergyDist(rv_continuous):
         self._full_prob = full_absorp_prob
         self._partial_prob = 1 - full_absorp_prob
 
-        self._dist_full = norm(loc=energy, scale=energy*energy_res)
-        self._dist_partial = norm(loc=energy_deposited, scale=energy_deposited * energy_res)
+        self._dist_full = norm(loc=energy.value, scale = energy_res(energy).to_value(energy.unit))
+        self._dist_partial = norm(loc=energy_deposited.value, scale =  energy_res(energy_deposited).to_value(energy.unit))
 
     def _pdf(self, measured_energy, *args):
         return self._full_prob * self._dist_full.pdf(measured_energy) + self._partial_prob * self._dist_partial.pdf(measured_energy)
@@ -360,11 +423,168 @@ class MeasuredEnergyDist(rv_continuous):
 
         return samples
 
-class IdealComptonInstrumentResponseFunction(FarFieldInstrumentResponseFunctionInterface):
+class LogGaussianCosThetaEffectiveArea:
+
+    def __init__(self,
+                 max_area:Quantity,
+                 max_area_energy:Quantity,
+                 sigma_decades: float,
+                 batch_size = 1000):
+        """
+        The effective area is represented as a log-gaussian as function of energy and
+        a cos(theta) dependence as a function of the instrument colatitude theta.
+        =0 beyond theta = 90 deg
+
+        Parameters
+        ----------
+        max_area: maximum effective area
+        max_area_energy: energy where the effective area peaks
+        sigma_decades:
+        """
+
+        self._max_area = max_area
+        self._max_area_energy = max_area_energy.to_value(u.keV)
+        self._sigma_decades = sigma_decades
+
+        self._batch_size = batch_size
+
+    def __call__(self, photons = Iterable[PhotonWithDirectionAndEnergyInSCFrameInterface]) -> Iterable[Quantity]:
+        """
+        """
+
+        for batch in itertools_batched(photons, self._batch_size):
+
+            energy = []
+            latitude = []
+
+            for photon in batch:
+
+                energy.append(photon.energy_keV)
+                latitude.append(photon.direction_lat_radians)
+
+            energy = np.asarray(energy)
+            latitude = np.asarray(latitude)
+
+            area = self._max_area * np.exp(-np.log10(energy / self._max_area_energy) ** 2 / 2 / self._sigma_decades / self._sigma_decades)
+
+            area *= np.sin(latitude)
+            area[latitude < 0] = 0
+
+            yield from area
+
+class ConstantFractEnergyRes:
+
+    def __init__(self, energy_res,batch_size = 1000):
+        """
+
+        Parameters
+        ----------
+        energy_res: fraction
+        """
+
+        self._energy_res = energy_res
+        self._batch_size = batch_size
+
+    def __call__(self, photons = Iterable[PhotonWithEnergyInterface]) -> Iterable[Quantity]:
+        """
+        """
+
+        for batch in itertools_batched(photons, self._batch_size):
+
+            energy = np.asarray([photon.energy_keV for photon in batch])
+
+            yield from Quantity(energy * self._energy_res, u.keV, copy=False)
+
+class ConstantAngularResolution:
+
+    def __init__(self, angres, weights = None):
+        self._angres = np.atleast_1d(angres)
+
+        if weights is None:
+            weights = np.ones(self._angres.size)
+
+        self._weights = weights / np.sum(weights)
+
+    def __call__(self, photons=Iterable[PhotonWithDirectionInSCFrameInterface]) -> Iterable[Quantity]:
+        for _ in photons:
+            yield self._angres, self._weights
+
+class ConstantTimesExponentialCutoffFullAbsorption:
+
+    def __init__(self, base:float, cutoff_energy:Quantity, batch_size = 1000):
+        self._base = base
+        self._cutoff_energy = cutoff_energy.to_value(u.keV)
+        self._batch_size = batch_size
+
+    def __call__(self, photons = Iterable[PhotonWithEnergyInterface]) -> Iterable[Quantity]:
+        """
+        """
+
+        for batch in itertools_batched(photons, self._batch_size):
+
+            energy = np.asarray([photon.energy_keV for photon in batch])
+
+            prob = self._base * np.exp(-energy / self._cutoff_energy)
+
+            yield from prob
+
+class IdealComptonIRF(FarFieldInstrumentResponseFunctionInterface):
 
     # The photon class and event class that the IRF implementation can handle
     photon_type = PolDirESCPhoton
     event_type = EmCDSEventInSCFrameInterface
+
+    def __init__(self,
+                 effective_area:Callable[[Iterable[PhotonInterface]], Quantity],
+                 energy_resolution:Callable[[PhotonInterface], Quantity],
+                 angular_resolution:Callable[[PhotonInterface], Tuple[Quantity, np.ndarray[float]]],
+                 full_absorption_prob:Callable[[Iterable[PhotonInterface]], Quantity],
+                 energy_threshold:Union[None, Quantity] = None,
+                 ):
+
+        self._effective_area = effective_area
+        self._energy_resolution = energy_resolution
+        self._angular_resolution = angular_resolution
+        self._full_prob = full_absorption_prob
+
+        if energy_threshold is None:
+            self.energy_threshold = 0*u.keV
+        else:
+            self._energy_threshold = energy_threshold
+
+    @classmethod
+    def cosi_like(cls):
+        """
+        Similar performance as COSI. Meant for code development, not science or sensitivity predictions.
+
+        Returns
+        -------
+
+        """
+
+        max_area = 110 * u.cm * u.cm
+        max_area_energy = 1500 * u.keV
+        sigma_decades = 0.4
+        energy_resolution = 0.01
+        angres = np.deg2rad(3)
+        angres_fact = np.asarray([1 / 3., 1, 3, 9])
+        angres_weights = np.asarray([1, 4, 10, 20])
+        full_absorption_constant = 0.7
+        full_absorption_exp_cutoff = 10*u.MeV
+        energy_threshold = 20*u.keV
+
+        effective_area = LogGaussianCosThetaEffectiveArea(max_area, max_area_energy, sigma_decades)
+        energy_resolution = ConstantFractEnergyRes(energy_resolution)
+        angular_resolution = ConstantAngularResolution(angres * angres_fact, angres_weights)
+        full_absorption_prob = ConstantTimesExponentialCutoffFullAbsorption(full_absorption_constant, full_absorption_exp_cutoff)
+
+        return cls(effective_area,
+                   energy_resolution,
+                   angular_resolution,
+                   full_absorption_prob,
+                   energy_threshold)
+
+
 
     def event_probability(self, query: Iterable[Tuple[PolDirESCPhoton, EmCDSEventInSCFrameInterface]]) -> Iterable[float]:
         """
@@ -379,28 +599,33 @@ class IdealComptonInstrumentResponseFunction(FarFieldInstrumentResponseFunctionI
     def random_events(self, photons: Iterable[PolDirESCPhoton]) -> Iterable[EmCDSEventInSCFrameInterface]:
         """
         Return a stream of random events, photon by photon.
-
-        The number of output event might be less than the number if input photons,
-        since some might not be detected
         """
+
+        for photon in photons:
+
+            energy = photon.energy
+            energy_res = next(self._energy_resolution([photon]))
+            full_absorp_prob = next(self._full_prob([photon]))
+
+            # Random polar (phi) and azimuthal angle from Klein Nishina
+            phi = KleinNishinaPolarScatteringAngleDist(energy).rvs(size = 1)
+            azimuth = KleinNishinaAzimuthalScatteringAngleDist(energy, phi)
+
+            # Get the measured energy based on phi and the energy resolution and absroption probabity for the photon location
+            measured_energy = MeasuredEnergyDist(energy, energy_res, phi, full_absorp_prob).rvs(size = 1) * energy.unit
+
+            # Get a random ARM
+            angres, weights = next(self._angular_resolution([photon]))
+            arm = ARMMultiNormDist(phi, angres, weights)
+
+            # Transform arm and az to phichi
+
+
 
     def effective_area_cm2(self, photons: Iterable[PolDirESCPhoton]) -> Iterable[float]:
         """
 
         """
-
-    def event_probability(self, query: Iterable[Tuple[PolDirESCPhoton, EmCDSEventInSCFrameInterface]]) -> Iterable[float]:
-        """
-
-        Parameters
-        ----------
-        query
-
-        Returns
-        -------
-
-        """
-
-
+        return [a.to_value(u.cm*u.cm) for a in self._effective_area(photons)]
 
 

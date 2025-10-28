@@ -48,6 +48,13 @@ class PhotonWithDirectionInterface(PhotonInterface, Protocol):
                         unit=u.rad,
                         frame=self.frame)
 
+# TODO: change to follow the same idea as EventInterface:
+# Remove PhotonWithDirectionInterface
+# Remove PhotonInSCFrameInterface
+# Move direction_lon_radians and direction_lat_radians to PhotonWithDirectionInSCFrameInterface.
+# and add a _sc suffix
+# I'll need to coordinate first with those who are implemented the responses.
+
 @runtime_checkable
 class PhotonInSCFrameInterface(PhotonInterface, Protocol):
 

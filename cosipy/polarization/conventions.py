@@ -251,10 +251,7 @@ class MEGAlibRelative(OrthographicConvention, ConventionInSpacecraftFrameMixin):
         else:
             raise ValueError("Axis must be 'x', 'y' or 'z'.")
 
-        if attitude is None:
-            frame = None
-        else:
-            frame = SpacecraftFrame(attitude = attitude)
+        frame = SpacecraftFrame(attitude = attitude)
 
         super().__init__(ref_vector, frame = frame, clockwise = False)
         
@@ -351,10 +348,7 @@ class StereographicConvention(PolarizationConvention, ConventionInSpacecraftFram
             Spacecraft orientation
         """
 
-        if attitude is None:
-            self._frame = None
-        else:
-            self._frame = SpacecraftFrame(attitude=attitude)
+        self._frame = SpacecraftFrame(attitude=attitude)
         
         self._sign = 1 if clockwise else -1
 
@@ -362,7 +356,7 @@ class StereographicConvention(PolarizationConvention, ConventionInSpacecraftFram
     def frame(self):
         return self._frame
 
-    def get_basis_local(self, source_vector:np.ndarray[float]):
+    def get_basis_local(self, source_vector:Union[np.ndarray[float], SkyCoord]):
         """
         source_vector already in SC coordinates as a vector
 
@@ -374,6 +368,9 @@ class StereographicConvention(PolarizationConvention, ConventionInSpacecraftFram
         -------
         px,py: Basis vector. (2,N). Also in SC coordinates
         """
+
+        if isinstance(source_vector, SkyCoord):
+            source_vector = source_vector.cartesian.xyz
 
         x,y,z = source_vector
 

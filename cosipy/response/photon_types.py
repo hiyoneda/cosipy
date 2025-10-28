@@ -3,23 +3,30 @@ from scoords import SpacecraftFrame
 
 from cosipy.interfaces.photon_parameters import PhotonWithDirectionAndEnergyInSCFrameInterface, \
     PolarizedPhotonStereographicConventionInSCInterface, \
-    PolarizedPhotonWithDirectionAndEnergyInSCFrameStereographicConventionInterface
+    PolarizedPhotonWithDirectionAndEnergyInSCFrameStereographicConventionInterface, PhotonWithEnergyInterface
 from cosipy.polarization import PolarizationAngle
 
 from astropy import units as u
 
-class PhotonWithDirectionAndEnergyInSCFrame(PhotonWithDirectionAndEnergyInSCFrameInterface):
+class PhotonWithEnergy(PhotonWithEnergyInterface):
 
-    frame = SpacecraftFrame()
-
-    def __init__(self, direction_lon_radians, direction_lat_radians, energy_keV):
+    def __init__(self, energy_keV):
         self._energy = energy_keV
-        self._lon = direction_lon_radians
-        self._lat = direction_lat_radians
 
     @property
     def energy_keV(self) -> float:
         return self._energy
+
+class PhotonWithDirectionAndEnergyInSCFrame(PhotonWithEnergy, PhotonWithDirectionAndEnergyInSCFrameInterface):
+
+    frame = SpacecraftFrame()
+
+    def __init__(self, direction_lon_radians, direction_lat_radians, energy_keV):
+
+        super().__init__(energy_keV)
+
+        self._lon = direction_lon_radians
+        self._lat = direction_lat_radians
 
     @property
     def direction_lon_radians(self) -> float:
