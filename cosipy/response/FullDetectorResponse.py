@@ -91,7 +91,8 @@ class FullDetectorResponse(HealpixBase):
         new._file = h5.File(filename, mode='r')
 
         new._drm = new._file['DRM']
-
+        new._counts = new._drm['COUNTS']
+        
         # verify response format version
         rsp_version = new._drm.attrs.get('VERSION', default=1)
         if rsp_version != cls.rsp_version:
@@ -279,15 +280,15 @@ class FullDetectorResponse(HealpixBase):
 
         """
 
-        counts = self._drm['COUNTS'][pix]
+        counts = self._counts[pix]
 
         w = self._eff_area
 
         if weight is not None:
             if isinstance(weight, Quantity):
-                w = w * weight.value # don't modify eff_area in place
-            else:
-                w = w * weight
+                weight = weight.value
+                
+            w = w * weight  # don't modify eff_area in place
 
         data = counts * self._rest_axes.expand_dims(w, self._rest_axes.label_to_index("Ei"))
 
@@ -310,7 +311,7 @@ class FullDetectorResponse(HealpixBase):
 
         """
 
-        counts = np.array(self._drm['COUNTS'])
+        counts = np.array(self._counts)
 
         data = counts * self._axes.expand_dims(self._eff_area,
                                                self._axes.label_to_index("Ei"))
@@ -432,7 +433,7 @@ class FullDetectorResponse(HealpixBase):
 
             return PointSourceResponse(self._rest_axes,
                                        contents = psr,
-                                       unit = u.cm*u.cm*u.s,
+                                       unit = u.cm**2 * u.s,
                                        copy_contents = False)
 
         else:
