@@ -74,10 +74,13 @@ class PhotonWithDirectionAndEnergyInSCFrameInterface(PhotonWithDirectionInSCFram
 @runtime_checkable
 class PolarizedPhotonInterface(Protocol):
 
+    @property
     def polarization_angle_rad(self) -> float: ...
 
+    @property
     def polarization_convention(self) -> PolarizationConvention:...
 
+    @property
     def polarization_angle(self) -> PolarizationAngle:
         """
         This convenience function only makes sense for implementations
@@ -88,12 +91,14 @@ class PolarizedPhotonInterface(Protocol):
 @runtime_checkable
 class PolarizedPhotonStereographicConventionInSCInterface(PolarizedPhotonInterface, PhotonInSCFrameInterface, Protocol):
 
+    @property
     def polarization_convention(self) -> PolarizationConvention:
         return StereographicConvention()
 
 @runtime_checkable
 class PolarizedPhotonWithDirectionAndEnergyInSCFrameStereographicConventionInterface(PhotonWithDirectionAndEnergyInSCFrameInterface, PolarizedPhotonStereographicConventionInSCInterface, Protocol):
 
+    @property
     def polarization_angle(self) -> PolarizationAngle:
         return PolarizationAngle(self._pa * u.rad, self.direction, 'stereographic')
 

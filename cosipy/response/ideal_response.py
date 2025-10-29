@@ -1,9 +1,14 @@
+import warnings
 from collections.abc import Callable
 from typing import Iterable, Tuple, Union
 
 from astropy.coordinates import Angle
 from astropy.units import Quantity
+from cosipy.data_io.EmCDSUnbinnedData import EmCDSEventInSCFrame
+from cosipy.polarization import StereographicConvention
+from cosipy.response.relative_coordinates import RelativeCDSCoordinates
 from more_itertools.more import sample
+from scipy.optimize import minimize_scalar
 from scipy.stats import rv_continuous, truncnorm, norm, uniform, randint
 from scipy.stats.sampling import SimpleRatioUniforms
 import astropy.units as u
@@ -20,33 +25,12 @@ from scipy.special import erfi, erf
 
 from cosipy.util.iterables import itertools_batched
 
-
 def _to_rad(angle):
     if isinstance(angle, (Quantity, Angle)):
         return angle.to_value(u.rad)
     else:
         return angle
 
-class _RVSMixin:
-    """
-    Helper mixin for custom distributions (rv_continuous subclasses)
-    that will likely only get a sample per setup
-
-    Subclasses need to define _pdf and _cdf
-    """
-
-    def _rvs(self, *args, size=None, random_state=None):
-
-        # Faster than default _rvs for large sizes, but slow setup
-        # Most of the time we'll need a new setup per energy
-
-        if size is None or size == tuple():
-            return super()._rvs(*args, size=size, random_state=random_state)
-        else:
-
-            rng = SimpleRatioUniforms(self, random_state=random_state)
-
-            return rng.rvs(size=size)
 
 class _SimpleRVSMixin:
     """
@@ -56,9 +40,55 @@ class _SimpleRVSMixin:
     Subclasses need to define _pdf
 
     """
-    def _rvs(self, *args, size=None, random_state=None):
-        rng = SimpleRatioUniforms(self, random_state=random_state)
+
+    @property
+    def _mode(self):
+        # Return analytic mode if you can.
+        # Otherwise it will be estimated numerically
+        return None
+
+    def _simple_ratio_uniforms_rvs(self, *args, size=None, random_state=None):
+        if warnings.catch_warnings():
+            # Suppress warning
+            # "WARNING RuntimeWarning: [objid: SROU] 22 : mode: try finding it (numerically) => (distribution) incomplete distribution object, entry missing"
+            # when the mode need to be computed analytically
+
+            if self._mode is None:
+                warnings.filterwarnings(
+                    "ignore",
+                    message=r".*\[objid: SROU\].*",
+                    category=RuntimeWarning,
+                )
+
+            rng = SimpleRatioUniforms(self, random_state=random_state, mode=self._mode)
+
+        if size == ():
+            # SimpleRatioUniforms.rvs expects an integer, tuple of integers or None.
+            # It crashes with an empty tuple, which corresponds to a scalar.
+            size = None
+
         return rng.rvs(size=size)
+
+    def _rvs(self, *args, **kwargs):
+        return self._simple_ratio_uniforms_rvs(*args, **kwargs)
+
+class _RVSMixin(_SimpleRVSMixin):
+    """
+    Helper mixin for custom distributions (rv_continuous subclasses)
+    that will likely only get a sample per setup
+
+    Subclasses need to define _pdf and _cdf
+    """
+
+    def _rvs(self, *args, size=None, **kwargs):
+
+        # Faster than default _rvs for large sizes, but slow setup
+        # Most of the time we'll need a new setup per energy
+
+        if size is None or size == tuple():
+            return super()._rvs(*args, size=size, **kwargs)
+        else:
+            return self._simple_ratio_uniforms_rvs(*args, size = size, **kwargs)
 
 class KleinNishinaPolarScatteringAngleDist(_RVSMixin, rv_continuous):
     """
@@ -232,9 +262,11 @@ class ARMNormDist(_SimpleRVSMixin, rv_continuous):
              erfi((angres ** 2 + 1j * phi) / (np.sqrt(2) * angres)))
             / (2 * (erf(phi / (np.sqrt(2) * angres)) - erf((-np.pi + phi) / (np.sqrt(2) * angres)))))
 
+        self._truncnorm_dist = truncnorm(-self._phi / self._angres, (np.pi - self._phi) / self._angres, 0, self._angres)
+
     def _pdf(self, arm, *args):
 
-        return truncnorm.pdf(arm, -self._phi / self._angres, (np.pi - self._phi) / self._angres, 0, self._angres) * np.sin(self._phi + arm) / self._norm
+        return self._truncnorm_dist.pdf(arm) * np.sin(self._phi + arm) / self._norm
 
 class ARMMultiNormDist(rv_continuous):
 
@@ -291,7 +323,6 @@ class ARMMultiNormDist(rv_continuous):
             samples[mask] = dist._rvs(size = nmask)
 
         return samples
-
 
 class ThresholdKleinNishinaPolarScatteringAngleDist(KleinNishinaPolarScatteringAngleDist):
 
@@ -474,7 +505,7 @@ class LogGaussianCosThetaEffectiveArea:
 
 class ConstantFractEnergyRes:
 
-    def __init__(self, energy_res,batch_size = 1000):
+    def __init__(self, energy_res):
         """
 
         Parameters
@@ -483,17 +514,12 @@ class ConstantFractEnergyRes:
         """
 
         self._energy_res = energy_res
-        self._batch_size = batch_size
 
-    def __call__(self, photons = Iterable[PhotonWithEnergyInterface]) -> Iterable[Quantity]:
+    def __call__(self, energy) -> Quantity:
         """
         """
 
-        for batch in itertools_batched(photons, self._batch_size):
-
-            energy = np.asarray([photon.energy_keV for photon in batch])
-
-            yield from Quantity(energy * self._energy_res, u.keV, copy=False)
+        return self._energy_res * energy
 
 class ConstantAngularResolution:
 
@@ -536,7 +562,7 @@ class IdealComptonIRF(FarFieldInstrumentResponseFunctionInterface):
 
     def __init__(self,
                  effective_area:Callable[[Iterable[PhotonInterface]], Quantity],
-                 energy_resolution:Callable[[PhotonInterface], Quantity],
+                 energy_resolution:Callable[[Quantity], Quantity],
                  angular_resolution:Callable[[PhotonInterface], Tuple[Quantity, np.ndarray[float]]],
                  full_absorption_prob:Callable[[Iterable[PhotonInterface]], Quantity],
                  energy_threshold:Union[None, Quantity] = None,
@@ -553,7 +579,17 @@ class IdealComptonIRF(FarFieldInstrumentResponseFunctionInterface):
             self._energy_threshold = energy_threshold
 
     @classmethod
-    def cosi_like(cls):
+    def cosi_like(cls,
+                  max_area = 110 * u.cm * u.cm,
+                  max_area_energy = 1500 * u.keV,
+                  sigma_decades = 0.4,
+                  energy_resolution = 0.01,
+                  angres = 3*u.deg,
+                  angres_fact = [1 / 3., 1, 3, 9],
+                  angres_weights = [1, 4, 10, 20],
+                  full_absorption_constant = 0.5,
+                  full_absorption_exp_cutoff = 10*u.MeV,
+                  energy_threshold = 20*u.keV):
         """
         Similar performance as COSI. Meant for code development, not science or sensitivity predictions.
 
@@ -562,16 +598,19 @@ class IdealComptonIRF(FarFieldInstrumentResponseFunctionInterface):
 
         """
 
-        max_area = 110 * u.cm * u.cm
-        max_area_energy = 1500 * u.keV
-        sigma_decades = 0.4
-        energy_resolution = 0.01
-        angres = np.deg2rad(3)
-        angres_fact = np.asarray([1 / 3., 1, 3, 9])
-        angres_weights = np.asarray([1, 4, 10, 20])
-        full_absorption_constant = 0.7
-        full_absorption_exp_cutoff = 10*u.MeV
-        energy_threshold = 20*u.keV
+        max_area = 110 * u.cm * u.cm             if max_area is None else max_area
+        max_area_energy = 1500 * u.keV           if max_area_energy is None else max_area_energy
+        sigma_decades = 0.4                      if sigma_decades is None else sigma_decades
+        energy_resolution = 0.01                 if energy_resolution is None else energy_resolution
+        angres = 3 * u.deg                       if angres is None else angres
+        angres_fact = [1 / 3., 1, 3, 9]          if angres_fact is None else angres_fact
+        angres_weights = [1, 4, 10, 20]          if angres_weights is None else angres_weights
+        full_absorption_constant = 0.7           if full_absorption_constant is None else full_absorption_constant
+        full_absorption_exp_cutoff = 10 * u.MeV  if full_absorption_exp_cutoff is None else full_absorption_exp_cutoff
+        energy_threshold = 20 * u.keV            if energy_threshold is None else energy_threshold
+
+        angres_fact = np.asarray(angres_fact)
+        angres_weights = np.asarray(angres_weights)
 
         effective_area = LogGaussianCosThetaEffectiveArea(max_area, max_area_energy, sigma_decades)
         energy_resolution = ConstantFractEnergyRes(energy_resolution)
@@ -604,22 +643,28 @@ class IdealComptonIRF(FarFieldInstrumentResponseFunctionInterface):
         for photon in photons:
 
             energy = photon.energy
-            energy_res = next(self._energy_resolution([photon]))
             full_absorp_prob = next(self._full_prob([photon]))
 
             # Random polar (phi) and azimuthal angle from Klein Nishina
-            phi = KleinNishinaPolarScatteringAngleDist(energy).rvs(size = 1)
-            azimuth = KleinNishinaAzimuthalScatteringAngleDist(energy, phi)
+            phi = ThresholdKleinNishinaPolarScatteringAngleDist(energy, self._energy_threshold).rvs()
+            azimuth = KleinNishinaAzimuthalScatteringAngleDist(energy, phi).rvs()
+            azimuth += photon.polarization_angle_rad()
 
             # Get the measured energy based on phi and the energy resolution and absroption probabity for the photon location
-            measured_energy = MeasuredEnergyDist(energy, energy_res, phi, full_absorp_prob).rvs(size = 1) * energy.unit
+            measured_energy = MeasuredEnergyDist(energy, self._energy_resolution, phi, full_absorp_prob).rvs()
+            measured_energy_keV = Quantity(measured_energy, energy.unit, copy=False).to_value(u.keV)
 
             # Get a random ARM
             angres, weights = next(self._angular_resolution([photon]))
-            arm = ARMMultiNormDist(phi, angres, weights)
+            arm = ARMMultiNormDist(phi, angres, weights).rvs()
 
-            # Transform arm and az to phichi
+            # Transform arm and az to psichi
+            psichi = RelativeCDSCoordinates(photon.direction, StereographicConvention()).to_cds(phi + arm, azimuth)
 
+            # Put everything in the output event
+            # The assummed probability assumes that phi is measured exactly, all the uncertainty comes from the error
+            # in psichi (through the ARM)
+            yield EmCDSEventInSCFrame(measured_energy_keV, phi, psichi.lon.rad, psichi.lat.rad)
 
 
     def effective_area_cm2(self, photons: Iterable[PolDirESCPhoton]) -> Iterable[float]:

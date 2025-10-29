@@ -127,7 +127,7 @@ class RelativeCDSCoordinates:
         phi: Angular distance with respect to the source direction.
         az: Azimuthal angle around the source direction, with a 0-direction defined by the
         polarization convention.
-        Each with shape (N,M)
+        Each with shape (N,M). Angles.
         """
 
         psichi_vec = self._standardize_vector(psichi)
@@ -151,7 +151,7 @@ class RelativeCDSCoordinates:
         phi = np.arccos(psichi_source_component)
         az = np.arctan2(psichi_py_component, psichi_px_component)
 
-        return phi, az
+        return Angle(phi, unit=u.rad, copy=False), Angle(az, unit=u.rad, copy=False)
 
     @staticmethod
     def get_relative_cds_phase_space(phi_min = None, phi_max = None, arm_min = None, arm_max = None, az_min = None, az_max = None):
