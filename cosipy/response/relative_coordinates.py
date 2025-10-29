@@ -139,19 +139,17 @@ class RelativeCDSCoordinates:
         py = np.expand_dims(self._py, new_dims)
 
         # Get the psichi_perp_vec component along each basis vector
-        psichi_perp_vec = psichi_vec - source_vec
-
         # This is equivalent to
-        # psichi_px = np.sum(px * psichi_perp_vec, axis=0)
+        # psichi_px_component = np.sum(px * psichi_perp_vec, axis=0)
+        # for each component
         # but it does not allocate the temporary px*psichi_perp_vec results
-        subscripts = 'i...,i...->...' # Mean "product-sum over first dimensions"
-        psichi_px = np.einsum(subscripts, px, psichi_perp_vec)
-        psichi_py = np.einsum(subscripts, py, psichi_perp_vec)
-        psichi_dotprod_source = np.einsum(subscripts, source_vec, psichi_vec)
+        # and performs the full operation in one step
+        psichi_px_component, psichi_py_component, psichi_source_component =  \
+            np.einsum('ji...,ji...->j...',[px,py,source_vec], psichi_vec[np.newaxis])
 
         # Get the angle from the vector
-        phi = np.arccos(psichi_dotprod_source)
-        az = np.arctan2(psichi_py, psichi_px)
+        phi = np.arccos(psichi_source_component)
+        az = np.arctan2(psichi_py_component, psichi_px_component)
 
         return phi, az
 
