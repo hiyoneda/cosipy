@@ -44,6 +44,7 @@ class PolarizedPhotonWithDirectionAndEnergyInSCFrameStereographicConvention(Phot
 
         self._pa = polarization_angle_radians
 
+    @property
     def polarization_angle_rad(self) -> float:
         return self._pa
 

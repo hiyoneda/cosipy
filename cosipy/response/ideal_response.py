@@ -2,12 +2,13 @@ import warnings
 from collections.abc import Callable
 from typing import Iterable, Tuple, Union
 
-from astropy.coordinates import Angle
+from astropy.coordinates import Angle, SkyCoord
 from astropy.units import Quantity
 from cosipy.data_io.EmCDSUnbinnedData import EmCDSEventInSCFrame
 from cosipy.polarization import StereographicConvention
 from cosipy.response.relative_coordinates import RelativeCDSCoordinates
 from more_itertools.more import sample
+from numpy._typing import NDArray
 from scipy.optimize import minimize_scalar
 from scipy.stats import rv_continuous, truncnorm, norm, uniform, randint
 from scipy.stats.sampling import SimpleRatioUniforms
@@ -24,6 +25,8 @@ from cosipy.response.photon_types import \
 from scipy.special import erfi, erf
 
 from cosipy.util.iterables import itertools_batched
+from scoords import SpacecraftFrame
+
 
 def _to_rad(angle):
     if isinstance(angle, (Quantity, Angle)):
@@ -167,6 +170,8 @@ class KleinNishinaAzimuthalScatteringAngleDist(_RVSMixin, rv_continuous):
     def __init__(self, energy, theta, *args, **kwargs):
         """
         Conditional probability, given a polar angle and energy.
+
+        NOTE: input phi in pdf(phi) and cdf(phi) MUST lie between [0,2*pi]. The results are unpredictable otherwise.
 
         Parameters
         ----------
@@ -331,6 +336,8 @@ class ThresholdKleinNishinaPolarScatteringAngleDist(KleinNishinaPolarScatteringA
         super().__init__(energy)
 
         if energy_threshold is None:
+            self._renormalizable = True
+            self._renormalizable_error = None
             self._min_phi = 0
         else:
 
@@ -340,23 +347,31 @@ class ThresholdKleinNishinaPolarScatteringAngleDist(KleinNishinaPolarScatteringA
             max_energy_deposited = 2 * energy * self._eps / (1 + 2 * self._eps)
 
             if energy_threshold > max_energy_deposited:
-                raise ValueError(
-                    f"Threshold ({energy_threshold}) is greater than the maximum possible deposited energy ({max_energy_deposited}). PDF cannot be normalized")
+                self._renormalizable = False
+                self._renormalizable_error = ValueError(
+                f"Threshold ({energy_threshold}) is greater than the maximum possible deposited energy ({max_energy_deposited}). PDF cannot be normalized")
+            else:
+                self._renormalizable = True
+                self._renormalizable_error = None
 
-            # Mathematica
-            # Solve[e/(e - ethresh) ==
-            #   1 + \[Epsilon] (1 - Cos[\[Theta]]), \[Theta] ]
+                # Mathematica
+                # Solve[e/(e - ethresh) ==
+                #   1 + \[Epsilon] (1 - Cos[\[Theta]]), \[Theta] ]
 
-            energy_threshold = energy_threshold.to_value(energy.unit)
-            energy = energy.value
+                energy_threshold = energy_threshold.to_value(energy.unit)
+                energy = energy.value
 
-            eps_ediff = self._eps * (energy - energy_threshold)
+                eps_ediff = self._eps * (energy - energy_threshold)
 
-            self._min_phi = np.arccos((eps_ediff - energy_threshold) / eps_ediff)
+                self._min_phi = np.arccos((eps_ediff - energy_threshold) / eps_ediff)
 
         # Renormalize
-        self._cdf_min_phi = super()._cdf(self._min_phi)
-        self._norm_factor = 1 / (1 - self._cdf_min_phi)
+        self._cdf_min_phi = None
+        self._norm_factor = None
+
+        if self._renormalizable:
+            self._cdf_min_phi = super()._cdf(self._min_phi)
+            self._norm_factor = 1 / (1 - self._cdf_min_phi)
 
     def _renormalize(self, phi, prob):
 
@@ -374,6 +389,13 @@ class ThresholdKleinNishinaPolarScatteringAngleDist(KleinNishinaPolarScatteringA
 
     def _pdf(self, phi, *args):
 
+        if not self._renormalizable:
+            # While the PDF can't be normalized,
+            # and there we can't have a CDF or RVS,
+            # we can still return the probability = 0
+            # to prevent other code from crashing
+            return np.zeros_like(phi)
+
         phi = _to_rad(phi)
 
         prob = super()._pdf(phi, *args)
@@ -382,11 +404,20 @@ class ThresholdKleinNishinaPolarScatteringAngleDist(KleinNishinaPolarScatteringA
 
     def _cdf(self, phi, *args):
 
+        if not self._renormalizable:
+            raise self._renormalizable_error
+
         phi = _to_rad(phi)
 
         cum_prob = super()._cdf(phi, *args) - self._cdf_min_phi
 
         return self._renormalize(phi, cum_prob)
+
+    def _rvs(self, *args, **kwargs):
+        if not self._renormalizable:
+            raise self._renormalizable_error
+
+        return super()._rvs(*args, **kwargs)
 
 class MeasuredEnergyDist(rv_continuous):
 
@@ -425,8 +456,7 @@ class MeasuredEnergyDist(rv_continuous):
         eps = (energy / u.Quantity(510.99895069, u.keV)).value
 
         phi = _to_rad(phi)
-        phi = (phi + np.pi) % (2 * np.pi) - np.pi
-        energy_deposited = energy / (1 + eps * (1 - np.cos(phi)))
+        energy_deposited = energy * (1 - 1 / (1 + eps * (1 - np.cos(phi))))
 
         self._full_prob = full_absorp_prob
         self._partial_prob = 1 - full_absorp_prob
@@ -578,6 +608,8 @@ class IdealComptonIRF(FarFieldInstrumentResponseFunctionInterface):
         else:
             self._energy_threshold = energy_threshold
 
+        self._pol_convention = StereographicConvention()
+
     @classmethod
     def cosi_like(cls,
                   max_area = 110 * u.cm * u.cm,
@@ -623,17 +655,101 @@ class IdealComptonIRF(FarFieldInstrumentResponseFunctionInterface):
                    full_absorption_prob,
                    energy_threshold)
 
+    def _event_probability(self, photon:PolDirESCPhoton,
+                           phi:float,
+                           events:Iterable[EmCDSEventInSCFrameInterface]) -> Iterable[float]:
+        """
+        Computes the probability for a given set of photon parameters, and for all events with the same phi
 
+        Note: it is assumed that all events have the same phi!!!
+        """
+
+        # Get some needed values from this query
+        photon_energy_keV = photon.energy_keV
+        photon_energy = Quantity(photon_energy_keV, u.keV, copy = False)
+        measured_energy_keV = np.asarray([event.energy_keV for event in events])
+        full_absorp_prob = next(self._full_prob([photon]))
+        angres, weights = next(self._angular_resolution([photon]))
+        pa = photon.polarization_angle_rad
+        psichi_lon = [event.scattered_lon_rad_sc for event in events]
+        psichi_lat = [event.scattered_lat_rad_sc for event in events]
+        psichi = SkyCoord(lon = psichi_lon, lat = psichi_lat, unit = u.rad, frame = SpacecraftFrame())
+
+        # Convert CDF to relative
+        phi_geom, az = RelativeCDSCoordinates(photon.direction, self._pol_convention).to_relative(psichi)
+
+        # Get probability
+        # We're assuming the phi measured from kinematics has no errors. Otherwise, the calculation became too complex
+        # All directional error come from the uncertainty on psichi (through the ARM, in psichi_geom)
+        # P(phi|Ei) * P(Em | Ei, phi) * P(psichi | phi, Ei, PA)
+        # P(psichi | phi, Ei, PA) = P(arm | phi) * P(az | phi, Ei)
+
+        prob = ThresholdKleinNishinaPolarScatteringAngleDist(photon_energy, self._energy_threshold).pdf(phi)
+        prob *= MeasuredEnergyDist(photon_energy, self._energy_resolution, phi, full_absorp_prob).pdf(measured_energy_keV)
+        prob *= ARMMultiNormDist(phi, angres, weights).pdf(phi_geom.rad - phi)
+
+        prob *= KleinNishinaAzimuthalScatteringAngleDist(photon_energy, phi).pdf((az.rad - pa) % (2*np.pi))
+
+        yield from prob
 
     def event_probability(self, query: Iterable[Tuple[PolDirESCPhoton, EmCDSEventInSCFrameInterface]]) -> Iterable[float]:
         """
         Return the probability density of measuring a given event given a photon.
 
         The units of the output the inverse of the phase space of the class event_type data space.
-        e.g. if the event measured energy in keV, the units of output of this function are implicitly 1/keV
+        e.g. if the event measured photon_energy in keV, the units of output of this function are implicitly 1/keV
+
+        NOTE: this implementation runs fast if you sort the queries by photon, following by the event phi.
         """
 
-        # P(phi) * P(E_dep | phi, nulambda, Ei) * P(Em | E_dep) * P(psichi | )
+        # This allows to sample the PDF for multiple values at once
+        # Multiple event with the phi pretty much only happen during testing though,
+        # since for real data the same measured values will not be repeating
+        last_photon = None
+        last_phi = None
+        cached_events = []
+
+        for photon,event in query:
+
+            phi = event.scattering_angle_rad
+
+            if last_photon is None:
+                # This only happens for the first event
+                last_photon = photon
+                last_phi = phi
+                cached_events = [event]
+                continue
+
+            if photon is last_photon:
+                # We can keep caching values, unless phi changed
+
+                if last_phi is phi:
+                    # Same photon and phi. Keep caching events
+                    cached_events.append(event)
+                else:
+                    # It's not longer the same. We now need to evaluate and yield what we have so far
+                    yield from self._event_probability(last_photon, last_phi, cached_events)
+
+                    # Restart
+                    last_photon = photon
+                    last_phi = phi
+                    cached_events = [event]
+
+            else:
+                # It's not longer the same. We now need to evaluate and yield what we have so far
+                yield from self._event_probability(last_photon, last_phi, cached_events)
+
+                # Restart
+                last_photon = photon
+                last_phi = phi
+                cached_events = [event]
+
+        # Yield the probability for the leftover events
+        yield from self._event_probability(last_photon, last_phi, cached_events)
+
+
+
+
 
     def random_events(self, photons: Iterable[PolDirESCPhoton]) -> Iterable[EmCDSEventInSCFrameInterface]:
         """
@@ -659,7 +775,7 @@ class IdealComptonIRF(FarFieldInstrumentResponseFunctionInterface):
             arm = ARMMultiNormDist(phi, angres, weights).rvs()
 
             # Transform arm and az to psichi
-            psichi = RelativeCDSCoordinates(photon.direction, StereographicConvention()).to_cds(phi + arm, azimuth)
+            psichi = RelativeCDSCoordinates(photon.direction, self._pol_convention).to_cds(phi + arm, azimuth)
 
             # Put everything in the output event
             # The assummed probability assumes that phi is measured exactly, all the uncertainty comes from the error
