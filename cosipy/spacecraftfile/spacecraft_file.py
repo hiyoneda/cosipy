@@ -16,7 +16,6 @@ from scoords import Attitude, SpacecraftFrame
 import pandas as pd
 
 from .scatt_map import SpacecraftAttitudeMap
-from cosipy.event_selection import GoodTimeInterval
 
 from typing import Union, Optional
 
@@ -467,54 +466,6 @@ class SpacecraftHistory:
 
         return self.__class__(new_obstime, new_attitude, new_location, new_livetime)
 
-    def apply_gti(self, gti: GoodTimeInterval) -> "SpacecraftHistory":
-        """
-        Returns the SpacecraftHistory file class object by masking livetimes outside the good time interval.
-
-        Parameters
-        ----------
-        gti: cosipy.event_selection.GoodTimeInterval
-
-        Returns
-        -------
-        cosipy.spacecraft.SpacecraftHistory
-        """
-        new_obstime = None
-        new_attitude = None
-        new_location = None
-        new_livetime = None
-
-        for i, (start, stop) in enumerate(zip(gti.tstart_list, gti.tstop_list)):
-        # TODO: this line can be replaced with the following line after the PR in the develop branch is merged.
-        #for i, (start, stop) in enumerate(gti):
-            _sph = self.select_interval(start, stop)
-
-            _obstime = _sph.obstime
-            _attitude = _sph._attitude.as_matrix()
-            _location = _sph._gcrs.cartesian.xyz
-            _livetime = _sph.livetime
-            
-            if i == 0:
-                new_obstime = _obstime
-                new_attitude = _attitude
-                new_location = _location
-                new_livetime = _livetime
-            else:
-                new_obstime = Time(np.append(new_obstime.jd1, _obstime.jd1),
-                                   np.append(new_obstime.jd2, _obstime.jd2),
-                                   format='jd')
-                new_attitude = np.append(new_attitude, _attitude, axis = 0)
-                new_location = np.append(new_location, _location, axis = 1)
-                new_livetime = np.append(new_livetime, 0 * new_livetime.unit) # assign livetime of zero between GTIs
-                new_livetime = np.append(new_livetime, _livetime)
-
-        # finalizing
-        new_attitude = Attitude.from_matrix(new_attitude, frame=self._attitude.frame)
-        new_location = GCRS(x = new_location[0], y = new_location[1], z = new_location[2],
-                            representation_type='cartesian')
-        new_obstime.format = self.obstime.format
-
-        return self.__class__(new_obstime, new_attitude, new_location, new_livetime)
 
     def get_target_in_sc_frame(self, target_coord: SkyCoord) -> SkyCoord:
 
