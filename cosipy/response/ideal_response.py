@@ -584,10 +584,10 @@ class ConstantTimesExponentialCutoffFullAbsorption:
 
             yield from prob
 
-class IdealComptonIRF(FarFieldInstrumentResponseFunctionInterface):
+class UnpolarizedIdealComptonIRF(FarFieldInstrumentResponseFunctionInterface):
 
     # The photon class and event class that the IRF implementation can handle
-    photon_type = PolDirESCPhoton
+    photon_type = PhotonWithDirectionAndEnergyInSCFrameInterface
     event_type = EmCDSEventInSCFrameInterface
 
     def __init__(self,
@@ -595,7 +595,7 @@ class IdealComptonIRF(FarFieldInstrumentResponseFunctionInterface):
                  energy_resolution:Callable[[Quantity], Quantity],
                  angular_resolution:Callable[[PhotonInterface], Tuple[Quantity, np.ndarray[float]]],
                  full_absorption_prob:Callable[[Iterable[PhotonInterface]], Quantity],
-                 energy_threshold:Union[None, Quantity] = None,
+                 energy_threshold:Union[None, Quantity] = None
                  ):
 
         self._effective_area = effective_area
@@ -655,6 +655,12 @@ class IdealComptonIRF(FarFieldInstrumentResponseFunctionInterface):
                    full_absorption_prob,
                    energy_threshold)
 
+    def _az_prob(self, photon, phi, az):
+        return 1/2/np.pi
+
+    def _random_az(self, photon, phi):
+        return 2*np.pi*uniform.rvs()
+
     def _event_probability(self, photon:PolDirESCPhoton,
                            phi:float,
                            events:Iterable[EmCDSEventInSCFrameInterface]) -> Iterable[float]:
@@ -670,7 +676,6 @@ class IdealComptonIRF(FarFieldInstrumentResponseFunctionInterface):
         measured_energy_keV = np.asarray([event.energy_keV for event in events])
         full_absorp_prob = next(self._full_prob([photon]))
         angres, weights = next(self._angular_resolution([photon]))
-        pa = photon.polarization_angle_rad
         psichi_lon = [event.scattered_lon_rad_sc for event in events]
         psichi_lat = [event.scattered_lat_rad_sc for event in events]
         psichi = SkyCoord(lon = psichi_lon, lat = psichi_lat, unit = u.rad, frame = SpacecraftFrame())
@@ -687,10 +692,9 @@ class IdealComptonIRF(FarFieldInstrumentResponseFunctionInterface):
         prob = ThresholdKleinNishinaPolarScatteringAngleDist(photon_energy, self._energy_threshold).pdf(phi)
         prob *= MeasuredEnergyDist(photon_energy, self._energy_resolution, phi, full_absorp_prob).pdf(measured_energy_keV)
         prob *= ARMMultiNormDist(phi, angres, weights).pdf(phi_geom.rad - phi)
+        prob *= self._az_prob(photon, phi, az.rad)
 
-        prob *= KleinNishinaAzimuthalScatteringAngleDist(photon_energy, phi).pdf((az.rad - pa) % (2*np.pi))
-
-        yield from prob
+        return prob
 
     def event_probability(self, query: Iterable[Tuple[PolDirESCPhoton, EmCDSEventInSCFrameInterface]]) -> Iterable[float]:
         """
@@ -747,10 +751,6 @@ class IdealComptonIRF(FarFieldInstrumentResponseFunctionInterface):
         # Yield the probability for the leftover events
         yield from self._event_probability(last_photon, last_phi, cached_events)
 
-
-
-
-
     def random_events(self, photons: Iterable[PolDirESCPhoton]) -> Iterable[EmCDSEventInSCFrameInterface]:
         """
         Return a stream of random events, photon by photon.
@@ -763,8 +763,7 @@ class IdealComptonIRF(FarFieldInstrumentResponseFunctionInterface):
 
             # Random polar (phi) and azimuthal angle from Klein Nishina
             phi = ThresholdKleinNishinaPolarScatteringAngleDist(energy, self._energy_threshold).rvs()
-            azimuth = KleinNishinaAzimuthalScatteringAngleDist(energy, phi).rvs()
-            azimuth += photon.polarization_angle_rad()
+            azimuth = self._random_az(photon, phi)
 
             # Get the measured energy based on phi and the energy resolution and absroption probabity for the photon location
             measured_energy = MeasuredEnergyDist(energy, self._energy_resolution, phi, full_absorp_prob).rvs()
@@ -790,3 +789,14 @@ class IdealComptonIRF(FarFieldInstrumentResponseFunctionInterface):
         return [a.to_value(u.cm*u.cm) for a in self._effective_area(photons)]
 
 
+class IdealComptonIRF(UnpolarizedIdealComptonIRF):
+
+    photon_type = PolDirESCPhoton
+
+    def _az_prob(self, photon, phi, az):
+        pa = photon.polarization_angle_rad
+        return KleinNishinaAzimuthalScatteringAngleDist(photon.energy, phi).pdf((az - pa) % (2 * np.pi))
+
+    def _random_az(self, photon, phi):
+        pa = photon.polarization_angle_rad
+        return KleinNishinaAzimuthalScatteringAngleDist(photon.energy, phi).rvs() + pa
