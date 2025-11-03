@@ -9,7 +9,8 @@ from scoords import SpacecraftFrame
 
 from . import EventWithEnergyInterface
 from .event import EventInterface, TimeTagEventInterface, \
-    ComptonDataSpaceInSCFrameEventInterface, TimeTagEmCDSEventInSCFrameInterface, EventWithScatteringAngleInterface
+    ComptonDataSpaceInSCFrameEventInterface, TimeTagEmCDSEventInSCFrameInterface, EventWithScatteringAngleInterface, \
+    EmCDSEventInSCFrameInterface
 from histpy import Histogram, Axes
 
 from astropy.time import Time
@@ -86,6 +87,8 @@ class EventDataInterface(DataInterface, Protocol):
 @runtime_checkable
 class TimeTagEventDataInterface(EventDataInterface, Protocol):
 
+    event_type = TimeTagEventInterface
+
     def __iter__(self) -> Iterator[TimeTagEventInterface]:...
 
     @property
@@ -104,6 +107,8 @@ class TimeTagEventDataInterface(EventDataInterface, Protocol):
 @runtime_checkable
 class EventDataWithEnergyInterface(EventDataInterface, Protocol):
 
+    event_type = EventWithEnergyInterface
+
     def __iter__(self) -> Iterator[EventWithEnergyInterface]:...
 
     @property
@@ -120,6 +125,8 @@ class EventDataWithEnergyInterface(EventDataInterface, Protocol):
 @runtime_checkable
 class EventDataWithScatteringAngleInterface(EventDataInterface, Protocol):
 
+    event_type = EventWithScatteringAngleInterface
+
     def __iter__(self) -> Iterator[EventWithScatteringAngleInterface]:...
 
     @property
@@ -134,6 +141,8 @@ class EventDataWithScatteringAngleInterface(EventDataInterface, Protocol):
 
 @runtime_checkable
 class ComptonDataSpaceInSCFrameEventDataInterface(EventDataWithScatteringAngleInterface, Protocol):
+
+    event_type = ComptonDataSpaceInSCFrameEventInterface
 
     def __iter__(self) -> Iterator[ComptonDataSpaceInSCFrameEventInterface]:...
 
@@ -159,7 +168,18 @@ class EventDataInSCFrameInterface(EventDataInterface, Protocol):
     @property
     def frame(self) -> SpacecraftFrame:...
 
+@runtime_checkable
+class EmCDSEventDataInSCFrameInterface(EventDataWithEnergyInterface, ComptonDataSpaceInSCFrameEventDataInterface, Protocol):
+
+    event_type = EmCDSEventInSCFrameInterface
+
+    def __iter__(self) -> Iterator[EmCDSEventInSCFrameInterface]: ...
+
+@runtime_checkable
 class TimeTagEmCDSEventDataInSCFrameInterface(TimeTagEventDataInterface,
-                                              EventDataWithEnergyInterface,
-                                               ComptonDataSpaceInSCFrameEventDataInterface):
+                                              EmCDSEventDataInSCFrameInterface,
+                                              Protocol):
+
+    event_type = TimeTagEmCDSEventInSCFrameInterface
+
     def __iter__(self) -> Iterator[TimeTagEmCDSEventInSCFrameInterface]:...
