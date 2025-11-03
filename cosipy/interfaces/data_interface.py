@@ -92,10 +92,12 @@ class TimeTagEventDataInterface(EventDataInterface, Protocol):
     def __iter__(self) -> Iterator[TimeTagEventInterface]:...
 
     @property
-    def jd1(self) -> Iterable[float]: ...
+    def jd1(self) -> Iterable[float]:
+        return [e.jd1 for e in self]
 
     @property
-    def jd2(self) -> Iterable[float]: ...
+    def jd2(self) -> Iterable[float]:
+        return [e.jd2 for e in self]
 
     @property
     def time(self) -> Time:
@@ -112,14 +114,15 @@ class EventDataWithEnergyInterface(EventDataInterface, Protocol):
     def __iter__(self) -> Iterator[EventWithEnergyInterface]:...
 
     @property
-    def energy_rad(self) -> Iterable[float]:...
+    def energy_keV(self) -> Iterable[float]:
+        return [e.energy_keV for e in self]
 
     @property
     def energy(self) -> Quantity:
         """
         Add fancy energy quantity
         """
-        return Quantity(self.energy_rad, u.rad)
+        return Quantity(self.energy_keV, u.keV)
 
 
 @runtime_checkable
@@ -130,7 +133,8 @@ class EventDataWithScatteringAngleInterface(EventDataInterface, Protocol):
     def __iter__(self) -> Iterator[EventWithScatteringAngleInterface]:...
 
     @property
-    def scattering_angle_rad(self) -> Iterable[float]: ...
+    def scattering_angle_rad(self) -> Iterable[float]:
+        return [e.scattering_angle_rad for e in self]
 
     @property
     def scattering_angle(self) -> Angle:
@@ -147,10 +151,12 @@ class ComptonDataSpaceInSCFrameEventDataInterface(EventDataWithScatteringAngleIn
     def __iter__(self) -> Iterator[ComptonDataSpaceInSCFrameEventInterface]:...
 
     @property
-    def scattered_lon_rad_sc(self) -> Iterable[float]: ...
+    def scattered_lon_rad_sc(self) -> Iterable[float]:
+        return [e.scattered_lon_rad_sc for e in self]
 
     @property
-    def scattered_lat_rad_sc(self) -> Iterable[float]: ...
+    def scattered_lat_rad_sc(self) -> Iterable[float]:
+        return [e.scattered_lat_rad_sc for e in self]
 
     @property
     def scattered_direction_sc(self) -> SkyCoord:
