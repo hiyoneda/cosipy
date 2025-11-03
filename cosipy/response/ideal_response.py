@@ -1,16 +1,19 @@
+import itertools
 import warnings
 from collections.abc import Callable
-from typing import Iterable, Tuple, Union
+from typing import Iterable, Tuple, Union, Iterator
 
 from astropy.coordinates import Angle, SkyCoord
 from astropy.units import Quantity
 from cosipy.data_io.EmCDSUnbinnedData import EmCDSEventInSCFrame
-from cosipy.polarization import StereographicConvention
+from cosipy.interfaces import ExpectationDensityInterface
+from cosipy.interfaces.data_interface import EmCDSEventDataInSCFrameInterface
+from cosipy.polarization import StereographicConvention, PolarizationConvention, PolarizationAngle
 from cosipy.response.relative_coordinates import RelativeCDSCoordinates
 from more_itertools.more import sample
 from numpy._typing import NDArray
 from scipy.optimize import minimize_scalar
-from scipy.stats import rv_continuous, truncnorm, norm, uniform, randint
+from scipy.stats import rv_continuous, truncnorm, norm, uniform, randint, poisson
 from scipy.stats.sampling import SimpleRatioUniforms
 import astropy.units as u
 import numpy as np
@@ -21,7 +24,7 @@ from cosipy.interfaces.photon_parameters import PhotonInterface, PhotonWithDirec
     PhotonWithEnergyInterface, PhotonWithDirectionInSCFrameInterface
 from cosipy.response.photon_types import \
     PolarizedPhotonWithDirectionAndEnergyInSCFrameStereographicConventionInterface as PolDirESCPhoton, \
-    PhotonWithDirectionAndEnergyInSCFrame
+    PhotonWithDirectionAndEnergyInSCFrame, PolarizedPhotonWithDirectionAndEnergyInSCFrameStereographicConvention
 from scipy.special import erfi, erf
 
 from cosipy.util.iterables import itertools_batched
@@ -800,3 +803,267 @@ class IdealComptonIRF(UnpolarizedIdealComptonIRF):
     def _random_az(self, photon, phi):
         pa = photon.polarization_angle_rad
         return KleinNishinaAzimuthalScatteringAngleDist(photon.energy, phi).rvs() + pa
+
+class RandomEventDataFromLineInSCFrame(EmCDSEventDataInSCFrameInterface):
+
+    def __init__(self,
+                 irf:FarFieldInstrumentResponseFunctionInterface,
+                 flux:Quantity,
+                 duration:Quantity,
+                 energy:Quantity,
+                 direction:SkyCoord,
+                 polarized_irf:FarFieldInstrumentResponseFunctionInterface,
+                 polarization_degree:float = None,
+                 polarization_angle:Union[Angle, Quantity] = None,
+                 polarization_convention:PolarizationConvention = None):
+        """
+
+        Parameters
+        ----------
+        irf: Must handle PhotonWithDirectionAndEnergyInSCFrameInterface
+        flux: Source flux in unit of 1/area/time
+        duration: Integration time
+        energy: Source energy (a line)
+        direction: Source direction (in SC coordinates)
+        polarized_irf: Must handle PolarizedPhotonWithDirectionAndEnergyInSCFrameStereographicConventionInterface
+        polarization_degree
+        polarization_angle
+        polarization_convention
+        """
+
+        unpolarized_irf = irf
+
+        self.event_type = unpolarized_irf.event_type
+
+        flux_cm2_s = flux.to_value(1/u.cm/u.cm/u.s)
+        duration_s = duration.to_value(u.s)
+
+        energy_keV = energy.to_value(u.keV)
+        direction = direction.transform_to('spacecraftframe')
+        source_direction_lon_rad = direction.lon.rad
+        source_direction_lat_rad = direction.lat.rad
+
+        unpolarized_photon = PhotonWithDirectionAndEnergyInSCFrame(source_direction_lon_rad,
+                                                                         source_direction_lat_rad,
+                                                                         energy_keV)
+
+        unpolarized_expected_counts = next(iter(irf.effective_area_cm2([unpolarized_photon]))) * flux_cm2_s * duration_s
+
+        if polarization_degree is None:
+            polarization_degree = 0
+
+        if polarization_degree < 0 or polarization_degree > 1:
+            raise ValueError(f"polarization_degree must lie between 0 and 1. Got {polarization_degree}")
+
+        if polarization_degree == 0:
+            polarized_irf = None
+            polarized_expected_counts = 0
+
+        else:
+
+            polarized_irf = polarized_irf
+
+            if polarized_irf.event_type is not unpolarized_irf.event_type:
+                raise TypeError(f"Both IRF need to have the same event type. Got {unpolarized_irf.event_type} and {polarized_irf.event_type}")
+
+            polarization_angle_rad = PolarizationAngle(polarization_angle, direction, polarization_convention).transform_to('stereographic').angle.rad
+
+            polarized_photon =  PolarizedPhotonWithDirectionAndEnergyInSCFrameStereographicConvention(source_direction_lon_rad,
+                                                                                                            source_direction_lat_rad,
+                                                                                                            energy_keV,
+                                                                                                            polarization_angle_rad)
+
+            unpolarized_expected_counts *= (1 - polarization_degree)
+            polarized_expected_counts = polarization_degree * next(iter(polarized_irf.effective_area_cm2([polarized_photon]))) * flux_cm2_s * duration_s
+
+        unpolarized_counts = poisson(unpolarized_expected_counts).rvs()
+        polarized_counts = poisson(polarized_expected_counts).rvs()
+
+        self._events = []
+
+        unpolarized_events = iter(unpolarized_irf.random_events(itertools.repeat(unpolarized_photon, unpolarized_counts)))
+
+        polarized_events = None
+        if polarized_counts > 0:
+            polarized_events = iter(polarized_irf.random_events(itertools.repeat(polarized_photon, polarized_counts)))
+
+        nthrown_unpolarized = 0
+        nthrown_polarized = 0
+
+        while nthrown_unpolarized < unpolarized_counts or nthrown_polarized < polarized_counts:
+
+            if np.random.uniform() < polarization_degree:
+                # Polarized component
+                if nthrown_polarized < polarized_counts:
+                    self._events.append(next(polarized_events))
+                    nthrown_polarized += 1
+            else:
+                # Unpolarized component
+                if nthrown_unpolarized < unpolarized_counts:
+                    self._events.append(next(unpolarized_events))
+                    nthrown_unpolarized += 1
+
+    def __iter__(self) -> Iterator[EmCDSEventInSCFrameInterface]:
+        """
+        Return one Event at a time
+        """
+        yield from self._events
+
+class ExpectationFromLineInSCFrame(ExpectationDensityInterface):
+
+    def __init__(self,
+                 data:EmCDSEventDataInSCFrameInterface,
+                 irf:FarFieldInstrumentResponseFunctionInterface,
+                 flux:Quantity,
+                 duration:Quantity,
+                 energy:Quantity,
+                 direction:SkyCoord,
+                 polarized_irf:FarFieldInstrumentResponseFunctionInterface,
+                 polarization_degree:float = None,
+                 polarization_angle:Union[Angle, Quantity] = None,
+                 polarization_convention:PolarizationConvention = None):
+
+        self._unpolarized_irf = irf
+        self._polarized_irf = polarized_irf
+
+        self._duration_s = duration.to_value(u.s)
+        self._data = data
+
+        self._flux_cm2_s = None
+        self._energy_keV = None
+        self._direction = None
+        self._source_direction_lon_rad = None
+        self._source_direction_lat_rad = None
+        self._polarization_degree = None
+        self._polarization_angle_rad = None
+        self._polarization_convention = None
+        self._unpolarized_photon = None
+        self._polarized_photon = None
+        self.set_model(flux = flux,
+                       energy= energy,
+                       direction=direction,
+                       polarization_degree=polarization_degree,
+                       polarization_angle=polarization_angle,
+                       polarization_convention = polarization_convention)
+
+        # Cache
+        self._cached_energy_keV = None
+        self._cached_direction = None
+        self._cached_pol_angle_rad = None
+        self._cached_pol_degree = None
+        self._cached_diff_aeff = None # Per flux unit
+        self._cached_event_probability = None
+        self._cached_event_probability_unpolarized = None
+        self._cached_event_probability_polarized = None
+
+    def set_model(self,
+                  flux:Quantity = None,
+                  energy:Quantity = None,
+                  direction:SkyCoord = None,
+                  polarization_degree: float = None,
+                  polarization_angle: Union[Angle, Quantity] = None,
+                  polarization_convention: PolarizationConvention = None
+                  ):
+        """
+        Parameters not set default to current values
+        """
+
+        if flux is not None:
+            self._flux_cm2_s = flux.to_value(1 / u.cm / u.cm / u.s)
+
+        if energy is not None:
+            self._energy_keV = energy.to_value(u.keV)
+
+        if direction is not None:
+            direction = direction.transform_to('spacecraftframe')
+            self._direction = direction
+            self._source_direction_lon_rad = direction.lon.rad
+            self._source_direction_lat_rad = direction.lat.rad
+
+        if polarization_degree is not None:
+            self._polarization_degree = polarization_degree
+
+        if self._polarization_degree is None:
+            self._polarization_degree = 0
+
+        if self._polarization_degree < 0 or self._polarization_degree > 1:
+            raise ValueError(f"polarization_degree must lie between 0 and 1. Got {self._polarization_degree}")
+
+        if self._polarization_degree > 0:
+
+            if self._polarized_irf is None:
+                raise ValueError("Polarization degree >0 but polarized IRF is None")
+
+            if polarization_convention is not None:
+                self._polarization_convention = polarization_convention
+
+            if polarization_angle is not None:
+                self._polarization_angle_rad = PolarizationAngle(polarization_angle, self._direction,
+                                                                 self._polarization_convention).transform_to('stereographic').angle.rad
+
+        self._unpolarized_photon = PhotonWithDirectionAndEnergyInSCFrame(self._source_direction_lon_rad,
+                                                                         self._source_direction_lat_rad,
+                                                                         self._energy_keV)
+
+        self._polarized_photon = PolarizedPhotonWithDirectionAndEnergyInSCFrameStereographicConvention(
+                                            self._source_direction_lon_rad,
+                                            self._source_direction_lat_rad,
+                                            self._energy_keV,
+                                            self._polarization_angle_rad)
+
+    def _update_cache(self):
+
+        if (self._cached_energy_keV is None
+            or self._energy_keV != self._cached_energy_keV
+            or self._direction != self._cached_direction
+            or self._polarization_angle_rad != self._cached_pol_angle_rad
+            or self._polarization_degree != self._cached_pol_degree):
+            #Either it's the first time or the energy changed
+
+            unpolarized_diff_aeff = (1 - self._polarization_degree) * next(
+                iter(self._unpolarized_irf.effective_area_cm2([self._unpolarized_photon])))
+
+            if (self._cached_event_probability_unpolarized is None
+                    or self._energy_keV != self._cached_energy_keV
+                    or self._direction != self._cached_direction):
+                # Energy or direction can affect the unpolarized response, but not PA nor PD
+                self._cached_event_probability_unpolarized = np.fromiter(self._unpolarized_irf.event_probability([(self._unpolarized_photon, e) for e in self._data]),dtype=float)
+
+            if self._polarization_degree > 0:
+
+                polarized_diff_aeff = self._polarization_degree * next(iter(self._polarized_irf.effective_area_cm2([self._polarized_photon])))
+
+                self._cached_diff_aeff = unpolarized_diff_aeff + polarized_diff_aeff
+
+                if (self._cached_event_probability_polarized is None
+                        or self._energy_keV != self._cached_energy_keV
+                        or self._direction != self._cached_direction
+                        or self._polarization_angle_rad != self._cached_pol_angle_rad):
+                    # Energy, direction or PA can affect the unpolarized response, but not PD
+                    self._cached_event_probability_polarized = np.fromiter(self._polarized_irf.event_probability([(self._polarized_photon, e) for e in self._data]), dtype=float)
+
+                self._cached_event_probability = ( 1 - self._polarization_degree) * self._cached_event_probability_unpolarized + self._polarization_degree * self._cached_event_probability_polarized
+
+            else:
+
+                self._cached_diff_aeff = unpolarized_diff_aeff
+
+                self._cached_event_probability = self._cached_event_probability_unpolarized
+
+            self._cached_energy_keV = self._energy_keV
+            self._cached_direction = self._direction
+            self._cached_pol_angle_rad = self._polarization_angle_rad
+            self._cached_pol_degree = self._polarization_degree
+
+    def expected_counts(self) -> float:
+
+        self._update_cache()
+
+        return self._cached_diff_aeff * (self._flux_cm2_s * self._duration_s)
+
+    def event_probability(self) -> Iterable[float]:
+
+        self._update_cache()
+
+        yield from self._cached_event_probability
+
