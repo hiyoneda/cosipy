@@ -633,16 +633,17 @@ class UnpolarizedIdealComptonIRF(FarFieldInstrumentResponseFunctionInterface):
 
         """
 
-        max_area = 110 * u.cm * u.cm             if max_area is None else max_area
-        max_area_energy = 1500 * u.keV           if max_area_energy is None else max_area_energy
-        sigma_decades = 0.4                      if sigma_decades is None else sigma_decades
-        energy_resolution = 0.01                 if energy_resolution is None else energy_resolution
-        angres = 3 * u.deg                       if angres is None else angres
-        angres_fact = [1 / 3., 1, 3, 9]          if angres_fact is None else angres_fact
-        angres_weights = [1, 4, 10, 20]          if angres_weights is None else angres_weights
-        full_absorption_constant = 0.7           if full_absorption_constant is None else full_absorption_constant
-        full_absorption_exp_cutoff = 10 * u.MeV  if full_absorption_exp_cutoff is None else full_absorption_exp_cutoff
-        energy_threshold = 20 * u.keV            if energy_threshold is None else energy_threshold
+        # This angres_fact give a FWHM approx = angres, but with long tails
+        max_area = 110 * u.cm * u.cm                if max_area is None else max_area
+        max_area_energy = 1500 * u.keV              if max_area_energy is None else max_area_energy
+        sigma_decades = 0.4                         if sigma_decades is None else sigma_decades
+        energy_resolution = 0.01                    if energy_resolution is None else energy_resolution
+        angres = 3 * u.deg                          if angres is None else angres
+        angres_fact = np.asarray([1/3.,1,3,9,27])/3 if angres_fact is None else angres_fact
+        angres_weights = np.asarray([1,4,5,20,30])  if angres_weights is None else angres_weights
+        full_absorption_constant = 0.7              if full_absorption_constant is None else full_absorption_constant
+        full_absorption_exp_cutoff = 10 * u.MeV     if full_absorption_exp_cutoff is None else full_absorption_exp_cutoff
+        energy_threshold = 20 * u.keV               if energy_threshold is None else energy_threshold
 
         angres_fact = np.asarray(angres_fact)
         angres_weights = np.asarray(angres_weights)
