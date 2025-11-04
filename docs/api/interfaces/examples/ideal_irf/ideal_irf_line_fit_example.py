@@ -66,6 +66,8 @@ measured_energy = data.energy
 phi = data.scattering_angle
 psichi = data.scattered_direction_sc
 
+logger.info(f"Got {data.nevents} events.")
+
 # ======= Data visualization ======
 
 fig,ax = plt.subplots(2, 3, figsize = [18,8])
@@ -156,7 +158,7 @@ likelihood = UnbinnedLikelihood(expectation)
 
 fit_energy = True
 fit_direction = True
-direction_nside = 64 # Increase it to get a better TS map, but it'll last longer
+direction_nside = 128 # Decrease/increase it to get a better/worse TS map. It'll be faster/slower
 fit_pa_pd = True
 
 # ==== Free the source energy ====
@@ -263,7 +265,7 @@ if fit_pa_pd:
 
                 loglike[i,j,k] = likelihood.get_log_like()
 
-    fig,ax = plt.subplots(1,2, figaxis = [10,4])
+    fig,ax = plt.subplots(1,2, figsize = [10,4])
 
     flux_prof_loglike = Histogram(loglike.axes['flux'], contents = np.nanmax(loglike, axis = (1,2)))
     ts_flux = 2 * (flux_prof_loglike - np.nanmin(flux_prof_loglike))

@@ -910,6 +910,10 @@ class RandomEventDataFromLineInSCFrame(EmCDSEventDataInSCFrameInterface):
         """
         yield from self._events
 
+    @property
+    def nevents(self) -> int:
+        return len(self._events)
+
 class ExpectationFromLineInSCFrame(ExpectationDensityInterface):
 
     def __init__(self,
