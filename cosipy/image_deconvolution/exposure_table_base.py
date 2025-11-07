@@ -175,6 +175,9 @@ class ExposureTableBase(pd.DataFrame, ABC):
                     this_data = np.asarray(hdu.data[name], dtype=np.float64)
                 elif format_str == 'L':  # Logical (boolean)
                     this_data = np.asarray(hdu.data[name], dtype=bool)
+                elif format_str.endswith('A'):  # String (e.g., '10A', '20A')
+                    # Convert bytes to string if necessary
+                    this_data = np.asarray(hdu.data[name], dtype=str)
                 else:
                     # Default: keep original dtype but convert to native byte order
                     this_data = np.asarray(hdu.data[name])
@@ -352,18 +355,7 @@ class ExposureTableBase(pd.DataFrame, ABC):
         return averaged_pointing 
     
     @abstractmethod
-    def calc_pointing_trajectory_map(self):
-        """
-        Calculate a map showing exposure time for each bin.
-
-        Returns
-        -------
-        :py:class:`histpy.Histogram`
-        """
-        raise NotImplementedError
-
-    @abstractmethod
-    def get_binned_data_scatt(self, unbinned_event, psichi_binning = 'local', sparse = False):
+    def get_binned_data(self, unbinned_event, psichi_binning = 'local', sparse = False):
         """
         Create binned data from unbinned events using spacecraft attitude binning.
     

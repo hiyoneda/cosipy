@@ -251,7 +251,7 @@ class SpacecraftAttitudeExposureTable(ExposureTableBase):
         
         return map_pointing_zx
 
-    def get_binned_data_scatt(self, unbinned_event, psichi_binning = 'local', sparse = False):
+    def get_binned_data(self, unbinned_event, psichi_binning = 'local', sparse = False):
         """
         Create binned data from unbinned events using spacecraft attitude binning.
     

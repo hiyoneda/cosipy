@@ -61,7 +61,7 @@ def test_exposure_table(tmp_path):
     _ = analysis.cosi_dataset.pop('Zpointings')
     analysis.cosi_dataset['Zpointings (glon,glat)'] = _
 
-    binned_signal = exposure_table.get_binned_data_scatt(analysis, psichi_binning = 'local', sparse = False)
+    binned_signal = exposure_table.get_binned_data(analysis, psichi_binning = 'local', sparse = False)
 
     binned_signal_ref = Histogram.open(test_data.path / "image_deconvolution" / 'test_event_histogram_localCDS_scatt.h5')
 
