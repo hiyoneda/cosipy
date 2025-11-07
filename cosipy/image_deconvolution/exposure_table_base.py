@@ -38,18 +38,16 @@ class ExposureTableBase(pd.DataFrame, ABC):
     binning_method = None # used for histogram's axis label, e.g., 'Time' or 'ScAtt'
     additional_column_scaler = None # list of (column_name, format, unit)
     additional_column_array  = None # list of (column_name, format, unit)
+    required_init_params = []  # New: list of required __init__ parameters for subclass
 
-    def __init__(self, df, nside, scheme = 'ring'):
+    def __init__(self, df, **kwargs):
 
         super().__init__(pd.DataFrame(df))
 
-        self.nside = nside
-
-        if scheme == 'ring' or scheme == 'nested':
-            self.scheme = scheme
-        else:
-            logger.warning('The scheme should be "ring" or "nested" in SpacecraftAttitudeExposureTable. It will be set to "ring".')
-            self.scheme = 'ring'
+        # Store additional parameters defined in required_init_params
+        for param in self.required_init_params:
+            if param in kwargs:
+                setattr(self, param, kwargs[param])
 
     def __eq__(self, other):
 
@@ -75,11 +73,15 @@ class ExposureTableBase(pd.DataFrame, ABC):
                     if not np.all(self_ == other_):
                         return False
 
-        return (self.nside == other.nside) and (self.scheme == other.scheme)
+        for param in self.required_init_params:
+            if not getattr(self, param) == getattr(other, param):
+                return False
+
+        return True
 
     @classmethod
     @abstractmethod
-    def from_orientation(cls, orientation, nside, scheme = 'ring', **kwargs):
+    def from_orientation(cls, orientation, **kwargs):
         """
         Produce exposure table from orientation.
 
@@ -213,12 +215,16 @@ class ExposureTableBase(pd.DataFrame, ABC):
         
         # finalize
         df = pd.DataFrame(data=data)
-        nside = hdu.header['NSIDE']
-        scheme = hdu.header['SCHEME']
+
+        # Read required_init_params from header
+        init_params = {}
+        for param in cls.required_init_params:
+            if param.upper() in hdu.header:
+                init_params[param] = hdu.header[param.upper()]
 
         infile.close()
 
-        new = cls(df, nside, scheme)
+        new = cls(df, **init_params)
 
         return new
 
@@ -244,14 +250,6 @@ class ExposureTableBase(pd.DataFrame, ABC):
         columns = [ fits.Column(name=names[i], array=self[names[i]].to_numpy(), format = formats[i], unit = units[i]) 
                      for i in range(len(names))]
         
-#        column_healpix_index_z_pointing = fits.Column(name='healpix_index_z_pointing', 
-#                                                      array=np.array([idx[0] for idx in self['healpix_index']]), format = 'K')
-#        column_healpix_index_x_pointing = fits.Column(name='healpix_index_x_pointing', 
-#                                                      array=np.array([idx[1] for idx in self['healpix_index']]), format = 'K')
-#        
-#        columns.append(column_healpix_index_z_pointing)
-#        columns.append(column_healpix_index_x_pointing)
-
         column_altitude = fits.Column(name='altitude', format='PD()', unit = 'km',
                                         array=np.array(self['altitude'].array, dtype=np.object_))
         columns.append(column_altitude)    
@@ -317,8 +315,14 @@ class ExposureTableBase(pd.DataFrame, ABC):
         table_hdu = fits.BinTableHDU.from_columns(columns) 
         table_hdu.name = 'exposuretable'
 
-        table_hdu.header['nside'] = self.nside
-        table_hdu.header['scheme'] = self.scheme
+        # Add metadata to header
+        table_hdu.header['BINMETH'] = self.binning_method
+        
+        # Add required_init_params to header
+        for param in self.required_init_params:
+            if hasattr(self, param):
+                value = getattr(self, param)
+                table_hdu.header[param.upper()] = value
         
         #save file    
         hdul = fits.HDUList([primary_hdu, table_hdu])    

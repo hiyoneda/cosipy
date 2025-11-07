@@ -23,6 +23,8 @@ class SpacecraftAttitudeExposureTable(ExposureTableBase):
     - scatt_binning_index: int 
     - healpix_index_zpointing: int 
     - healpix_index_xpointing: int 
+    - nside: int
+    - scheme: str
     - zpointing: np.array of [l, b] in degrees. Array of z-pointings assigned to each scatt bin.
     - xpointing: np.array of [l, b] in degrees. Array of x-pointings assigned to each scatt bin.
     - zpointing_averaged: [l, b] in degrees. Averaged z-pointing in each scatt bin.
@@ -47,6 +49,20 @@ class SpacecraftAttitudeExposureTable(ExposureTableBase):
     additional_column_scaler = [('healpix_index_z_pointing', 'K', ''),
                                 ('healpix_index_x_pointing', 'K', '')]
     additional_column_array  = None
+    required_init_params = ['nside', 'scheme']  # New: required parameters
+    
+    def __init__(self, df, nside, scheme='ring'):
+        """
+        Parameters
+        ----------
+        df : pd.DataFrame
+            DataFrame with exposure table data
+        nside : int
+            Healpix NSIDE parameter
+        scheme : str, default 'ring'
+            Healpix scheme ('ring' or 'nested')
+        """
+        super().__init__(df, nside=nside, scheme=scheme)
 
     @classmethod
     def from_orientation(cls, orientation, nside, scheme = 'ring', start = None, stop = None, min_livetime = 1e-3, min_num_pointings = 1, **kwargs):
@@ -74,12 +90,10 @@ class SpacecraftAttitudeExposureTable(ExposureTableBase):
         -------
         :py:class:`cosipy.spacecraftfile.SpacecraftAttitudeExposureTable`
         """
-        
         df = cls.analyze_orientation(orientation, nside, scheme, start, stop, min_livetime, min_num_pointings)
-
-        new = cls(df, nside, scheme)
-
-        return new
+        
+        # nside and scheme are no longer stored in df
+        return cls(df, nside=nside, scheme=scheme)
 
     # GTI should be a mandary parameter
     @classmethod
