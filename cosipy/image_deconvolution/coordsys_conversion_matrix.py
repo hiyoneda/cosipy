@@ -32,7 +32,7 @@ class CoordsysConversionMatrix(Histogram):
         return new
 
     @classmethod
-    def from_exposure_table(cls, exposure_table, full_detector_response, nside_model = None, use_averaged_pointing = False, r_earth = 6378.0):
+    def from_exposure_table(cls, exposure_table, full_detector_response, nside_model = None, scheme_model = 'ring', use_averaged_pointing = False, r_earth = 6378.0):
         """
         Calculate a ccm from a given exposure_table.
 
@@ -44,6 +44,7 @@ class CoordsysConversionMatrix(Histogram):
             Scatt exposure table
         nside_model : int or None, default None
             If it is None, it will be the same as the NSIDE in the response.
+        scheme_model: str, default ring
         use_averaged_pointing : bool, default False
             If it is True, first the averaged Z- and X-pointings are calculated.
             Then the dwell time map is calculated once for ach model pixel and each scatt_binning_index.
@@ -62,13 +63,13 @@ class CoordsysConversionMatrix(Histogram):
 
         if nside_model is None:
             nside_model = full_detector_response.nside
-        is_nest_model = True if exposure_table.scheme == 'nest' else False
+        is_nest_model = True if scheme_model == 'nest' else False
         nside_local = full_detector_response.nside
 
         n_bins = len(exposure_table)
 
         axis_binning = Axis(edges = np.arange(n_bins+1), label = exposure_table.binning_method)
-        axis_model_map = HealpixAxis(nside = nside_model, coordsys = "galactic", scheme = exposure_table.scheme, label = "lb")
+        axis_model_map = HealpixAxis(nside = nside_model, coordsys = "galactic", scheme = scheme_model, label = "lb")
         axis_local_map = full_detector_response.axes["NuLambda"]
 
         axis_coordsys_conv_matrix = Axes((axis_binning, axis_model_map, axis_local_map), copy_axes=False)

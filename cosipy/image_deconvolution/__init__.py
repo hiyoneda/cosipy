@@ -13,5 +13,5 @@ from .RichardsonLucySimple import RichardsonLucySimple
 from .MAP_RichardsonLucy import MAP_RichardsonLucy 
 
 from .scatt_exposure_table import SpacecraftAttitudeExposureTable
-#from .time_binned_exposure_table import TimeBinnedExposureTable
+from .time_binned_exposure_table import TimeBinnedExposureTable
 from .coordsys_conversion_matrix import CoordsysConversionMatrix
