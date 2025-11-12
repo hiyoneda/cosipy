@@ -10,6 +10,7 @@ import subprocess
 import argparse, textwrap
 
 from yayc import Configurator
+from cosipy import UnBinnedData
 
 from cosipy.pipeline.src.io import *
 from cosipy.pipeline.src.preprocessing import *
@@ -33,7 +34,7 @@ def cosi_bindata(argv=None):
             Bins an unbinned dataset matching the given response matrix 
             and within the time interval of the given orientation file. 
             Uses the given time bin size (dt) and coordinate system (either "local" or "galactic").
-            Optionally, applies a time selection tmin-tmax to the data between before binning.
+            Optionally, applies a time selection tmin-tmax to the data before binning.
             Data, response and orientation files paths in the config file should be relative to the config file.
             Outputs the input_yaml describing the binning and the binned dataset.
             """),
@@ -120,7 +121,7 @@ def cosi_bindata(argv=None):
         #
         tseldata_name="tsel_unbinned_data" if not args.suffix else str("tsel_unbinned_data_"+args.suffix)
         tseldata_path=odir/tseldata_name
-        tseldata=BinnedData(yaml_path)
+        tseldata=UnBinnedData(yaml_path)
         tseldata.select_data_time(unbinned_data=data_path,output_name=str(tseldata_path))
         #
         #Unzip:
@@ -129,7 +130,7 @@ def cosi_bindata(argv=None):
         tseldata_path=odir/tseldata_name
         data_path=tseldata_path
         #
-        tselbdata_name = "tsel_binned_data" if not args.suffix else str("tsel_binned_data_" + args.suffix)
+        tselbdata_name = str("tsel_binned_data_"+psichi_coo) if not args.suffix else str("tsel_binned_data_"+psichi_coo+"_"+ args.suffix)
         bdata_name=tselbdata_name
 
 
@@ -219,6 +220,7 @@ def cosi_threemlfit(argv=None):
     # Parse model
     model = ModelParser(model_dict = config['model']).get_model()
 
+
     # Parse input files from config file
     data_path = config.absolute_path(config["data:args"][0])
     yaml_path = config.absolute_path(config["data:kwargs:input_yaml"])
@@ -231,6 +233,7 @@ def cosi_threemlfit(argv=None):
     resp_path = config.absolute_path(config["response:args"][0])
 
     ori = load_ori(config.absolute_path(config["sc_file"]))
+    print(type(ori))
 
     # Slice time, if needed
     tstart = config.get("cuts:kwargs:tstart")
@@ -249,8 +252,8 @@ def cosi_threemlfit(argv=None):
         ori=ori_sliced
 
     # Calculation
-    results, cts_exp = get_fit_results(binned_data, bk_binned_data, resp_path, ori,
-                                                   "cosi_bkg", model)
+    results, cts_exp = get_fit_results(binned_data, bk_binned_data, resp_path, ori, "cosi_bkg", model)
+
 
     # Results
     results.display()
