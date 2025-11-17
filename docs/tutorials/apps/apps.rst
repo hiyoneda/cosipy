@@ -4,64 +4,89 @@ Pipeline applications
 Introduction
 -----------
 We provide scripts to authomatize individual step of the COSI data analysis.
-These can be called from the command line and require, at minimum, only a .yaml configuration file listing the input parameters.
-and files (cosi dataset, response file, orientation file, background file) to process.
+
+These can be called from the command line and require, at minimum, only a .yaml configuration file listing the input parameters and the files (cosi dataset, response file, orientation file, background file) to process.
+
 Here, we demonstrate the usage of the available applications, which are, at the moment:
 
-cosi-bindata: to bin an unbinned dataset, matching a given response matrix
-cosi-threemlfit: to fit a source at l,b with a given threeml spectral model
+cosi-bindata: to bin an unbinned dataset, matching a given response matrix. Optionally, it applies a time selection tmin-tmax to the unbinned data before binning. It outputs the .yaml file with the binning information, the binned dataset, and optionally the time-selected unbinned dataset.
 
-For all the applications, the option -h or -h --help prints an help file that describes the function, the inputs, the outputs and the command line option available
+cosi-threemlfit: to fit a source at l,b with a given threeml spectral model and optionally, in a time window tstart-tstop. It outputs the results of the fit (in a fits file), and a plot of the data and best-fit model. It prints in the terminal the best-fit parameters and the flux (with errors) in the 0.1-10 MeV band, computed from the best-fit model.
+
+For all the applications, the option --h or --help prints an help file that describes the function, the inputs, the outputs and the command line options available:
 
 cosi-threemlfit --help
+
+A practical example
+~~~~~~~~~~~~
+We provide an example of usage of the command line applications in the file run_tutorial.sh.
+
+It is also possible to run the applications from a python script: this is shown in the file run_tutorial.py.
+
+This tutorial uses the data of GRB 081207680 from dc3 and the Galactic background component (for simplicity).
+
+The script get_tutorial_data.py downloads all the necessary files and prepare the dataset for the fit (i.e. combine source and background unbinned data).
+
+This particular GRB starts at t=1836496100.0 and ends at t=1836496188.1
+
+This example uses the app cosi-bindata to bin and cut in time around the time window of the grb the background file.
+
+Hence, it bins and cut in time the grb+bk data file.
+
+Finally, it fits the binned grb+bk data in the whole time window, in the first ten seconds and in the last twenty seconds.
+
 
 The .yaml parameter file
 ~~~~~~~~~~~~
 
+The files prep_bk_fit_grbdc3.yaml and prep_fit_grbdc3.yaml are example of configuration files needed to run the applications.
+
+Note the following:
+
+The parameters for each applications are subgrouped into sections in the file. The default config_group name are bindata (for cosi-bindata) and threemlfit (for cosi-threemlfit). These names can be customized, as the app can be run using the --config_group option (e.g., cosi_threemlfit --config_file MY_CONFIG_FILE --config_grup MY_CONFIG_GROUP).
+
+Some parameters have suboptions, following the structure of the TBD Interface of cosipy.
+
+
+Optional parameters can be set to null.
+
+In the case of cosi-threemlfit, the input model and starting parameters have to be input from the .yaml file. Threeml has a built-in option to export a particular model to the .yaml format. This is shown in the file export_threemlmodel.py for the model of this tutorial.
+
+
 How to call the applications from the command line
 ~~~~~~~~~~~~
+
+All these options are demostrated in the tutorial.
+
 A .yaml parameters file is the minimum requirement to call an application e.g.:
 
 cosi-bindata --config_file MY_CONFIG_FILE
+
+will run cosi-bindata with the parameters set in MY_CONFIG_FILE.
 
 It is possible to add options directly in the command line e.g. :
 
 cosi-bindata --config_file MY_CONFIG_FILE --odir MY_OUTPUT_DIRECTORY
 
-This is the same as before, but the outputs will be saved in the given ouput directory.
+is the same as before, but the outputs will be saved in the given ouput directory.
 
-It is also possible to override parameters of the .yaml file, either directly (for same parameters) or using the override option for any parameters.
+It is also possible to override parameters of the .yaml file, either naming them directly in the command string or using the override option for any parameters.
+
 For instance:
+
 cosi-bindata --config_file MY_CONFIG_FILE --tmin TMIN --tmax TMAX
 
-this string will run cosi-bindata using the tmin amd tmax provided in the command line
-or
-cosi-threemlfit --config_file MY_CONFIG_FILE --override cuts:kwargs:tstart=TSTART cuts:kwargs:tstop=TSTOP
+will run cosi-bindata and set the tmin and tmax parameters to new values.
 
-will run
+cosi-threemlfit --config_file MY_CONFIG_FILE --override cuts:kwargs:tstart=TSTART cuts:kwargs:tstop=TSTOP.
+
+will run cosi-threemlfit and set the tstart and tstop parameters to new values.
+
+
 
 How to call the applications from a python script
 ~~~~~~~~~~~~
 
+This option is demonstrated in the tutorial.
 
-# run_bindata.py
-from bindata_script import cosi_bindata# Define the arguments as a list of strings
-# This mimics what you'd type on the command line
-arguments = [
-    '--config', 'config.yaml',      # Required config file
-    '--tmin', '1577836800.0',       # Optional tmin override
-    '--tmax', '1577923200.0',       # Optional tmax override
-    '-o', './output_directory',     # Specify the output directory
-    '--suffix', 'my_run',           # Add a suffix to output files
-    '--overwrite'                   # Flag to overwrite existing files
-]# Call the function with the argument list
-# The function will use this list instead of sys.argv
-cosi_bindata(argv=arguments)print("cosi_bindata function executed successfully.")
-
-
-
-
-
-A practical example
-~~~~~~~~~~~~
-
+It could be convenient sometimes to run applications from a python script, rather than from the terminal. This is possible by providing the command line options as a list of string (see run_tutorial.py)
