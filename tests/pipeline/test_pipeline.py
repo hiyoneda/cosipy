@@ -7,4 +7,4 @@ def test_run_task():
     os.system(str("cosi-bindata --config "+ config_path + " --overwrite"))
     os.system(str("cosi-threemlfit --config "+ config_path+ " --overwrite"))
     
-test_run_task()
+#test_run_task()
