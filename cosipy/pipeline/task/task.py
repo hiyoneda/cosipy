@@ -233,7 +233,6 @@ def cosi_threemlfit(argv=None):
     resp_path = config.absolute_path(config["response:args"][0])
 
     ori = load_ori(config.absolute_path(config["sc_file"]))
-    print(type(ori))
 
     # Slice time, if needed
     tstart = config.get("cuts:kwargs:tstart")
