@@ -32,7 +32,7 @@ class CoordsysConversionMatrix(Histogram):
         return new
 
     @classmethod
-    def from_exposure_table(cls, exposure_table, full_detector_response, nside_model = None, scheme_model = 'ring', use_averaged_pointing = False, r_earth = 6378.0):
+    def from_exposure_table(cls, exposure_table, full_detector_response, nside_model = None, scheme_model = 'ring', use_averaged_pointing = False, earth_occ = True, r_earth = 6378.0):
         """
         Calculate a ccm from a given exposure_table.
 
@@ -52,6 +52,8 @@ class CoordsysConversionMatrix(Histogram):
             Then the calculated dwell time maps are summed up.
             In the former case, the computation is fast but may lose the angular resolution.
             In the latter case, the conversion matrix is more accurate but it takes a long time to calculate it.
+        earth_occ: bool, default True
+            If it is True, the earth occultation is considered.
         r_earth : float, default 6378.0
             Earth's radius in kilometers.
 
@@ -103,7 +105,7 @@ class CoordsysConversionMatrix(Histogram):
 
             # exposure map calculation including earth occultation
             exposure_time_map = cls._calc_exposure_time_map(nside_model, num_pointings, earth_zenith, altitude, livetime,
-                                                            is_nest_model = is_nest_model, r_earth = r_earth)
+                                                            is_nest_model = is_nest_model, earth_occ = earth_occ, r_earth = r_earth)
 
             # ccm
             for ipix in range(hp.nside2npix(nside_model)):
@@ -145,7 +147,7 @@ class CoordsysConversionMatrix(Histogram):
         return coordsys_conv_matrix
 
     @classmethod
-    def _calc_exposure_time_map(cls, nside_model, num_pointings, earth_zenith, altitude, livetime, is_nest_model = False, r_earth = 6378.0):
+    def _calc_exposure_time_map(cls, nside_model, num_pointings, earth_zenith, altitude, livetime, is_nest_model = False, earth_occ = True, r_earth = 6378.0):
         """
         Calculate exposure time map considering Earth occultation.
 
@@ -169,6 +171,8 @@ class CoordsysConversionMatrix(Histogram):
             Array of livetimes in seconds for each pointing.
         is_nest_model : bool, default False
             If True, use nested HEALPix pixel ordering scheme. If False, use ring ordering.
+        earth_occ: bool, default True
+            If it is True, the earth occultation is considered.
         r_earth : float, default 6378.0
             Earth's radius in kilometers.
 
@@ -185,9 +189,12 @@ class CoordsysConversionMatrix(Histogram):
         exposure_time_map = np.zeros((num_pointings, npix_model))
 
         for i_pointing in range(num_pointings):
-            earth_radius = np.pi - np.arcsin(r_earth / (r_earth + altitude[i_pointing])) #rad
-            filling_pixel_index = hp.query_disc(nside_model, hp.ang2vec(earth_zenith[i_pointing,0], earth_zenith[i_pointing,1], lonlat = True), nest = is_nest_model, radius = earth_radius)
-            exposure_time_map[i_pointing][filling_pixel_index] = livetime[i_pointing]
+            if earth_occ:
+                earth_radius = np.pi - np.arcsin(r_earth / (r_earth + altitude[i_pointing])) #rad
+                filling_pixel_index = hp.query_disc(nside_model, hp.ang2vec(earth_zenith[i_pointing,0], earth_zenith[i_pointing,1], lonlat = True), nest = is_nest_model, radius = earth_radius)
+                exposure_time_map[i_pointing][filling_pixel_index] = livetime[i_pointing]
+            else:
+                exposure_time_map[i_pointing, :] = livetime[i_pointing]
 
         return exposure_time_map
 
