@@ -4,14 +4,28 @@ from astropy.units import Quantity
 from astropy.coordinates import Galactic
 from scipy import integrate
 
-from histpy import Histogram, Axes, Axis, HealpixAxis
+from histpy import Histogram
 
-from threeML import Band, DiracDelta, Constant, Line, Quadratic, Cubic, Quartic, StepFunction, StepFunctionUpper, Cosine_Prior, Uniform_prior, PhAbs, Gaussian
+from threeML import (
+    Band,
+    DiracDelta,
+    Constant,
+    Line,
+    Quadratic,
+    Cubic,
+    Quartic,
+    StepFunction,
+    StepFunctionUpper,
+    Cosine_Prior,
+    Uniform_prior,
+    PhAbs,
+    Gaussian
+)
 
 def get_integrated_spectral_model(spectrum, energy_axis):
     """
     Get the photon fluxes integrated over given energy bins with an input astropy spectral model
-        
+
     Parameters
     ----------
     spectrum : astromodels.functions
@@ -38,41 +52,46 @@ def get_integrated_spectral_model(spectrum, energy_axis):
     from cosipy.threeml import Band_Eflux
 
     spectrum_unit = None
-
-    for item in spectrum.parameters:
-        if getattr(spectrum, item).is_normalization == True:
-            spectrum_unit = getattr(spectrum, item).unit
+    for param in spectrum.parameters.values():
+        if param.is_normalization:
+            spectrum_unit = param.unit
             break
-            
-    if spectrum_unit == None:
-        if isinstance(spectrum, Constant):
-            spectrum_unit = spectrum.k.unit
-        elif isinstance(spectrum, Line) or isinstance(spectrum, Quadratic) or isinstance(spectrum, Cubic) or isinstance(spectrum, Quartic):
-            spectrum_unit = spectrum.a.unit
-        elif isinstance(spectrum, StepFunction) or isinstance(spectrum, StepFunctionUpper) or isinstance(spectrum, Cosine_Prior) or isinstance(spectrum, Uniform_prior) or isinstance(spectrum, DiracDelta): 
-            spectrum_unit = spectrum.value.unit
-        elif isinstance(spectrum, PhAbs):
-            spectrum_unit = u.dimensionless_unscaled
-        elif isinstance(spectrum, Gaussian):
-            spectrum_unit = spectrum.F.unit / spectrum.sigma.unit 
-        elif isinstance(spectrum, Band_Eflux):
-            spectrum_unit = spectrum.K.unit / spectrum.a.unit
-        else:
-            try:
-                spectrum_unit = spectrum.K.unit
-            except:
-                raise RuntimeError("Spectrum not yet supported because units of spectrum are unknown.")
-                
+
+    if spectrum_unit is None:
+        match spectrum:
+            case Constant():
+                spectrum_unit = spectrum.k.unit
+            case Line() | Quadratic() | Cubic() | Quartic():
+                spectrum_unit = spectrum.a.unit
+            case StepFunction() | StepFunctionUpper() | Cosine_Prior() | Uniform_prior() | DiracDelta():
+                spectrum_unit = spectrum.value.unit
+            case PhAbs():
+                spectrum_unit = u.dimensionless_unscaled
+            case Gaussian():
+                spectrum_unit = spectrum.F.unit / spectrum.sigma.unit
+            case Band_Eflux():
+                spectrum_unit = spectrum.K.unit / spectrum.a.unit
+            case _:
+                try:
+                    spectrum_unit = spectrum.k.unit
+                except:
+                    raise RuntimeError("Spectrum not yet supported because units are unknown.")
+
     if isinstance(spectrum, DiracDelta):
-        flux = Quantity([spectrum.value.value * spectrum_unit * lo_lim.unit if spectrum.zero_point.value >= lo_lim/lo_lim.unit and spectrum.zero_point.value <= hi_lim/hi_lim.unit else 0 * spectrum_unit * lo_lim.unit
-                         for lo_lim,hi_lim
-                         in zip(energy_axis.lower_bounds, energy_axis.upper_bounds)])
+        flux = [spectrum.value.value
+                if spectrum.zero_point.value >= lo_lim and spectrum.zero_point.value <= hi_lim
+                else 0
+                for lo_lim, hi_lim in zip(energy_axis.lower_bounds.value,
+                                          energy_axis.upper_bounds.value)]
+
     else:
-        flux = Quantity([integrate.quad(spectrum, lo_lim/lo_lim.unit, hi_lim/hi_lim.unit)[0] * spectrum_unit * lo_lim.unit
-                         for lo_lim,hi_lim
-                         in zip(energy_axis.lower_bounds, energy_axis.upper_bounds)])
-    
-    flux = Histogram(energy_axis, contents = flux)
+        flux = [integrate.quad(spectrum, lo_lim, hi_lim)[0]
+                for lo_lim, hi_lim in zip(energy_axis.lower_bounds.value,
+                                          energy_axis.upper_bounds.value)]
+
+    flux = Histogram(energy_axis,
+                     contents = flux,
+                     unit = spectrum_unit * energy_axis.unit)
 
     return flux
 
@@ -100,7 +119,7 @@ def get_integrated_extended_model(extendedmodel, image_axis, energy_axis):
     This function first integrates the spectral model over the energy bins,
     then combines it with the spatial distribution to create a 2D flux map.
     """
-    
+
     if not isinstance(image_axis.coordsys, Galactic):
         raise ValueError
 
@@ -108,10 +127,10 @@ def get_integrated_extended_model(extendedmodel, image_axis, energy_axis):
 
     npix = image_axis.npix
     coords = image_axis.pix2skycoord(np.arange(npix))
-
     normalized_map = extendedmodel.spatial_shape(coords.l.deg, coords.b.deg) / u.sr
 
-    flux_map = Histogram([image_axis, energy_axis], contents = np.tensordot(normalized_map, integrated_flux.contents, axes = 0))
+    flux_map = Histogram((image_axis, energy_axis),
+                         contents = np.tensordot(normalized_map, integrated_flux.contents, axes = 0),
+                         copy_contents = False)
 
     return flux_map
-    

@@ -6,7 +6,6 @@ from astromodels import Parameter
 
 from cosipy.response.FullDetectorResponse import FullDetectorResponse
 from cosipy.response.ExtendedSourceResponse import ExtendedSourceResponse
-from cosipy.image_deconvolution import AllSkyImageModel
 
 from scoords import SpacecraftFrame, Attitude
 
@@ -15,7 +14,6 @@ from mhealpy import HealpixMap
 from cosipy.response import PointSourceResponse, DetectorResponse
 from histpy import Histogram
 import h5py as h5
-from histpy import Axis, Axes
 import sys
 
 import astropy.units as u
@@ -28,8 +26,6 @@ import numpy as np
 from scipy.special import factorial
 
 import collections
-
-import copy
 
 import logging
 logger = logging.getLogger(__name__)
@@ -160,7 +156,7 @@ class COSILike(PluginPrototype):
             total_expectation = self.image_response.get_expectation_from_astromodel(source)
 
             # Save expected counts for source:
-            self._expected_counts[name] = copy.deepcopy(total_expectation)
+            self._expected_counts[name] = total_expectation.copy()
 
             # Need to check if self._signal type is dense (i.e. 'Quantity') or sparse (i.e. 'COO').
             if type(total_expectation.contents) == u.quantity.Quantity:
@@ -191,7 +187,7 @@ class COSILike(PluginPrototype):
                 for name, source in point_sources.items():
                     coord = source.position.sky_coord
                 
-                    self._source_location[name] = copy.deepcopy(coord) # to avoid same memory issue
+                    self._source_location[name] = coord.copy() # to avoid same memory issue
 
                     if self._coordsys == 'spacecraftframe':
                         dwell_time_map = self._get_dwell_time_map(coord)
@@ -213,7 +209,7 @@ class COSILike(PluginPrototype):
                 logger.info(f"... Re-calculating the point source response of {name} ...")
                 coord = source.position.sky_coord
 
-                self._source_location[name] = copy.deepcopy(coord) # to avoid same memory issue
+                self._source_location[name] = coord.copy() # to avoid same memory issue
                 
                 if self._coordsys == 'spacecraftframe':
                     dwell_time_map = self._get_dwell_time_map(coord)
@@ -236,7 +232,7 @@ class COSILike(PluginPrototype):
             total_expectation = self._psr[name].get_expectation(spectrum)
             
             # Save expected counts for source:
-            self._expected_counts[name] = copy.deepcopy(total_expectation)
+            self._expected_counts[name] = total_expectation.copy()
          
             # Need to check if self._signal type is dense (i.e. 'Quantity') or sparse (i.e. 'COO').
             if type(total_expectation.contents) == u.quantity.Quantity:
@@ -268,7 +264,7 @@ class COSILike(PluginPrototype):
         
         # Recompute the expectation if any parameter in the model changed
         if self._model is None:
-            log.error("You need to set the model first")
+            logger.error("You need to set the model first")
        
         # Set model:
         self.set_model(self._model)
@@ -323,8 +319,9 @@ class COSILike(PluginPrototype):
             Dwell time map
         """
         
-        self._sc_orientation.get_target_in_sc_frame(target_name = self._name, target_coord = coord)
-        dwell_time_map = self._sc_orientation.get_dwell_map(response = self._rsp_path)
+        src_path = self._sc_orientation.get_target_in_sc_frame(coord)
+        dwell_time_map = self._sc_orientation.get_dwell_map(response = self._rsp_path,
+                                                            src_path = src_path)
         
         return dwell_time_map
     
@@ -343,7 +340,7 @@ class COSILike(PluginPrototype):
         """
         
         scatt_map = self._sc_orientation.get_scatt_map(nside = self._dr.nside * 2, target_coord = coord,
-                coordsys = 'galactic', earth_occ = self.earth_occ)
+                                                       earth_occ = self.earth_occ)
         
         return scatt_map
     
