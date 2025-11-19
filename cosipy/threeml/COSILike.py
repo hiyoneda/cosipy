@@ -245,9 +245,6 @@ class COSILike(PluginPrototype):
         # Get expectation for point sources:
         for name,source in point_sources.items():
 
-            # Convolve with spectrum
-            # See also the Detector Response and Source Injector tutorials
-
             if hasattr(source.spectrum, 'main'):
 
                 spectrum = source.spectrum.main.shape
@@ -264,8 +261,6 @@ class COSILike(PluginPrototype):
                     if not 'Pol' in self._dr.axes.labels:
                         this_expectation = self._psr[name].get_expectation(spectrum)
                     else:
-                        #polarization_level = source.components['grb'].polarization.degree.value / 100.
-                        #polarization_angle = PolarizationAngle(coords.Angle(source.components['grb'].polarization.angle.value, unit=u.deg), source.position.sky_coord, convention=self._pa_convention)
                         if self._coordsys == 'spacecraftframe':
                             this_expectation = self._psr[name].get_expectation(spectrum, source.components['grb'].polarization)
                         elif self._coordsys == 'galactic':
