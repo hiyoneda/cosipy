@@ -42,7 +42,7 @@ class FullDetectorResponse(HealpixBase):
         pass
 
     @classmethod
-    def open(cls, filename, dtype=None, pa_convention=None):
+    def open(cls, filename, dtype=None, pa_convention=None, cache_size=None):
 
         """
         Open a detector response file.
@@ -51,25 +51,26 @@ class FullDetectorResponse(HealpixBase):
         ----------
         filename : str, :py:class:`~pathlib.Path`
              Path to the response file (.h5 or .rsp.gz)
-
         dtype : numpy dtype or None
              Dtype of values to be returned when accessing response
              contents. If None, use the type stored in the file
-
         pa_convention : str, optional
             Polarization convention of response ('RelativeX', 'RelativeY', or 'RelativeZ')
+        cache_size : int, optional
+            Number of NuLambda slices' worth of memory to allocate to cache response chunks;
+            if None, use default (which is too small for a useful cache) 
         """
 
         filename = Path(filename)
 
         if filename.suffix == ".h5":
-            return cls._open_h5(filename, dtype, pa_convention)
+            return cls._open_h5(filename, dtype, pa_convention, cache_size)
         else:
             raise ValueError(
                 "Unsupported file format. Only .h5 and .rsp.gz extensions are supported.")
 
     @classmethod
-    def _open_h5(cls, filename, dtype=None, pa_convention=None):
+    def _open_h5(cls, filename, dtype=None, pa_convention=None, cache_size=None):
         """
          Open a detector response h5 file.
 
@@ -77,22 +78,22 @@ class FullDetectorResponse(HealpixBase):
          ----------
          filename : str, :py:class:`~pathlib.Path`
              Path to HDF5 file
-
-        dtype : numpy dtype or None
+         dtype : numpy dtype or None
              Dtype of values to be returned when accessing response
              contents. If None, use the type stored in the file
              (specifically, the type of EFF_AREA)
-
          pa_convention : str, optional
              Polarization convention of response ('RelativeX', 'RelativeY', or 'RelativeZ')
+         cache_size : int, optional
+            Number of NuLambda slices' worth of memory to allocate to cache response chunks;
+            if None, use default (which is too small for a useful cache) 
+
          """
         new = cls(filename)
 
         new._file = h5.File(filename, mode='r')
-
         new._drm = new._file['DRM']
-        new._counts = new._drm['COUNTS']
-        
+
         # verify response format version
         rsp_version = new._drm.attrs.get('VERSION', default=1)
         if rsp_version != cls.rsp_version:
@@ -105,9 +106,9 @@ class FullDetectorResponse(HealpixBase):
 
         # axes minus NuLambda -- used for getting pixel slices for PSRs
         new._rest_axes = new._axes[1:]
-
+        
         new._unit = u.Unit(new._drm.attrs['UNIT'])
-
+        
         # effective area for counts
         ea = np.array(new._drm["EFF_AREA"])
 
@@ -126,8 +127,22 @@ class FullDetectorResponse(HealpixBase):
             raise RuntimeError("Polarization angle convention of response "
                                "('RelativeX', 'RelativeY', or 'RelativeZ') must be provided")
 
-        return new
+        if (cache_size is not None):
+            
+            # Create a cache big enough to hold cache_size NuLambda
+            # slices. We must reopen the HDF5 file to enable caching
+            # behavior.
+            ds = new._drm['COUNTS']
+            cache_bytes = np.prod(new._rest_axes.nbins) * ds.dtype.itemsize
 
+            new._file.close()
+            new._file = h5.File(filename, mode='r', rdcc_nbytes=cache_size*cache_bytes, rdcc_w0=0)
+            new._drm = new._file['DRM']
+        
+        new._counts = new._drm['COUNTS']
+
+        return new
+        
     @property
     def ndim(self):
         """
@@ -209,7 +224,7 @@ class FullDetectorResponse(HealpixBase):
         :py:class:`h5py.dataset`
         """
 
-        return self._drm['COUNTS']
+        return self._counts
 
     @property
     def headers(self):
@@ -294,6 +309,29 @@ class FullDetectorResponse(HealpixBase):
 
         return data
 
+    def get_counts(self, pix, em_slice=None):
+        """
+        Get raw count data for a given NuLambda pixel from the underlying
+        HDF5 file.  Optionally return only a given slice along the Em
+        axis.
+        
+        Parameters
+        ----------
+        pix : int
+          NuLambda pixel to read
+        em_slice: Slice, optional
+          slice of the Em axis to return; None means return all
+
+        """
+        
+        if em_slice is not None:
+            em_dim = self._rest_axes.label_to_index("Em")
+            idx = (pix,) + (slice(None),) * em_dim + (em_slice,)
+        else:
+            idx = pix
+            
+        return self._counts[idx]
+    
     def __getitem__(self, pix):
 
         if not isinstance(pix, (int, np.integer)):
