@@ -262,10 +262,9 @@ class COSILike(PluginPrototype):
                         this_expectation = self._psr[name].get_expectation(spectrum)
                     else:
                         if self._coordsys == 'spacecraftframe':
-                            this_expectation = self._psr[name].get_expectation(spectrum, source.components['grb'].polarization)
+                            this_expectation = self._psr[name].get_expectation(spectrum, source.components[item].polarization)
                         elif self._coordsys == 'galactic':
-                            scatt_map = self._get_scatt_map(source.position.sky_coord)
-                            this_expectation = self._psr[name].get_expectation(spectrum, source.components['grb'].polarization)
+                            this_expectation = self._psr[name].get_expectation(spectrum, source.components[item].polarization)
                         else:
                             raise RuntimeError("Unknown coordinate system")
 
