@@ -127,11 +127,17 @@ class FastTSMap():
         else:
             self._response = GalacticResponse(response_path)
 
+        # record order of response's CDS physical dimensions for linearization
+        axes = self._response.axes
+        if axes.label_to_index("Phi") < axes.label_to_index("PsiChi"):
+            self._cds_order = ("Phi", "PsiChi")
+        else:
+            self._cds_order = ("PsiChi", "Phi")
+            
         self._data = data.todense().project(["Em", "Phi", "PsiChi"])
         self._bkg_model = bkg_model.todense().project(["Em", "Phi", "PsiChi"])
 
         self._fnf = fnf(max_iter=1000)
-
 
     @staticmethod
     def get_hypothesis_coords(nside, pixels = None,
@@ -171,31 +177,7 @@ class FastTSMap():
         return coords
 
     @staticmethod
-    def slice_energy_channel(hist, channel_start, channel_stop):
-        """
-        Slice one or more bins along first axis of the `histogram`.
-
-        Parameters
-        ----------
-        hist : histpy.Histogram
-            The histogram object to be sliced.
-        channel_start : int
-            The start of the slice (inclusive).
-        channel_stop : int
-            The stop of the slice (exclusive).
-
-        Returns
-        -------
-        sliced_hist : histpy.Histogram
-            The sliced histogram.
-        """
-
-        sliced_hist = hist.slice[{"Em" : slice(channel_start, channel_stop)}]
-
-        return sliced_hist
-
-    @staticmethod
-    def get_cds_array(hist, energy_channel):
+    def get_cds_array(hist, em_slice, cds_order):
 
         """
         Convert a CDS histogram to a flattened array, enforcing canonical
@@ -206,8 +188,10 @@ class FastTSMap():
         -----------
         hist : histpy.Histogram
            A CDS count Histogram
-        energy_channel : 2-element list of form [lower_channel, upper_channel]
-            energy (Em) channels to use in fitting (Python range lower_channel:upper_channel)
+        em_slice : Slice object 
+           Energy (Em) channels to use in fitting
+        cds_order : list-like
+           order of Psi and PhiChi dimensions for linearization
 
         Returns
         -------
@@ -216,8 +200,8 @@ class FastTSMap():
 
         """
 
-        hist_cds_sliced = FastTSMap.slice_energy_channel(hist, energy_channel[0], energy_channel[1])
-        hist_cds = hist_cds_sliced.project(["Phi", "PsiChi"]) # project out Em
+        hist_cds_sliced = hist.slice[{"Em" : em_slice}]
+        hist_cds = hist_cds_sliced.project(cds_order) # project out Em
 
         cds_array = hist_cds.contents
         if hist_cds.unit is not None:
@@ -225,7 +209,7 @@ class FastTSMap():
 
         return cds_array.ravel()
 
-    def get_ei_cds_array(self, source, energy_channel, flux):
+    def get_ei_cds_array(self, source, em_slice, valid_cells, flux):
 
         """
         Get the expected counts in CDS in local or galactic frame.
@@ -234,8 +218,10 @@ class FastTSMap():
         ----------
         source : astropy.coordinates.SkyCoord
             source direction
-        energy_channel : 2-element list of form [lower_channel, upper_channel]
-            energy (Em) channels to use in fitting (Python range lower_channel:upper_channel)
+        em_slice : Slice object 
+           Energy (Em) channels to use in fitting
+        valid_cells : array
+           valid Phi/PsiChi voxels of CDS
         flux: Histogram
             The integrated spectral flux of the source, binned according to the response
 
@@ -265,11 +251,14 @@ class FastTSMap():
         expectation = psr.get_expectation(spectrum = None, flux = flux)
 
         # slice energy channals and project it to CDS
-        ei_cds_array = self.get_cds_array(expectation, energy_channel)
+        ei_cds_array = self.get_cds_array(expectation, em_slice, self._cds_order)
 
-        return ei_cds_array
+        ei_sum = np.sum(ei_cds_array)
+        ei_cds_array = ei_cds_array[valid_cells]
 
-    def fast_ts_fit(self, source, energy_channel, flux,
+        return ei_cds_array, ei_sum
+
+    def fast_ts_fit(self, source, em_slice, flux,
                     data_cds_array, bkg_model_cds_array,
                     valid_cells):
         """
@@ -279,8 +268,8 @@ class FastTSMap():
         ----------
         source : astropy.coordinates.SkyCoord
             source direction
-        energy_channel : 2-element list of form [lower_channel, upper_channel]
-            energy (Em) channels to use in fitting (Python range lower_channel:upper_channel)
+        em_slice : Slice object 
+           Energy (Em) channels to use in fitting
         flux: Histogram
             The integrated spectral flux of the source, binned according to the response
         data_cds_array : numpy.ndarray
@@ -296,9 +285,7 @@ class FastTSMap():
 
         """
 
-        ei_cds_array = self.get_ei_cds_array(source, energy_channel, flux)
-        ei_sum = np.sum(ei_cds_array)
-        ei_cds_array = ei_cds_array[valid_cells]
+        ei_cds_array, ei_sum = self.get_ei_cds_array(source, em_slice, valid_cells, flux)
 
         return self._fnf.solve(data_cds_array, bkg_model_cds_array, ei_cds_array, ei_sum)
 
@@ -328,9 +315,14 @@ class FastTSMap():
         if cpu_cores is not None:
             numba.set_num_threads(cpu_cores)
 
-        # get the flattened data_cds_array
-        data_cds_array = self.get_cds_array(self._data, energy_channel)
-        bkg_model_cds_array = self.get_cds_array(self._bkg_model, energy_channel)
+        if energy_channel is None:
+            em_slice = slice(None)
+        else:
+            em_slice = slice(energy_channel[0], energy_channel[1])
+        
+        # get the flattened data and background CDS arrays
+        data_cds_array = self.get_cds_array(self._data, em_slice, self._cds_order)
+        bkg_model_cds_array = self.get_cds_array(self._bkg_model, em_slice, self._cds_order)
 
         # eliminate CDS cells with no counts in data (due to data sparsity) or
         # in bkg model (lack of pseudocounts in bkg model -- could be considered
@@ -342,7 +334,7 @@ class FastTSMap():
         flux = get_integrated_spectral_model(spectrum, self._response.axes["Ei"])
 
         results = [
-            self.fast_ts_fit(source, energy_channel, flux,
+            self.fast_ts_fit(source, em_slice, flux,
                              data_cds_array, bkg_model_cds_array,
                              valid_cells)[0]
             for source in hypothesis_coords
