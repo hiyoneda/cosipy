@@ -137,6 +137,8 @@ class COSILike(PluginPrototype):
                 self._pa_convention = IAUPolarizationConvention()
             else:
                 raise RuntimeError("Unknown coordinate system")
+        else:
+            self._response_pa_convention = None
         
     def set_model(self, model):
         """
