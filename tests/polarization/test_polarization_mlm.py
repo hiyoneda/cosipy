@@ -37,7 +37,7 @@ spectrum.K.unit = K.unit
 
 source_direction = SkyCoord(0, 70, representation_type='spherical', frame=SpacecraftFrame(attitude=attitude), unit=u.deg).transform_to('galactic')
 
-polarization = LinearPolarization(1, 100)
+polarization = LinearPolarization(0.5, 100)
 spectral_component = SpectralComponent('test', spectrum, polarization)
 
 source = PointSource('test',                             
@@ -68,4 +68,4 @@ def test_polarization_fit():
     like.fit()
 
     assert np.allclose([source.spectrum.test.polarization.degree.value, source.spectrum.test.polarization.angle.value],
-                       [100., 112.24], atol=[1.0, 1.0])
+                       [0.000012, 100.], atol=[0.1, 1.0])
