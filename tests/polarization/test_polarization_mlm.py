@@ -13,7 +13,6 @@ from cosipy.threeml.custom_functions import Band_Eflux
 from cosipy import test_data
 
 analysis = BinnedData(test_data.path / 'polarization_data_mlm.yaml')
-analysis.get_binned_data(unbinned_data='polarization_data.hdf5', output_name='polarization_data_binned', psichi_binning='galactic')
 analysis.load_binned_data_from_hdf5(test_data.path / 'polarization_data_binned.hdf5')
 response_path = test_data.path / 'test_polarization_response.h5'
 sc_orientation = SpacecraftFile.parse_from_file(test_data.path / 'polarization_ori.ori')
