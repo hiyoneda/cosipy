@@ -263,7 +263,7 @@ class COSILike(PluginPrototype):
         
         # Recompute the expectation if any parameter in the model changed
         if self._model is None:
-            log.error("You need to set the model first")
+            logger.error("You need to set the model first")
        
         # Set model:
         self.set_model(self._model)
