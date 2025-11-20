@@ -115,7 +115,7 @@ class SourceInjector():
 
             with FullDetectorResponse.open(self.response_path) as response:
                 
-                scatt_map = orientation.get_scatt_map(response.nside*2,  target_coord = coordinate, coordsys = 'galactic', earth_occ = True)
+                scatt_map = orientation.get_scatt_map(response.nside*2, target_coord = coordinate, earth_occ = True)
                 
                 psr = response.get_point_source_response(coord=coordinate, scatt_map=scatt_map)
 

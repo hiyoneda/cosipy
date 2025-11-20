@@ -460,7 +460,7 @@ class UnBinnedData(DataIO):
 
         # Get ori info:
         ori = SpacecraftFile.parse_from_file(self.ori_file)
-        time_tags = ori._load_time
+        time_tags = ori.get_time().to_value(format="unix")
         x_pointings = ori.x_pointings
         z_pointings = ori.z_pointings
 
@@ -562,8 +562,16 @@ class UnBinnedData(DataIO):
         """
 
         # Data units:
-        units=['keV','s','rad','rad',
-                'rad','rad','rad','rad','cm','deg','deg','']
+        #check for the old data structure when CO_seq was not added
+		#This should be remove for DC4
+        if len(self.cosi_dataset.keys())==11:
+            units=['keV','s','rad','rad',
+                    'rad','rad','rad','rad','cm','deg','deg']
+            
+        # New DC4 structure of the data
+        else:
+             units=['keV','s','rad','rad',
+                    'rad','rad','rad','rad','cm','deg','deg','']
             
         # For fits output: 
         if self.unbinned_output == 'fits':

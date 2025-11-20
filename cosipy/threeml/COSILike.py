@@ -308,7 +308,7 @@ class COSILike(PluginPrototype):
         
         # Recompute the expectation if any parameter in the model changed
         if self._model is None:
-            log.error("You need to set the model first")
+            logger.error("You need to set the model first")
        
         # Set model:
         self.set_model(self._model)
@@ -363,8 +363,10 @@ class COSILike(PluginPrototype):
             Dwell time map
         """
         
-        self._sc_orientation.get_target_in_sc_frame(target_name=self._name, target_coord=coord)
-        dwell_time_map = self._sc_orientation.get_dwell_map(response=self._rsp_path, pa_convention=self._response_pa_convention)
+        src_path = self._sc_orientation.get_target_in_sc_frame(coord)
+        dwell_time_map = self._sc_orientation.get_dwell_map(response = self._rsp_path,
+                                                            src_path = src_path,
+                                                            pa_convention = self._response_pa_convention)
         
         return dwell_time_map
     
@@ -382,8 +384,8 @@ class COSILike(PluginPrototype):
         scatt_map : cosipy.spacecraftfile.scatt_map.SpacecraftAttitudeMap
         """
         
-        scatt_map = self._sc_orientation.get_scatt_map(nside=self._dr.nside * 2, target_coord=coord,
-                coordsys='galactic', earth_occ=self.earth_occ)
+        scatt_map = self._sc_orientation.get_scatt_map(nside = self._dr.nside * 2, target_coord = coord,
+                                                       earth_occ = self.earth_occ)
         
         return scatt_map
     
