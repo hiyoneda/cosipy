@@ -5,6 +5,7 @@ import numba
 
 import matplotlib.pyplot as plt
 
+import astropy.units as u
 from astropy.units import Unit
 
 import healpy as hp
@@ -80,7 +81,7 @@ class GalacticResponse:
 
         """
 
-        pix = self.hpbase.ang2pix(source)
+        pix = self.hpbase.vec2pix(source)
 
         return PointSourceResponse(self.rest_axes, self.contents[pix+1], unit = self.unit)
 
@@ -114,20 +115,24 @@ class FastTSMap():
         if cds_frame not in ("local", "galactic"):
             raise ValueError("cds_frame must be one of local or galactic")
 
-        if cds_frame == "local" and orientation is None:
-            raise TypeError("When data are binned in local frame, "
-                            "orientation must be provided")
-
-        self._orientation = orientation
         self._cds_frame = cds_frame
 
-        # open the response file
-        if cds_frame == "local":          
+        if cds_frame == "local":
+
+            if orientation is None:
+                raise TypeError("When data are binned in local frame, "
+                                "orientation must be provided")
+
+            self._orientation = orientation
+
+            # open the response file
             # cache up to 10 NuLambda slices, which is enough to see a fairly high
             # hit rate across source directions for a short GRB when processing
             # source dirs in nested order.
             self._response = FullDetectorResponse.open(response_path, cache_size=10)
+
         else:
+
             self._response = GalacticResponse(response_path)
 
         # record order of response's CDS physical dimensions for linearization
@@ -136,7 +141,7 @@ class FastTSMap():
             self._cds_order = ("Phi", "PsiChi")
         else:
             self._cds_order = ("PsiChi", "Phi")
-            
+
         self._data = data.todense().project(["Em", "Phi", "PsiChi"])
         self._bkg_model = bkg_model.todense().project(["Em", "Phi", "PsiChi"])
 
@@ -144,7 +149,8 @@ class FastTSMap():
 
     @staticmethod
     def get_hypothesis_coords(nside, pixels = None,
-                              scheme = "ring", coordsys = "galactic"):
+                              scheme = "ring",
+                              coordsys = "galactic"):
 
         """
         Get directions corresponding to pixels of a HEALPix map of a
@@ -165,8 +171,8 @@ class FastTSMap():
 
         Returns
         -------
-        hypothesis_coords : SkyCoord
-            Vector SkyCoord containing coordinates for each pixel
+        hypothesis_coords : np.ndarray of (# pixels x 3)
+            Cartesian 3-vectors for each pixel's direction
 
         """
 
@@ -175,9 +181,8 @@ class FastTSMap():
             pixels = np.arange(npix, dtype=int)
 
         hpbase = HealpixBase(nside = nside, scheme = scheme, coordsys = coordsys)
-        coords = hpbase.pix2skycoord(pixels)
 
-        return coords
+        return np.column_stack(hpbase.pix2vec(pixels))
 
     @staticmethod
     def get_cds_array(hist, em_slice, cds_order):
@@ -191,7 +196,7 @@ class FastTSMap():
         -----------
         hist : histpy.Histogram
            A CDS count Histogram
-        em_slice : Slice object 
+        em_slice : Slice object
            Energy (Em) channels to use in fitting
         cds_order : list-like
            order of Psi and PhiChi dimensions for linearization
@@ -212,7 +217,8 @@ class FastTSMap():
 
         return cds_array.ravel()
 
-    def get_ei_cds_array_fast(self, source, em_slice, valid_cells, flux):
+    def get_ei_cds_array_local_fast(self, pixels, exposures,
+                                    em_slice, valid_cells, flux):
         """
         Fast computation of expected CDS counts array for local frame.  We
         merge PSR and expectation calculations so that we can sum away
@@ -221,13 +227,15 @@ class FastTSMap():
 
         Parameters
         ----------
-        source : astropy.coordinates.SkyCoord 
-          source direction 
-        em_slice : Slice object 
-          energy (Em) channels to use in fitting 
+        pixels : np.ndarray (int)
+          pixels in source path
+        exposures: np.ndarray (float)
+          exposure for each pixel in source path
+        em_slice : Slice object
+          energy (Em) channels to use in fitting
         valid_cells : array of int
           valid Phi/PsiChi voxels of CDS
-        flux: np.ndarray 
+        flux: np.ndarray
           integrated spectral flux of the source, binned according to
           response
 
@@ -240,29 +248,14 @@ class FastTSMap():
 
         """
 
-        assert self._cds_frame == "local"
-
-        # convert source direction to local frame
-        source_in_sc_frame = self._orientation.get_target_in_sc_frame(source)
-        
-        # get map of the time spent at each pixel in the local frame
-        dwell_time_map = self._orientation.get_dwell_map(base = self._response,
-                                                         src_path = source_in_sc_frame)
-
-        pixels = np.nonzero(dwell_time_map)[0]
-        
-        ei_weights = flux * self._response.eff_area
-        
-        for i, p in enumerate(pixels):
-            
-            exposure = dwell_time_map[p]
+        for i, (p, exposure) in enumerate(zip(pixels, exposures)):
 
             # get raw CDS counts for pixel, trimmed by Em slice : Ei x Em x Phi/PsiChi
             counts = self._response.get_counts(p, em_slice)
 
             # FIXME? Following assumes response has rest_axes = [ Ei, Em,
             # Phi/PsiChi ]. We should probably verify this in __init__.
-            
+
             # linearize CDS : Ei x Em x CDS voxels. Note that we ensure
             # elsewhere that data and bkg will use the same dimension
             # ordering as the response for the CDS, so there is no
@@ -275,7 +268,7 @@ class FastTSMap():
             # reduce to valid voxels, after capturing sum over all voxels
             sums = np.sum(counts, axis = 1)
             counts = counts[:, valid_cells]
-            
+
             # accumulate PSR over pixels
             if i == 0:
                 psr_sum = sums * exposure
@@ -285,6 +278,8 @@ class FastTSMap():
                 psr     += counts * exposure
 
         # average by flux and effective area weight
+        ei_weights = flux * self._response.eff_area
+
         ei_sum = np.dot(psr_sum, ei_weights)
         ei_cds_array = np.tensordot(psr, ei_weights, axes=(0,0))
 
@@ -299,7 +294,7 @@ class FastTSMap():
         ----------
         source : astropy.coordinates.SkyCoord
             source direction
-        em_slice : Slice object 
+        em_slice : Slice object
            Energy (Em) channels to use in fitting
         valid_cells : array
            valid Phi/PsiChi voxels of CDS
@@ -314,8 +309,17 @@ class FastTSMap():
 
         if self._cds_frame == "local":
 
-            ei_cds_array, ei_sum = self.get_ei_cds_array_fast(source, em_slice, valid_cells,
-                                                              flux.contents.value)
+            # convert source direction to path in local frame
+            lons, colats = self._orientation.get_target_in_sc_frame(source)
+
+            # get list of HEALPix pixels with nonzero exposure on path
+            pixels, exposures = self._orientation.get_exposure(base = self._response,
+                                                               theta = colats, phi = lons,
+                                                               lonlat = False)
+
+            ei_cds_array, ei_sum = self.get_ei_cds_array_local_fast(pixels, exposures,
+                                                                    em_slice, valid_cells,
+                                                                    flux.contents.value)
 
         else: # galactic frame
 
@@ -342,7 +346,7 @@ class FastTSMap():
         ----------
         source : astropy.coordinates.SkyCoord
             source direction
-        em_slice : Slice object 
+        em_slice : Slice object
            Energy (Em) channels to use in fitting
         flux: Histogram
             The integrated spectral flux of the source, binned according to the response
@@ -393,7 +397,7 @@ class FastTSMap():
             em_slice = slice(None)
         else:
             em_slice = slice(energy_channel[0], energy_channel[1])
-        
+
         # get the flattened data and background CDS arrays
         data_cds_array = self.get_cds_array(self._data, em_slice, self._cds_order)
         bkg_model_cds_array = self.get_cds_array(self._bkg_model, em_slice, self._cds_order)
@@ -406,14 +410,14 @@ class FastTSMap():
         bkg_model_cds_array = bkg_model_cds_array[valid_cells]
 
         flux = get_integrated_spectral_model(spectrum, self._response.axes["Ei"])
-        
+
         results = [
             self.fast_ts_fit(source, em_slice, flux,
                              data_cds_array, bkg_model_cds_array,
                              valid_cells)[0]
             for source in hypothesis_coords
         ]
-        
+
         return np.array(results)
 
 
@@ -452,7 +456,7 @@ class FastTSMap():
 
         fig, ax = plt.subplots(dpi = dpi)
         nest = scheme.startswith("nest")
-        
+
         if containment is not None:
             critical = FastTSMap.get_chi_critical_value(containment = containment)
             max_ts = np.max(m_ts)
