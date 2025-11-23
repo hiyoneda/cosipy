@@ -248,7 +248,12 @@ class FastTSMap():
 
         """
 
-        for i, (p, exposure) in enumerate(zip(pixels, exposures)):
+        nEi  = self._response.axes["Ei"].nbins
+
+        psr     = np.zeros((nEi, len(valid_cells)), dtype=self._response.dtype)
+        psr_sum = np.zeros(nEi, dtype=self._response.dtype)
+
+        for p, exposure in zip(pixels, exposures):
 
             # get raw CDS counts for pixel, trimmed by Em slice : Ei x Em x Phi/PsiChi
             counts = self._response.get_counts(p, em_slice)
@@ -260,22 +265,20 @@ class FastTSMap():
             # elsewhere that data and bkg will use the same dimension
             # ordering as the response for the CDS, so there is no
             # need to re-order dimensions here.
-            counts = np.reshape(counts, counts.shape[0:2] + (-1,))
+            counts = counts.reshape(*counts.shape[:2], -1)
 
             # sum over Em dimension and convert to float : Ei x CDS voxels
-            counts = np.sum(counts, axis=1, dtype=self._response.dtype)
+            counts = np.sum(counts, axis=1, dtype=psr.dtype)
 
-            # reduce to valid voxels, after capturing sum over all voxels
-            sums = np.sum(counts, axis = 1)
-            counts = counts[:, valid_cells]
+            # accumulate PSR sum over pixels
+            psum     = np.sum(counts, axis=1)
+            psum    *= exposure
+            psr_sum += psum
 
             # accumulate PSR over pixels
-            if i == 0:
-                psr_sum = sums * exposure
-                psr     = counts * exposure
-            else:
-                psr_sum += sums * exposure
-                psr     += counts * exposure
+            ps   = counts[:, valid_cells]
+            ps  *= exposure
+            psr += ps
 
         # average by flux and effective area weight
         ei_weights = flux * self._response.eff_area
@@ -405,7 +408,8 @@ class FastTSMap():
         # eliminate CDS cells with no counts in data (due to data sparsity) or
         # in bkg model (lack of pseudocounts in bkg model -- could be considered
         # a bug, may cause divide-by-zero error in fitting)
-        valid_cells = np.logical_and(data_cds_array > 0, bkg_model_cds_array > 0)
+        valid_cells = np.nonzero(np.logical_and(data_cds_array > 0, bkg_model_cds_array > 0))[0]
+
         data_cds_array = data_cds_array[valid_cells]
         bkg_model_cds_array = bkg_model_cds_array[valid_cells]
 
