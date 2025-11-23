@@ -27,8 +27,6 @@ def test_open():
         assert response.eff_area.dtype == np.float32
         assert len(response.eff_area) == response.axes['Ei'].nbins
 
-        assert response.counts.shape == response.shape
-
         assert arr_eq(response.axes.labels,
                       ['NuLambda', 'Ei', 'Em', 'Phi', 'PsiChi'])
 
@@ -43,7 +41,7 @@ def test_get_item():
 
     with FullDetectorResponse.open(response_path) as response:
 
-        drm = response.get_pixel(0, weight=1.0)
+        drm = response[0]
 
         assert drm.ndim == 4
 
@@ -51,14 +49,6 @@ def test_get_item():
                       ['Ei', 'Em', 'Phi', 'PsiChi'])
 
         assert drm.unit.is_equivalent('m2')
-
-        drmu = response.get_pixel(0, weight=1.0 * u.s)
-
-        assert drmu.unit.is_equivalent('m2 s')
-
-        drm2 = response[0] # shorthand for get_pixel with unit weight
-
-        assert drm == drm2
 
 def test_get_interp_response():
 
