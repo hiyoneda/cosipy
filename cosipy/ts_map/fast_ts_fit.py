@@ -87,7 +87,7 @@ class FastTSMap():
 
     @staticmethod
     def get_hypothesis_coords(nside, pixels = None,
-                              scheme = "ring",
+                              scheme = "nested",
                               coordsys = "galactic"):
         """
         Get directions corresponding to pixels of a HEALPix map of a
@@ -102,7 +102,7 @@ class FastTSMap():
             specified, directions will be generated for every pixel in
             map
         scheme : str, optional
-            Scheme of HEALPix map (default: ring)
+            Scheme of HEALPix map ("ring" or "nested"; default: nested)
         coordsys : str, optional
             Coordinate system of HEALPix map (default: galactic)
 
@@ -155,27 +155,34 @@ class FastTSMap():
 
         return cds_array.ravel()
 
-    def get_ei_cds_array(self, source, em_slice, valid_cells, flux):
-
+    def fast_ts_fit(self, source, em_slice, flux,
+                    data_cds_array, bkg_model_cds_array,
+                    valid_cells):
         """
-        Get the expected counts in CDS in local or galactic frame.
+        Perform a TS fit of data for a single source direction
 
         Parameters
         ----------
-        source : astropy.coordinates.SkyCoord
-            source direction
+        source : np.ndarray
+            source direction as Cartesian 3-vector
         em_slice : Slice object
            Energy (Em) channels to use in fitting
-        valid_cells : array
-           valid Phi/PsiChi voxels of CDS
         flux: Histogram
             The integrated spectral flux of the source, binned
             according to the response
+        data_cds_array : numpy.ndarray
+            The flattened Compton data space (CDS) array of the data.
+        bkg_model_cds_array : numpy.ndarray
+            The flattened Compton data space (CDS) array of the
+            background model.
+        valid_cells : np.ndarray of bool
+            Mask indicating which cells of CDS were preserved in data,
+            bkg_model
 
         Returns
         -------
-        cds_array : numpy.ndarray
-            Flattended Compton data space (CDS) array
+        result of TS fitting:
+          [ts value, norm, norm_err, failed, # iterations]
 
         """
 
@@ -213,43 +220,14 @@ class FastTSMap():
             ei_cds_array += psr * exposure
             ei_sum += psr_sum * exposure
 
-        return ei_cds_array, ei_sum
-
-    def fast_ts_fit(self, source, em_slice, flux,
-                    data_cds_array, bkg_model_cds_array,
-                    valid_cells):
-        """
-        Perform a TS fit of data for a single source direction
-
-        Parameters
-        ----------
-        source : astropy.coordinates.SkyCoord
-            source direction
-        em_slice : Slice object
-           Energy (Em) channels to use in fitting
-        flux: Histogram
-            The integrated spectral flux of the source, binned according to the response
-        data_cds_array : numpy.ndarray
-            The flattened Compton data space (CDS) array of the data.
-        bkg_model_cds_array : numpy.ndarray
-            The flattened Compton data space (CDS) array of the background model.
-        valid_cells : np.ndarray of bool
-            Mask indicating which cells of CDS were preserved in data, bkg_model
-
-        Returns
-        -------
-        result of TS fitting: [ts value, norm, norm_err, failed, # iterations]
-
-        """
-
-        ei_cds_array, ei_sum = self.get_ei_cds_array(source, em_slice, valid_cells, flux)
-
         return self._fnf.solve(data_cds_array, bkg_model_cds_array, ei_cds_array, ei_sum)
+
 
     def parallel_ts_fit(self, hypothesis_coords, energy_channel, spectrum,
                         cpu_cores = None):
 
-        """Perform parallel computation on all the hypothesis coordinates.
+        """
+        Perform parallel ts fitting on an array of hypothesis coordinates.
 
         Parameters
         ----------
@@ -311,7 +289,7 @@ class FastTSMap():
 
 
     @staticmethod
-    def plot_ts(m_ts, skycoord = None, containment = None, scheme="ring",
+    def plot_ts(m_ts, skycoord = None, containment = None, scheme="nested",
                 save_plot = False, save_dir = "",
                 save_name = "ts_map.png", dpi = 300):
 
@@ -330,7 +308,7 @@ class FastTSMap():
             The containment level of the source (the default is `None`, which will plot
             raw TS values).
         scheme : string, optional
-            HEALPix scheme of TS map values ("ring" or "nested"; default = "ring")
+            HEALPix scheme of TS map values ("ring" or "nested"; default = "nested")
         save_plot : bool, optional
             Set `True` to save the plot (the default is `False`, which means it won't save
             the plot.
