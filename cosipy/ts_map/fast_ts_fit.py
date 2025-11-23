@@ -1,20 +1,17 @@
 from pathlib import Path
 
+from enum import Enum
+
 import numpy as np
 import numba
 
 import matplotlib.pyplot as plt
 
-import astropy.units as u
-from astropy.units import Unit
-
 import healpy as hp
 from mhealpy import HealpixBase
 
-from histpy import Histogram, Axis, Axes
-
 from cosipy import SpacecraftFile
-from cosipy.response import FullDetectorResponse, PointSourceResponse
+from cosipy.response import FullDetectorResponse, GalacticResponse
 from cosipy.response.functions import get_integrated_spectral_model
 
 from .fast_norm_fit import FastNormFit as fnf
@@ -22,218 +19,10 @@ from .fast_norm_fit import FastNormFit as fnf
 import logging
 logger = logging.getLogger(__name__)
 
-class GalacticResponse:
 
-    def __init__(self, response_path):
-        """
-        Load a galactic-frame response from a specified path.  The
-        response is stored as a standard Histogram; we selectively
-        load just enough information to retrieve slices for individual
-        source directions from the file as needed, rather than loading
-        the whole response.
-
-        Parameters
-        ----------
-        response_path : string or Path
-          file containing response
-
-        """
-        import h5py as h5
-
-        self._file = h5.File(response_path, mode='r')
-
-        axes_group = self._file['hist/axes']
-        axes = Axes.open(axes_group)
-
-        self._axes = axes
-        self.hpbase = axes[0]
-        self.rest_axes = axes[1:]
-
-        self.unit = Unit(self._file['hist'].attrs['unit'])
-        self.contents = self._file['hist/contents']
-
-    @property
-    def axes(self):
-        """
-        List of axes.
-
-        Returns
-        -------
-        :py:class:`histpy.Axes`
-        """
-        return self._axes
-
-    def get_point_source_response(self, source):
-
-        """
-        Get point source response (psr) corresponding to a
-        given source direction in the galactic frame.
-
-        Parameters
-        ----------
-        source : astropy.coordinates.SkyCoord
-            Source direction in galactic frame.
-
-        Returns
-        -------
-        psr : histpy.Histogram
-            Point source response for source direction.
-
-        """
-
-        pix = self.hpbase.vec2pix(source)
-
-        return PointSourceResponse(self.rest_axes, self.contents[pix+1], unit = self.unit)
-
-
-class PSRCache:
-    """
-    A cached reader for PSR data from a response file, designed for
-    use with FastTSMap.  For a given NuLambda pixel p, we fetch the
-    pixel's data from the underlying response file and do all the data
-    reduction needed to compute a PSR for pixel p averaged over the
-    input flux.  The result is cached so that, when different source
-    directions require a PSR for the same pixel p, we don't do the
-    fetching and reduction more than once.
-
-    If memory usage is a concern, the cache can be set to a given max
-    size with LRU replacement.  But the reduced PSR sums away the Ei
-    and Em dimensions *and* removes CDS voxels that do not matter for
-    the ts_map computation, so it is much smaller than a raw chunk of
-    the response file. Hence, it is likely not necessary to limit the
-    cache size in practice.
-
-    """
-
-    def __init__(self, response, em_slice, valid_cells, flux,
-                 maxSize = None):
-        """
-        Create a new PSRCache, providing the information needed
-        to fetch and reduce PSRs from the response file on demand.
-
-        Parameters
-        ----------
-        response : FullDetectorResponse
-          The response from which to read slices for PSR computation
-        em_slice : Slice object
-          The slice of the Em axis used to compute PSRs
-        valid_cells : np.ndarray of int
-          CDS voxels on the linearized Phi/PsiChi axis that are actually
-          used in in the ts_map computation
-        flux : Histogram
-          Integrated spectral flux, binned according to response's Ei axis
-        maxSize: int (optional)
-          If not None, maximum number of NuLambda pixels for which we will
-          cache PSRs.  The cache is managed according to an LRU policy.
-
-        """
-
-        from collections import OrderedDict
-
-        self.cache = OrderedDict()
-        self.maxSize = maxSize
-
-        self.response = response
-        self.em_slice = em_slice
-        self.valid_cells = valid_cells
-
-        self.ei_weights = flux.contents.value * response.eff_area
-
-        self.nLookups = 0
-        self.nMisses = 0
-
-    def get_psr(self, p):
-        """
-        Get the reduced PSR for NuLambda pixel p.
-
-        Parameters
-        ----------
-        p : int
-          NuLambda value of requested PSR
-
-        Returns
-        -------
-        psr : np.ndarray of float (length = |valid_cells|)
-          PSR for pixel p, summed over requested Em and
-          convolved with spectral flux.  The result gives
-          one value per valid voxel.
-        psr_sum
-          Sum of PSR for pixel p over *all* voxels, not just
-          the valid ones.
-
-        """
-
-        self.nLookups += 1
-        v = self.cache.get(p)
-        if v is None: # cache miss
-            self.nMisses += 1
-            v = self.compute_psr(p)
-            self.cache[p] = v
-
-            # implement LRU policy if requested
-            if self.maxSize is not None and len(self.cache) > self.maxSize:
-                self.cache.popitem(last=False)
-        else:
-            # move MRU value to end to support LRU policy if requested
-            if self.maxSize is not None:
-                self.cache.move_to_end(p)
-
-        return v
-
-    def print_stats(self):
-        """
-        Print cache miss statistics
-        """
-
-        missRate = 0. if self.nLookups == 0 else self.nMisses/self.nLookups
-
-        print(f"Cache size: {len(self.cache)} (out of {self.maxSize})")
-        print(f"Misses: {self.nMisses} / {self.nLookups} = {missRate:0.3f}")
-
-    def compute_psr(self, p):
-        """
-        Compute a reduced PSR for NuLambda pixel p.
-
-        Returns
-        -------
-        psr : np.ndarray of float (length = |valid_cells|)
-          PSR for pixel p, summed over requested Em and
-          convolved with spectral flux.  The result gives
-          one value per valid voxel.
-        psr_sum
-          Sum of PSR for pixel p over *all* voxels, not just
-          the valid ones.
-
-        """
-
-        # FIXME? Following assumes response has rest_axes = [ Ei, Em,
-        # Phi/PsiChi ]. We should probably verify this in __init__.
-
-        # get raw CDS counts for pixel, trimmed by Em slice
-        # size is Ei x Em x Phi/PsiChi
-        counts = self.response.get_counts(p, self.em_slice)
-
-        # linearize CDS : Ei x Em x CDS voxels. Note that we ensure
-        # in FastTSMap that data and bkg will use the same dimension
-        # ordering as the response for the CDS, so there is no need to
-        # re-order dimensions here.
-        counts = counts.reshape(*counts.shape[:2], -1)
-
-        # sum over Em dimension and convert to float : Ei x CDS voxels
-        counts = np.sum(counts, axis=1, dtype=self.response.dtype)
-
-        # extract valid CDS voxels of psr after capturing sum of
-        # *all* voxels : Ei x valid CDS voxels
-        psr_sum = np.sum(counts, axis=1)
-        psr = counts[:, self.valid_cells]
-
-        # convolve psr with flux (and also eff_area weights, which
-        # have not yet been applied) to remove Ei dimension
-        psr_sum = np.dot(psr_sum, self.ei_weights)
-        psr = np.tensordot(psr, self.ei_weights, axes=(0,0))
-
-        return psr, psr_sum
-
+class Frame(Enum):
+    LOCAL = 1
+    GALACTIC = 2
 
 class FastTSMap():
 
@@ -262,25 +51,26 @@ class FastTSMap():
 
         """
 
-        if cds_frame not in ("local", "galactic"):
-            raise ValueError("cds_frame must be one of local or galactic")
+        match cds_frame:
+            case "galactic":
+                self._cds_frame = Frame.GALACTIC
+            case "local":
+                self._cds_frame = Frame.LOCAL
+            case _:
+                raise TypeError(f"Unrecognized frame {cds_frame}, "
+                                "must be 'local' or 'galactic'")
 
-        self._cds_frame = cds_frame
-
-        if cds_frame == "local":
-
+        if self._cds_frame == Frame.LOCAL:
             if orientation is None:
                 raise TypeError("When data are binned in local frame, "
                                 "orientation must be provided")
 
             self._orientation = orientation
 
-            # open the response file
             self._response = FullDetectorResponse.open(response_path)
-
         else:
 
-            self._response = GalacticResponse(response_path)
+            self._response = GalacticResponse.open(response_path)
 
         # record order of response's CDS physical dimensions for
         # linearization of data, bkg
@@ -389,39 +179,39 @@ class FastTSMap():
 
         """
 
-        if self._cds_frame == "local":
+        if self._cds_frame == Frame.LOCAL:
 
             # convert source direction to path in local frame
             lons, colats = self._orientation.get_target_in_sc_frame(source)
 
             # get list of HEALPix pixels with nonzero exposure on path
-            pixels, exposures = self._orientation.get_exposure(base = self._response,
-                                                               theta = colats,
-                                                               phi = lons,
-                                                               lonlat = False)
-
-            # sum the PSRs for each NuLambda pixel according to their
-            # exposure weights
-            ei_cds_array = np.zeros(len(valid_cells), dtype=self._response.dtype)
-            ei_sum = 0.
-
-            for p, exposure in zip(pixels, exposures):
-                psr, psr_sum = self.psr_cache.get_psr(p)
-                ei_cds_array += psr * exposure
-                ei_sum += psr_sum * exposure
-
+            pixels, exposures = \
+                self._orientation.get_exposure(base = self._response,
+                                               theta = colats,
+                                               phi = lons,
+                                               lonlat = False)
         else: # galactic frame
 
-            psr = self._response.get_point_source_response(source)
+            # convert source vector to polar coords
+            x, y, z = source
+            lon   = np.arctan2(y, x)
+            colat = np.arccos(z)
 
-            # convolve PSR with spectral flux to get expected counts
-            expectation = psr.get_expectation(spectrum = None, flux = flux)
+            # interpolate the source onto the response grid
+            pixels, exposures = \
+                self._response.get_interp_weights(theta = colat,
+                                                  phi = lon,
+                                                  lonlat = False)
 
-            # slice energy channals and project it to CDS
-            ei_cds_array = self.get_cds_array(expectation, em_slice, self._cds_order)
+        # sum the PSRs for each NuLambda pixel according to their
+        # exposure weights
+        ei_cds_array = np.zeros(len(valid_cells), dtype=self._response.dtype)
+        ei_sum = 0.
 
-            ei_sum = np.sum(ei_cds_array)
-            ei_cds_array = ei_cds_array[valid_cells]
+        for p, exposure in zip(pixels, exposures):
+            psr, psr_sum = self.psr_cache.get_psr(p)
+            ei_cds_array += psr * exposure
+            ei_sum += psr_sum * exposure
 
         return ei_cds_array, ei_sum
 
@@ -600,3 +390,155 @@ class FastTSMap():
         from scipy.stats import chi2
 
         return chi2.ppf(containment, df=2)
+
+
+class PSRCache:
+    """
+    A cached reader for PSR data from a response file, designed for
+    use with FastTSMap.  For a given NuLambda pixel p, we fetch the
+    pixel's data from the underlying response file and do all the data
+    reduction needed to compute a PSR for pixel p averaged over the
+    input flux.  The result is cached so that, when different source
+    directions require a PSR for the same pixel p, we don't do the
+    fetching and reduction more than once.
+
+    If memory usage is a concern, the cache can be set to a given max
+    size with LRU replacement.  But the reduced PSR sums away the Ei
+    and Em dimensions *and* removes CDS voxels that do not matter for
+    the ts_map computation, so it is much smaller than a raw chunk of
+    the response file. Hence, it is likely not necessary to limit the
+    cache size in practice.
+
+    """
+
+    def __init__(self, response, em_slice, valid_cells, flux,
+                 maxSize = None):
+        """
+        Create a new PSRCache, providing the information needed
+        to fetch and reduce PSRs from the response file on demand.
+
+        Parameters
+        ----------
+        response : FullDetectorResponse
+          The response from which to read slices for PSR computation
+        em_slice : Slice object
+          The slice of the Em axis used to compute PSRs
+        valid_cells : np.ndarray of int
+          CDS voxels on the linearized Phi/PsiChi axis that are actually
+          used in in the ts_map computation
+        flux : Histogram
+          Integrated spectral flux, binned according to response's Ei axis
+        maxSize: int (optional)
+          If not None, maximum number of NuLambda pixels for which we will
+          cache PSRs.  The cache is managed according to an LRU policy.
+
+        """
+
+        from collections import OrderedDict
+
+        self.cache = OrderedDict()
+        self.maxSize = maxSize
+
+        self.response = response
+        self.em_slice = em_slice
+        self.valid_cells = valid_cells
+
+        if isinstance(response, GalacticResponse):
+            self.ei_weights = flux.contents.value
+        else:
+            self.ei_weights = flux.contents.value * response.eff_area
+
+        self.nLookups = 0
+        self.nMisses = 0
+
+    def get_psr(self, p):
+        """
+        Get the reduced PSR for NuLambda pixel p.
+
+        Parameters
+        ----------
+        p : int
+          NuLambda value of requested PSR
+
+        Returns
+        -------
+        psr : np.ndarray of float (length = |valid_cells|)
+          PSR for pixel p, summed over requested Em and
+          convolved with spectral flux.  The result gives
+          one value per valid voxel.
+        psr_sum
+          Sum of PSR for pixel p over *all* voxels, not just
+          the valid ones.
+
+        """
+
+        self.nLookups += 1
+        v = self.cache.get(p)
+        if v is None: # cache miss
+            self.nMisses += 1
+            v = self._compute_psr(p)
+            self.cache[p] = v
+
+            # implement LRU policy if requested
+            if self.maxSize is not None and len(self.cache) > self.maxSize:
+                self.cache.popitem(last=False)
+        else:
+            # move MRU value to end to support LRU policy if requested
+            if self.maxSize is not None:
+                self.cache.move_to_end(p)
+
+        return v
+
+    def print_stats(self):
+        """
+        Print cache miss statistics
+        """
+
+        missRate = 0. if self.nLookups == 0 else self.nMisses/self.nLookups
+
+        print(f"Cache size: {len(self.cache)} (out of {self.maxSize})")
+        print(f"Misses: {self.nMisses} / {self.nLookups} = {missRate:0.3f}")
+
+    def _compute_psr(self, p):
+        """
+        Compute a reduced PSR for NuLambda pixel p.
+
+        Returns
+        -------
+        psr : np.ndarray of float (length = |valid_cells|)
+          PSR for pixel p, summed over requested Em and
+          convolved with spectral flux.  The result gives
+          one value per valid voxel.
+        psr_sum
+          Sum of PSR for pixel p over *all* voxels, not just
+          the valid ones.
+
+        """
+
+        # FIXME? Following assumes response has rest_axes = [ Ei, Em,
+        # Phi/PsiChi ]. We should probably verify this in __init__.
+
+        # get raw CDS counts for pixel, trimmed by Em slice
+        # size is Ei x Em x Phi/PsiChi
+        counts = self.response.get_counts(p, self.em_slice)
+
+        # linearize CDS : Ei x Em x CDS voxels. Note that we ensure
+        # in FastTSMap that data and bkg will use the same dimension
+        # ordering as the response for the CDS, so there is no need to
+        # re-order dimensions here.
+        counts = counts.reshape(*counts.shape[:2], -1)
+
+        # sum over Em dimension and convert to float : Ei x CDS voxels
+        counts = np.sum(counts, axis=1, dtype=self.response.dtype)
+
+        # extract valid CDS voxels of psr after capturing sum of
+        # *all* voxels : Ei x valid CDS voxels
+        psr_sum = np.sum(counts, axis=1)
+        psr = counts[:, self.valid_cells]
+
+        # convolve psr with flux (and also eff_area weights, which
+        # have not yet been applied) to remove Ei dimension
+        psr_sum = np.dot(psr_sum, self.ei_weights)
+        psr = np.tensordot(psr, self.ei_weights, axes=(0,0))
+
+        return psr, psr_sum
