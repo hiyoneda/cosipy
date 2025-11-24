@@ -87,8 +87,8 @@ class FastTSMap():
 
     @staticmethod
     def get_hypothesis_coords(nside, pixels = None,
-                              scheme = "nested",
-                              coordsys = "galactic"):
+                               scheme = "nested",
+                               coordsys = "galactic"):
         """
         Get directions corresponding to pixels of a HEALPix map of a
         given resolution and scheme.
@@ -123,7 +123,7 @@ class FastTSMap():
         return np.column_stack(hpbase.pix2vec(pixels))
 
     @staticmethod
-    def get_cds_array(hist, em_slice, cds_order):
+    def _get_cds_array(hist, em_slice, cds_order):
 
         """
         Convert a CDS histogram to a flattened array, enforcing
@@ -155,9 +155,9 @@ class FastTSMap():
 
         return cds_array.ravel()
 
-    def fast_ts_fit(self, source, em_slice, flux,
+    def fast_ts_fit(self, source,
                     data_cds_array, bkg_model_cds_array,
-                    valid_cells):
+                    psr_cache):
         """
         Perform a TS fit of data for a single source direction
 
@@ -165,19 +165,13 @@ class FastTSMap():
         ----------
         source : np.ndarray
             source direction as Cartesian 3-vector
-        em_slice : Slice object
-           Energy (Em) channels to use in fitting
-        flux: Histogram
-            The integrated spectral flux of the source, binned
-            according to the response
         data_cds_array : numpy.ndarray
             The flattened Compton data space (CDS) array of the data.
         bkg_model_cds_array : numpy.ndarray
             The flattened Compton data space (CDS) array of the
             background model.
-        valid_cells : np.ndarray of bool
-            Mask indicating which cells of CDS were preserved in data,
-            bkg_model
+        psr_cache : PSRCache
+            Cache to retrieve PSR for source direction
 
         Returns
         -------
@@ -212,18 +206,71 @@ class FastTSMap():
 
         # sum the PSRs for each NuLambda pixel according to their
         # exposure weights
-        ei_cds_array = np.zeros(len(valid_cells), dtype=self._response.dtype)
+        ei_cds_array = np.zeros(psr_cache.shape, psr_cache.dtype)
         ei_sum = 0.
 
         for p, exposure in zip(pixels, exposures):
-            psr, psr_sum = self.psr_cache.get_psr(p)
+            psr, psr_sum = psr_cache.get_psr(p)
             ei_cds_array += psr * exposure
             ei_sum += psr_sum * exposure
 
         return self._fnf.solve(data_cds_array, bkg_model_cds_array, ei_cds_array, ei_sum)
 
+    def _prepare_inputs(self, energy_channel, spectrum):
+        """
+        Prepare the data and background arrays for ts fitting, and get ready
+        to read and cache PSRs for different source directions.  The shape
+        and contents of the arrays and PSRs depends on the data reductions
+        implied by the energy channel and spectrum.
 
-    def parallel_ts_fit(self, hypothesis_coords, energy_channel, spectrum,
+        Parameters
+        ----------
+        energy_channel : 2-element list of form [lower_channel, upper_channel]
+            Energy (Em) channels to use in fitting (Python range
+            lower_channel:upper_channel)
+        spectrum : astromodels.functions
+            Spectrum of the source.
+
+        Returns
+        -------
+        data_cds_array : numpy.ndarray
+            The flattened Compton data space (CDS) array of the data.
+        bkg_model_cds_array : numpy.ndarray
+            The flattened Compton data space (CDS) array of the
+            background model.
+        psr_cache : PSRCache
+            Cache to retrieve PSR for source directions
+
+        """
+
+        if energy_channel is None:
+            em_slice = slice(None)
+        else:
+            em_slice = slice(energy_channel[0], energy_channel[1])
+
+        # get the flattened data and background CDS arrays
+        data_cds_array = self._get_cds_array(self._data, em_slice,
+                                             self._cds_order)
+        bkg_model_cds_array = self._get_cds_array(self._bkg_model, em_slice,
+                                                  self._cds_order)
+
+        # eliminate CDS cells with no counts in data (due to data
+        # sparsity) or in bkg model (lack of pseudocounts in bkg model
+        # -- could be considered a bug, may cause divide-by-zero error
+        # in fitting)
+        valid_cells = np.where(np.logical_and(data_cds_array > 0,
+                                              bkg_model_cds_array > 0))[0]
+
+        data_cds_array = data_cds_array[valid_cells]
+        bkg_model_cds_array = bkg_model_cds_array[valid_cells]
+
+        flux = get_integrated_spectral_model(spectrum, self._response.axes["Ei"])
+
+        psr_cache = PSRCache(self._response, em_slice, valid_cells, flux)
+
+        return data_cds_array, bkg_model_cds_array, psr_cache
+
+    def parallel_ts_fit(self, nside, energy_channel, spectrum,
                         cpu_cores = None):
 
         """
@@ -231,8 +278,8 @@ class FastTSMap():
 
         Parameters
         ----------
-        hypothesis_coords : np.ndarray (N x 3)
-            Hypothesis coordinates to fit
+        nside : int
+            HEALPix nside of ts map to produce
         energy_channel : 2-element list of form [lower_channel, upper_channel]
             Energy (Em) channels to use in fitting (Python range
             lower_channel:upper_channel)
@@ -251,42 +298,18 @@ class FastTSMap():
         if cpu_cores is not None:
             numba.set_num_threads(cpu_cores)
 
-        if energy_channel is None:
-            em_slice = slice(None)
-        else:
-            em_slice = slice(energy_channel[0], energy_channel[1])
+        data_cds_array, bkg_model_cds_array, psr_cache = \
+            self._prepare_inputs(energy_channel, spectrum)
 
-        # get the flattened data and background CDS arrays
-        data_cds_array = self.get_cds_array(self._data, em_slice,
-                                            self._cds_order)
-        bkg_model_cds_array = self.get_cds_array(self._bkg_model, em_slice,
-                                                 self._cds_order)
-
-        # eliminate CDS cells with no counts in data (due to data
-        # sparsity) or in bkg model (lack of pseudocounts in bkg model
-        # -- could be considered a bug, may cause divide-by-zero error
-        # in fitting)
-        valid_cells = np.where(np.logical_and(data_cds_array > 0,
-                                              bkg_model_cds_array > 0))[0]
-
-        data_cds_array = data_cds_array[valid_cells]
-        bkg_model_cds_array = bkg_model_cds_array[valid_cells]
-
-        flux = get_integrated_spectral_model(spectrum, self._response.axes["Ei"])
-
-        self.psr_cache = PSRCache(self._response, em_slice, valid_cells, flux)
+        hypothesis_coords = self.get_hypothesis_coords(nside)
 
         results = [
-            self.fast_ts_fit(source, em_slice, flux,
-                             data_cds_array, bkg_model_cds_array,
-                             valid_cells)[0]
+            self.fast_ts_fit(source,
+                             data_cds_array, bkg_model_cds_array, psr_cache)[0]
             for source in hypothesis_coords
         ]
 
-        del self.psr_cache
-
         return np.array(results)
-
 
     @staticmethod
     def plot_ts(m_ts, skycoord = None, containment = None, scheme="nested",
@@ -337,9 +360,11 @@ class FastTSMap():
             lon = skycoord.l.deg
             lat = skycoord.b.deg
             hp.projscatter(lon, lat, marker = "x", linewidths = 0.5, lonlat=True,
-                           coord = "G", label = f"True location at l={lon}, b={lat}", color = "fuchsia")
+                           coord = "G", label = f"True location at l={lon}, b={lat}",
+                           color = "fuchsia")
 
-        hp.projscatter(0, 0, marker = "o", linewidths = 0.5, lonlat=True, coord = "G", color = "red")
+        hp.projscatter(0, 0, marker = "o", linewidths = 0.5, lonlat=True, coord = "G",
+                       color = "red")
         hp.projtext(350, 0, "(l=0, b=0)", lonlat=True, coord = "G", color = "red")
 
         if save_plot:
@@ -428,6 +453,20 @@ class PSRCache:
 
         self.nLookups = 0
         self.nMisses = 0
+
+    @property
+    def shape(self):
+        """
+        Array shape of a PSR returned by the cache
+        """
+        return (len(self.valid_cells),)
+
+    @property
+    def dtype(self):
+        """
+        Element type of a PSR returned by the cache
+        """
+        return self.response.dtype
 
     def get_psr(self, p):
         """

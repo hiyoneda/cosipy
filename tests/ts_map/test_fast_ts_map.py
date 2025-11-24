@@ -24,8 +24,6 @@ def test_parallel_ts_fit():
     ts = FastTSMap(data = src_bkg, bkg_model = bkg, orientation = ori,
                    response_path = response_path, cds_frame = "local")
 
-    hypothesis_coords = FastTSMap.get_hypothesis_coords(nside = 1)
-
     index = -2.2
     K = 10 / u.cm / u.cm / u.s / u.keV
     piv = 100 * u.keV
@@ -36,7 +34,7 @@ def test_parallel_ts_fit():
     spectrum.K.unit = K.unit
     spectrum.piv.unit = piv.unit
 
-    ts_results = ts.parallel_ts_fit(hypothesis_coords = hypothesis_coords, energy_channel = [2,3], spectrum = spectrum)
+    ts_results = ts.parallel_ts_fit(nside = 1, energy_channel = [2,3], spectrum = spectrum)
 
     assert np.allclose(ts_results,
                        [40.18628386, 39.59382592, 37.4339627,
