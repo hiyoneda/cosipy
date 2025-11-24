@@ -86,9 +86,9 @@ class FastTSMap():
         self._fnf = fnf(max_iter=1000)
 
     @staticmethod
-    def get_hypothesis_coords(nside, pixels = None,
-                              scheme = "nested",
-                              coordsys = "galactic"):
+    def _get_hypothesis_coords(nside, pixels = None,
+                               scheme = "nested",
+                               coordsys = "galactic"):
         """
         Get directions corresponding to pixels of a HEALPix map of a
         given resolution and scheme.
@@ -274,7 +274,7 @@ class FastTSMap():
                         cpu_cores = None):
 
         """
-        Perform parallel ts fitting on an array of hypothesis coordinates.
+        Produce a ts map of specified resolution.
 
         Parameters
         ----------
@@ -301,7 +301,7 @@ class FastTSMap():
         data_cds_array, bkg_model_cds_array, psr_cache = \
             self._prepare_inputs(energy_channel, spectrum)
 
-        hypothesis_coords = self.get_hypothesis_coords(nside)
+        hypothesis_coords = self._get_hypothesis_coords(nside)
 
         results = [
             self.fast_ts_fit(source,

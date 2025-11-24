@@ -162,7 +162,7 @@ class MOCTSMap(FastTSMap):
 
         while nside <= max_nside:
 
-            src_locs = self.get_hypothesis_coords(nside, pixels)
+            src_locs = self._get_hypothesis_coords(nside, pixels)
 
             results = [
                 self.fast_ts_fit(source,
