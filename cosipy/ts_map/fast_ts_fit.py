@@ -87,8 +87,8 @@ class FastTSMap():
 
     @staticmethod
     def get_hypothesis_coords(nside, pixels = None,
-                               scheme = "nested",
-                               coordsys = "galactic"):
+                              scheme = "nested",
+                              coordsys = "galactic"):
         """
         Get directions corresponding to pixels of a HEALPix map of a
         given resolution and scheme.
@@ -316,31 +316,29 @@ class FastTSMap():
                 save_plot = False, save_dir = "",
                 save_name = "ts_map.png", dpi = 300):
 
-        """
-        Plot a TS map.
+        """Plot a TS map.
 
         Parameters
         ----------
         m_ts : numpy.ndarray
             The array of ts values from a ts fit.
         skycoord : astropy.coordinates.SkyCoord, optional
-            The true location of the source (the default is `None`,
-            which implies that there are no coordiantes to be printed on
-            the TS map).
+            The true location of the source (default: do not plot)
         containment : float, optional
-            The containment level of the source (the default is `None`, which will plot
-            raw TS values).
+            Restrict the plotted pixels to the specified containment
+            threshold relative to the max ts value (default: plot
+            *all* ts values)
         scheme : string, optional
-            HEALPix scheme of TS map values ("ring" or "nested"; default = "nested")
+            HEALPix scheme of ts map values ("ring" or "nested";
+            default = "nested")
         save_plot : bool, optional
-            Set `True` to save the plot (the default is `False`, which means it won't save
-            the plot.
-        save_dir : str or pathlib.Path, optional
-            The directory to save the plot.
+            Save the plot to a file (default: False)
+        save_dir : string, optional
+            Directory in which to save the plot
         save_name : str, optional
-            The file name of the plot to be saved.
+            File name under which tos ave the plot
         dpi : int, optional
-            The dpi for plotting and saving.
+            DPI used for plotting / saving
 
         """
 
@@ -350,22 +348,34 @@ class FastTSMap():
         if containment is not None:
             critical = FastTSMap.get_chi_critical_value(containment = containment)
             max_ts = np.max(m_ts)
-            min_ts = np.min(m_ts)
-            hp.mollview(m_ts, max = max_ts, min = max_ts - critical, nest=nest,
-                        title = f"Containment {containment*100}%", coord = "G", hold = True)
+            hp.mollview(m_ts, max = max_ts, min = max_ts - critical,
+                        nest=nest,
+                        title = f"Containment {containment*100}%",
+                        coord = "G",
+                        hold = True)
         else:
             hp.mollview(m_ts, nest=nest, coord = "G", hold = True)
 
         if skycoord is not None:
             lon = skycoord.l.deg
             lat = skycoord.b.deg
-            hp.projscatter(lon, lat, marker = "x", linewidths = 0.5, lonlat=True,
-                           coord = "G", label = f"True location at l={lon}, b={lat}",
+            hp.projscatter(lon, lat, marker = "x",
+                           linewidths = 0.5,
+                           lonlat=True,
+                           coord = "G",
+                           label = f"True location at l={lon}, b={lat}",
                            color = "fuchsia")
 
-        hp.projscatter(0, 0, marker = "o", linewidths = 0.5, lonlat=True, coord = "G",
+        hp.projscatter(0, 0, marker = "o",
+                       linewidths = 0.5,
+                       lonlat=True,
+                       coord = "G",
                        color = "red")
-        hp.projtext(350, 0, "(l=0, b=0)", lonlat=True, coord = "G", color = "red")
+
+        hp.projtext(350, 0, "(l=0, b=0)",
+                    lonlat=True,
+                    coord = "G",
+                    color = "red")
 
         if save_plot:
             fig.savefig(Path(save_dir)/save_name, dpi = dpi)
