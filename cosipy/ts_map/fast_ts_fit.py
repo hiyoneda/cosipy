@@ -28,7 +28,6 @@ class FastTSMap():
 
     def __init__(self, data, bkg_model, response_path, orientation = None,
                  cds_frame = "local"):
-
         """
         Initialize the instance of a TS map fit.
 
@@ -75,6 +74,22 @@ class FastTSMap():
         # record order of response's CDS physical dimensions for
         # linearization of data, bkg
         axes = self._response.axes
+
+        # mapping only works with CDS's of the form [Em, Phi/PsiChi]
+        # (the last two in either order).  The response must map from
+        # NuLambda / Ei to a CDS.
+
+        labels = axes.labels
+
+        if not all(labels[0:3] == ("NuLambda", "Ei", "Em")):
+            raise ValueError("Response axes must be begin with "
+                             "(NuLambda, Ei, Em)")
+
+        if len(labels) > 5 or \
+           labels[3] not in ("Phi", "PsiChi") or \
+           labels[4] not in ("Phi", "PsiChi"):
+            raise ValueError("Response axes must end with Phi/PsiChi")
+
         if axes.label_to_index("Phi") < axes.label_to_index("PsiChi"):
             self._cds_order = ("Phi", "PsiChi")
         else:
@@ -124,7 +139,6 @@ class FastTSMap():
 
     @staticmethod
     def _get_cds_array(hist, em_slice, cds_order):
-
         """
         Convert a CDS histogram to a flattened array, enforcing
         canonical order for dimensions and projecting over just the
@@ -272,7 +286,6 @@ class FastTSMap():
 
     def parallel_ts_fit(self, nside, energy_channel, spectrum,
                         cpu_cores = None):
-
         """
         Produce a ts map of specified resolution.
 
@@ -315,8 +328,8 @@ class FastTSMap():
     def plot_ts(m_ts, skycoord = None, containment = None, scheme="nested",
                 save_plot = False, save_dir = "",
                 save_name = "ts_map.png", dpi = 300):
-
-        """Plot a TS map.
+        """
+        Plot a TS map.
 
         Parameters
         ----------
@@ -382,7 +395,6 @@ class FastTSMap():
 
     @staticmethod
     def get_chi_critical_value(containment = 0.90):
-
         """
         Get the critical value of the chi^2 distribution based on the
         confidence level.
@@ -541,9 +553,6 @@ class PSRCache:
           the valid ones.
 
         """
-
-        # FIXME? Following assumes response has rest_axes = [ Ei, Em,
-        # Phi/PsiChi ]. We should probably verify this in __init__.
 
         # get raw CDS counts for pixel, trimmed by Em slice
         # size is Ei x Em x Phi/PsiChi

@@ -205,7 +205,6 @@ class MOCTSMap(FastTSMap):
                 grid_lines = True,
                 save_plot = False, save_dir = "",
                 save_name = "ts_map.png", dpi = 300):
-
         """
         Plot a multi-resolution TS map.
 
