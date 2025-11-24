@@ -16,8 +16,8 @@ def test_solve():
     bkg = Histogram.open(bkg_path).todense().project(["Em", "Phi", "PsiChi"])
 
     # get the cds arrays of src_bkg and bkg
-    src_bkg_cds_array = FastTSMap._get_cds_array(src_bkg, slice(0,10), ["Phi", "PsiChi"])
-    bkg_cds_array = FastTSMap._get_cds_array(bkg, slice(0,10), ["Phi", "PsiChi"])
+    src_bkg_cds_array = FastTSMap._get_cds_array(src_bkg, slice(0,10))
+    bkg_cds_array = FastTSMap._get_cds_array(bkg, slice(0,10))
 
     # read the cds array of expectation
     ei_path = test_data.path / "ei_cds_array.npy"

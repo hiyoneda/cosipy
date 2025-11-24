@@ -90,13 +90,11 @@ class FastTSMap():
            labels[4] not in ("Phi", "PsiChi"):
             raise ValueError("Response axes must end with Phi/PsiChi")
 
-        if axes.label_to_index("Phi") < axes.label_to_index("PsiChi"):
-            self._cds_order = ("Phi", "PsiChi")
-        else:
-            self._cds_order = ("PsiChi", "Phi")
+        cds_order = tuple(labels[-2:])
 
-        self._data = data.todense().project(["Em", "Phi", "PsiChi"])
-        self._bkg_model = bkg_model.todense().project(["Em", "Phi", "PsiChi"])
+        # make sure data and background CDS are ordered to match response
+        self._data = data.todense().project(("Em",) + cds_order)
+        self._bkg_model = bkg_model.todense().project(("Em",) + cds_order)
 
         self._fnf = fnf(max_iter=1000)
 
@@ -138,11 +136,10 @@ class FastTSMap():
         return np.column_stack(hpbase.pix2vec(pixels))
 
     @staticmethod
-    def _get_cds_array(hist, em_slice, cds_order):
+    def _get_cds_array(hist, em_slice):
         """
-        Convert a CDS histogram to a flattened array, enforcing
-        canonical order for dimensions and projecting over just the
-        selected channels of the Em dimension.
+        Convert a CDS histogram to a flattened array, projecting over
+        just the selected channels of the Em dimension.
 
         Parameters
         -----------
@@ -150,8 +147,6 @@ class FastTSMap():
            A CDS count Histogram
         em_slice : Slice object
            Energy (Em) channels to use in fitting
-        cds_order : list-like
-           order of Psi and PhiChi dimensions for linearization
 
         Returns
         -------
@@ -161,7 +156,7 @@ class FastTSMap():
         """
 
         hist_cds_sliced = hist.slice[{"Em" : em_slice}]
-        hist_cds = hist_cds_sliced.project(cds_order) # project out Em
+        hist_cds = hist_cds_sliced.project_out("Em")
 
         cds_array = hist_cds.contents
         if hist_cds.unit is not None:
@@ -263,10 +258,8 @@ class FastTSMap():
             em_slice = slice(energy_channel[0], energy_channel[1])
 
         # get the flattened data and background CDS arrays
-        data_cds_array = self._get_cds_array(self._data, em_slice,
-                                             self._cds_order)
-        bkg_model_cds_array = self._get_cds_array(self._bkg_model, em_slice,
-                                                  self._cds_order)
+        data_cds_array = self._get_cds_array(self._data, em_slice)
+        bkg_model_cds_array = self._get_cds_array(self._bkg_model, em_slice)
 
         # eliminate CDS cells with no counts in data (due to data
         # sparsity) or in bkg model (lack of pseudocounts in bkg model
