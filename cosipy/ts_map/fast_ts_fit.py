@@ -75,26 +75,22 @@ class FastTSMap():
         # linearization of data, bkg
         axes = self._response.axes
 
-        # mapping only works with CDS's of the form [Em, Phi/PsiChi]
-        # (the last two in either order).  The response must map from
-        # NuLambda / Ei to a CDS.
+        # mapping only works with CDS's consisting of Em/Phi/PsiChi
+        # (in any order). The response must map from NuLambda / Ei to
+        # the CDS.
 
         labels = axes.labels
 
-        if not all(labels[0:3] == ("NuLambda", "Ei", "Em")):
-            raise ValueError("Response axes must be begin with "
-                             "(NuLambda, Ei, Em)")
+        if not all(labels[0:2] == ("NuLambda", "Ei")):
+            raise ValueError("Response axes must begin with (NuLambda, Ei)")
 
-        if len(labels) > 5 or \
-           labels[3] not in ("Phi", "PsiChi") or \
-           labels[4] not in ("Phi", "PsiChi"):
-            raise ValueError("Response axes must end with Phi/PsiChi")
-
-        cds_order = tuple(labels[-2:])
+        cds_order = tuple(labels[2:])
+        if not all(lab in ("Em", "Phi", "PsiChi") for lab in cds_order):
+            raise ValueError("Response CDS axes must be Em/Phi/PsiChi")
 
         # make sure data and background CDS are ordered to match response
-        self._data = data.todense().project(("Em",) + cds_order)
-        self._bkg_model = bkg_model.todense().project(("Em",) + cds_order)
+        self._data = data.todense().project(cds_order)
+        self._bkg_model = bkg_model.todense().project(cds_order)
 
         self._fnf = fnf(max_iter=1000)
 
@@ -223,7 +219,8 @@ class FastTSMap():
             ei_cds_array += psr * exposure
             ei_sum += psr_sum * exposure
 
-        return self._fnf.solve(data_cds_array, bkg_model_cds_array, ei_cds_array, ei_sum)
+        return self._fnf.solve(data_cds_array, bkg_model_cds_array,
+                               ei_cds_array, ei_sum)
 
     def _prepare_inputs(self, energy_channel, spectrum):
         """
@@ -234,7 +231,7 @@ class FastTSMap():
 
         Parameters
         ----------
-        energy_channel : 2-element list of form [lower_channel, upper_channel]
+        energy_channel : 2-element list [lower_channel, upper_channel]
             Energy (Em) channels to use in fitting (Python range
             lower_channel:upper_channel)
         spectrum : astromodels.functions
@@ -458,6 +455,7 @@ class PSRCache:
         self.maxSize = maxSize
 
         self.response = response
+        self.em_axis = response.axes.label_to_index("Em") - 1 # for NuLambda
         self.em_slice = em_slice
         self.valid_cells = valid_cells
 
@@ -551,14 +549,14 @@ class PSRCache:
         # size is Ei x Em x Phi/PsiChi
         counts = self.response.get_counts(p, self.em_slice)
 
-        # linearize CDS : Ei x Em x CDS voxels. Note that we ensure
+        # sum over Em dimension and convert to float : Ei x Phi/PsiChi
+        counts = np.sum(counts, axis=self.em_axis, dtype=self.response.dtype)
+
+        # linearize CDS : Ei x CDS voxels. Note that we ensure
         # in FastTSMap that data and bkg will use the same dimension
         # ordering as the response for the CDS, so there is no need to
         # re-order dimensions here.
-        counts = counts.reshape(*counts.shape[:2], -1)
-
-        # sum over Em dimension and convert to float : Ei x CDS voxels
-        counts = np.sum(counts, axis=1, dtype=self.response.dtype)
+        counts = counts.reshape(counts.shape[0], -1)
 
         # extract valid CDS voxels of psr after capturing sum of
         # *all* voxels : Ei x valid CDS voxels
