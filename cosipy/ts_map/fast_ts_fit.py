@@ -71,21 +71,20 @@ class FastTSMap():
 
             self._response = GalacticResponse.open(response_path)
 
-        # record order of response's CDS physical dimensions for
-        # linearization of data, bkg
-        axes = self._response.axes
+        labels = self._response.axes.labels
 
         # mapping only works with CDS's consisting of Em/Phi/PsiChi
         # (in any order). The response must map from NuLambda / Ei to
         # the CDS.
 
-        labels = axes.labels
-
         if not all(labels[0:2] == ("NuLambda", "Ei")):
             raise ValueError("Response axes must begin with (NuLambda, Ei)")
 
+        # record order of response's CDS physical dimensions for
+        # linearization of data, bkg
+
         cds_order = tuple(labels[2:])
-        if not all(lab in ("Em", "Phi", "PsiChi") for lab in cds_order):
+        if not all(ax in ("Em", "Phi", "PsiChi") for ax in cds_order):
             raise ValueError("Response CDS axes must be Em/Phi/PsiChi")
 
         # make sure data and background CDS are ordered to match response
@@ -545,21 +544,21 @@ class PSRCache:
 
         """
 
-        # get raw CDS counts for pixel, trimmed by Em slice
-        # size is Ei x Em x Phi/PsiChi
+        # get raw CDS counts for pixel, trimmed by Em slice size is Ei
+        # x (Em, Phi, PsiChi) in some order
         counts = self.response.get_counts(p, self.em_slice)
 
         # sum over Em dimension and convert to float : Ei x Phi/PsiChi
         counts = np.sum(counts, axis=self.em_axis, dtype=self.response.dtype)
 
-        # linearize CDS : Ei x CDS voxels. Note that we ensure
-        # in FastTSMap that data and bkg will use the same dimension
+        # linearize CDS : Ei x CDS voxels. Note that we ensure in
+        # FastTSMap that data and bkg will use the same dimension
         # ordering as the response for the CDS, so there is no need to
         # re-order dimensions here.
         counts = counts.reshape(counts.shape[0], -1)
 
-        # extract valid CDS voxels of psr after capturing sum of
-        # *all* voxels : Ei x valid CDS voxels
+        # extract valid CDS voxels of psr after capturing sum of *all*
+        # voxels : Ei x valid CDS voxels
         psr_sum = np.sum(counts, axis=1)
         psr = counts[:, self.valid_cells]
 
