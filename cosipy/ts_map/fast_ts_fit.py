@@ -77,11 +77,11 @@ class FastTSMap():
         # (in any order). The response must map from NuLambda / Ei to
         # the CDS.
 
-        if not all(labels[0:2] == ("NuLambda", "Ei")):
+        if not all(labels[:2] == ("NuLambda", "Ei")):
             raise ValueError("Response axes must begin with (NuLambda, Ei)")
 
-        # record order of response's CDS physical dimensions for
-        # linearization of data, bkg
+        # extract order of response's CDS dimensions for linearization
+        # of data, bkg
 
         cds_order = tuple(labels[2:])
         if not all(ax in ("Em", "Phi", "PsiChi") for ax in cds_order):
