@@ -229,6 +229,9 @@ class GalacticResponse(HealpixBase):
         em_slice: Slice, optional
           slice of the Em axis to return; None means return all
 
+        Returns
+        -------
+        raw response values for specified pixel/slice
         """
 
         em_dim = self._rest_axes.label_to_index("Em")
@@ -245,6 +248,8 @@ class GalacticResponse(HealpixBase):
                                  em_slice.stop + 1)
         else:
             all_slice = slice(None)
+            if em_slice is None:
+                em_slice = all_slice
 
         idx  = [pix]
         idx += [all_slice] * em_dim
