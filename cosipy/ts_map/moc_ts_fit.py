@@ -45,61 +45,105 @@ class MOCTSMap(FastTSMap):
                          orientation = orientation,
                          cds_frame = cds_frame)
 
-    def _choose_pix_to_refine(self, ts):
+    class Strategy:
         """
-        Decide which pixels to refine based on their ts scores.
-
-        Parameters
-        ----------
-        ts : np.ndarray
-          ts scores for one or more pixels
-
-        Returns
-        -------
-        hi_mask : np.ndarray of bool
-          Boolean mask of size equal to ts that is True if pixel
-          should be refined.
-
+        A generic strategy API for selecting pixels to refine in a moc map.
         """
 
-        # mask identifies the top self._refine_rank pixels
-        top_ts_indices = np.argpartition(ts, -self._top_rank)[-self._top_rank:]
-        hi_idx = top_ts_indices[-self._top_rank:]
-        hi_mask = np.zeros(len(ts), dtype=bool)
-        hi_mask[hi_idx] = True
+        def __call__(self, ts, pixels, nside):
+            """
+            Select a subset of input pixels to refine.
 
+            Parameters
+            ----------
+            ts : np.array of float
+               ts values for a set of pixels
+            pixels : np.array of int
+               nested-scheme indices for pixels corresponding to each ts
+               value
+            nside : int
+               nside of map from which pixels are drawn
+
+            Returns
+            -------
+              boolean mask -- True only for those pixels that should be
+              refined
+
+            """
+            raise RuntimeError("Strategy subclass must redefine select()")
+
+    class TopKStrategy(Strategy):
         """
-        # mask identifies pixels above a threshold
-        hi_mask = (ts >= ts.max() - self._cv_chi)
-        """
-
-        return hi_mask
-
-    def _pad_refined_pixels(self, pixels, nside, hi_mask):
-        """
-        Given a mask specifying which of a set of pixels to retain,
-        expand the mask to include adjacent pixels as well.
-
-        hi_mask is modified in place.
-
-        Parameters
-        ----------
-        pixels : np.ndarray of int
-          A set of pixels, some of which are designated for refinement.
-        nside : int
-          nside of pixels in array
-        hi_mask : np.ndarray of bool
-          Boolean mask of size equal to pixels that is True if pixel
-          should be refined
+        Refine a fixed number of pixels with the highest ts values
         """
 
-        hi_adj = hp.get_all_neighbours(nside, pixels[hi_mask], nest=True)
-        hi_adj = np.unique(hi_adj)
-        adj_mask = np.isin(pixels, hi_adj, assume_unique=True)
-        hi_mask[adj_mask] = True
+        def __init__(self, k):
+            """
+            Parameters
+            ----------
+            k : int
+              refine the k pixels with highest ts values
+            """
 
-    def moc_ts_fit(self, max_nside, top_rank, energy_channel, spectrum,
-                   cpu_cores = None, init_nside = 1):
+            self.k = k
+
+        def __call__(self, ts, pixels, nside):
+            top_ts_indices = np.argpartition(ts, -self.k)[-self.k:]
+            hi_idx = top_ts_indices[-self.k:]
+            hi_mask = np.zeros(len(ts), dtype=bool)
+            hi_mask[hi_idx] = True
+
+            return hi_mask
+
+    class ContainmentStrategy(Strategy):
+        """
+        Refine all pixels within a specified containment region
+        based on ts value
+        """
+
+        def __init__(self, containment):
+            """
+            Parameters
+            ----------
+            containment : float
+              refine pixels whose ts value is within the specified
+              containment region vs the max value.
+            """
+
+            self.chi = FastTSMap.get_chi_critical_value(containment)
+
+        def __call__(self, ts, pixels, nside):
+            return (ts >= ts.max() - self.chi)
+
+    class PaddingStrategy(Strategy):
+        """
+        After applying a specified strategy, pad the result to include
+        all neighbors of pixels chosen to be refined.
+        """
+
+        def __init__(self, sub_strategy):
+            """
+            Parameters
+            ----------
+            sub_strategy : MOCTSMap.Strategy subclass
+              strategy to apply prior to padding
+            """
+
+            self.sub_strategy = sub_strategy
+
+        def __call__(self, ts, pixels, nside):
+
+            hi_mask = self.sub_strategy(ts, pixels, nside)
+
+            hi_adj = hp.get_all_neighbours(nside, pixels[hi_mask], nest=True)
+            hi_adj = np.unique(hi_adj)
+            adj_mask = np.isin(pixels, hi_adj, assume_unique=True)
+            hi_mask[adj_mask] = True
+
+            return hi_mask
+
+    def fit(self, max_nside, energy_channel, spectrum,
+            cpu_cores = None, init_nside = 1, strategy=None):
         """
         Construct a multi-resolution map of ts statistics, selectively
         refining the highest-scoring pixels.
@@ -108,8 +152,6 @@ class MOCTSMap(FastTSMap):
         ----------
         max_nside : int
           highest possible nside reached during refinement
-        top_rank : int
-          ...
         energy_channel : 2-element list of form [lower_channel, upper_channel]
           energy (Em) channels to use in fitting (Python range
           lower_channel:upper_channel)
@@ -119,6 +161,9 @@ class MOCTSMap(FastTSMap):
           number of processors to use (default: do not restrict)
         init_nside : int, optional
           lowest nside used in map
+        strategy : MOCTSMap.Strategy subclass, optional
+          strategy to use in selecting pixels to refine.  If None,
+          default to TopKStrategy with k=8
 
         Returns
         -------
@@ -145,7 +190,10 @@ class MOCTSMap(FastTSMap):
 
             return res
 
-        self._top_rank = top_rank
+        if strategy is None:
+            self.strategy = self.TopKStrategy(k=8)
+        else:
+            self.strategy = strategy
 
         if cpu_cores is not None:
             numba.set_num_threads(cpu_cores)
@@ -165,9 +213,10 @@ class MOCTSMap(FastTSMap):
             src_locs = self._get_hypothesis_coords(nside, pixels)
 
             results = [
-                self.fast_ts_fit(source,
-                                 data_cds_array, bkg_model_cds_array,
-                                 psr_cache)[0]
+                self._fit_one_direction(source,
+                                        data_cds_array,
+                                        bkg_model_cds_array,
+                                        psr_cache)[0]
                 for source in src_locs
             ]
 
@@ -179,9 +228,7 @@ class MOCTSMap(FastTSMap):
                 all_ts.append(ts)
                 break
 
-            hi_mask = self._choose_pix_to_refine(ts)
-
-            # self._pad_refined_pixels(pixels, nside, hi_mask)
+            hi_mask = self.strategy(ts, pixels, nside)
 
             # For pixels that we will *not* refine, compute their
             # unique indices and save them.

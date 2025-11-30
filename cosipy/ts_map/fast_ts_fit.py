@@ -159,9 +159,9 @@ class FastTSMap():
 
         return cds_array.ravel()
 
-    def fast_ts_fit(self, source,
-                    data_cds_array, bkg_model_cds_array,
-                    psr_cache):
+    def _fit_one_direction(self, source,
+                           data_cds_array, bkg_model_cds_array,
+                           psr_cache):
         """
         Perform a TS fit of data for a single source direction
 
@@ -273,8 +273,8 @@ class FastTSMap():
 
         return data_cds_array, bkg_model_cds_array, psr_cache
 
-    def parallel_ts_fit(self, nside, energy_channel, spectrum,
-                        cpu_cores = None):
+    def fit(self, nside, energy_channel, spectrum,
+            cpu_cores = None):
         """
         Produce a ts map of specified resolution.
 
@@ -306,8 +306,10 @@ class FastTSMap():
         hypothesis_coords = self._get_hypothesis_coords(nside)
 
         results = [
-            self.fast_ts_fit(source,
-                             data_cds_array, bkg_model_cds_array, psr_cache)[0]
+            self._fit_one_direction(source,
+                                    data_cds_array,
+                                    bkg_model_cds_array,
+                                    psr_cache)[0]
             for source in hypothesis_coords
         ]
 
@@ -463,8 +465,8 @@ class PSRCache:
         else:
             self.ei_weights = flux.contents.value * response.eff_area
 
-        self.nLookups = 0
-        self.nMisses = 0
+        #self.nLookups = 0
+        #self.nMisses = 0
 
     @property
     def shape(self):
@@ -501,10 +503,10 @@ class PSRCache:
 
         """
 
-        self.nLookups += 1
+        #self.nLookups += 1
         v = self.cache.get(p)
         if v is None: # cache miss
-            self.nMisses += 1
+            #self.nMisses += 1
             v = self._compute_psr(p)
             self.cache[p] = v
 
@@ -518,6 +520,7 @@ class PSRCache:
 
         return v
 
+    '''
     def print_stats(self):
         """
         Print cache miss statistics
@@ -527,6 +530,7 @@ class PSRCache:
 
         print(f"Cache size: {len(self.cache)} (out of {self.maxSize})")
         print(f"Misses: {self.nMisses} / {self.nLookups} = {missRate:0.3f}")
+    '''
 
     def _compute_psr(self, p):
         """
