@@ -510,7 +510,7 @@ class SpacecraftFile():
 
         Parameters
         ----------
-        target_coord : astropy.coordinates.SkyCoord
+        target_coord : astropy.coordinates.SkyCoord or Cartesian 3-vector
             The coordinates of the target object.
         Returns
         -------
@@ -551,6 +551,9 @@ class SpacecraftFile():
         optional array of weights per index (defaults to all ones if
         None), return a sorted array of the unique values in indices
         and, for each, the sum of the weights for each unique index.
+
+        If input weights are provided, only unique indices with
+        nonzero weights are returned.
 
         Parameters
         ----------
