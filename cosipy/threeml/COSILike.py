@@ -116,6 +116,9 @@ class COSILike(PluginPrototype):
             logger.info("... loading the pre-computed image response ...")
             self.image_response = ExtendedSourceResponse.open(self.precomputed_psr_file)
             logger.info("--> done")
+
+        # Temporary fix to only print log-likelihood warning once max per fit
+        self._printed_warning = False
         
     def set_model(self, model):
         """
@@ -127,11 +130,7 @@ class COSILike(PluginPrototype):
             Any model supported by astromodels
         """
         
-        # Temporary fix to only print log-likelihood warning once max per fit
-        if inspect.stack()[1][3] == '_assign_model_to_data':
-            self._printed_warning = False
-    
-        # Get point sources and extended sources from model: 
+        # Get point sources and extended sources from model:
         point_sources = model.point_sources
         extended_sources = model.extended_sources
         
