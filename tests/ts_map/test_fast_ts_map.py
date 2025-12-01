@@ -4,6 +4,7 @@ import os
 import numpy as np
 
 import astropy.units as u
+from astropy.coordinates import SkyCoord
 
 from threeML import Powerlaw
 
@@ -37,14 +38,28 @@ def test_ts_fit():
     spectrum.K.unit = K.unit
     spectrum.piv.unit = piv.unit
 
+    ts_results = ts.fit(nside = 1,
+                        spectrum = spectrum,
+                        max_cache_size = 10)
+
+    assert np.allclose(ts_results,
+                       [142.65320313, 146.40087766, 143.79688155,
+                        147.26724713, 142.12808137, 141.04487277,
+                        142.91736454, 143.37732116, 143.02080182,
+                        142.36211847, 145.47734097, 143.22293343])
+
+
     ts_results = ts.fit(nside = 1, energy_channel = [2,3],
-                        spectrum = spectrum)
+                        spectrum = spectrum, cpu_cores = 1)
 
     assert np.allclose(ts_results,
                        [40.18628386, 39.59382592, 37.4339627,
                         39.88459849, 40.20132198, 39.86762314,
                         37.2327797,  37.4506428,  40.54884861,
                         39.69773074, 38.83421249, 39.99131767])
+
+    ts.plot_ts(ts_results,
+               skycoord = SkyCoord(l=0, b=0, unit=u.deg, frame="galactic"))
 
     ts.plot_ts(ts_results, containment = 0.9, save_plot = True,
                save_dir = "", save_name = "ts_map.png")
@@ -111,7 +126,7 @@ def test_moc_ts_fit():
 
     # test default top-k strategy
     ts_results = ts.fit(max_nside = 2, energy_channel = [2,3],
-                        spectrum = spectrum)
+                        spectrum = spectrum, cpu_cores = 1)
 
     ts_values, pixels = ts_results
     assert all(pixels == [
@@ -135,6 +150,9 @@ def test_moc_ts_fit():
         39.65452286, 39.940159, 39.61014067, 40.65108076, 39.92533792,
         40.2989865
     ])
+
+    ts.plot_ts(*ts_results,
+               skycoord = SkyCoord(l=0, b=0, unit=u.deg, frame="galactic"))
 
     ts.plot_ts(*ts_results, containment = 0.9, save_plot = True,
                save_dir = "", save_name = "ts_map.png")

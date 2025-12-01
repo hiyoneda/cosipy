@@ -50,6 +50,25 @@ def test_get_item():
 
         assert drm.unit.is_equivalent('m2')
 
+    with FullDetectorResponse.open(response_path, dtype=np.float32, cache_size = 100) as response:
+
+        drm = response[0]
+
+def test_get_counts():
+
+    with FullDetectorResponse.open(response_path) as response:
+
+        data = response.get_counts(2)
+
+        assert data.shape == tuple(response.axes.nbins[1:])
+
+        data = response.get_counts(2, em_slice = slice(2,3))
+
+        assert data.shape == (response.axes.nbins[1],
+                              1,
+                              response.axes.nbins[3],
+                              response.axes.nbins[4])
+
 def test_get_interp_response():
 
     with FullDetectorResponse.open(response_path) as response:
@@ -65,6 +84,30 @@ def test_get_interp_response():
 
         assert drm.unit.is_equivalent('m2')
 
+def test_get_point_source_response():
+
+    orientation = SpacecraftFile.parse_from_file(orientation_path)
+    coord = SkyCoord(l=0,b=0,unit=u.deg,frame="galactic")
+
+    with FullDetectorResponse.open(response_path) as response:
+
+        # test call with dwell_map
+        src_path = orientation.get_target_in_sc_frame(coord)
+        exp_map = orientation.get_dwell_map(response, src_path)
+
+        psr = response.get_point_source_response(exposure_map = exp_map)
+
+        # test call with source + scatt_map
+        scatt_map = orientation.get_scatt_map(nside=16,
+                                              target_coord=coord)
+
+        psr = response.get_point_source_response(coord=coord,
+                                                 scatt_map=scatt_map)
+
+        # test stripping extra dimensions from SkyCoord
+        coord = SkyCoord(l=[0],b=[0],unit=u.deg,frame="galactic")
+        psr = response.get_point_source_response(coord=coord,
+                                                 scatt_map=scatt_map)
 def test_get_extended_source_response():
 
     orientation = SpacecraftFile.parse_from_file(orientation_path)

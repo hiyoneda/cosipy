@@ -221,7 +221,7 @@ class FastTSMap():
         return self._fnf.solve(data_cds_array, bkg_model_cds_array,
                                ei_cds_array, ei_sum)
 
-    def _prepare_inputs(self, energy_channel, spectrum):
+    def _prepare_inputs(self, energy_channel, spectrum, max_cache_size):
         """
         Prepare the data and background arrays for ts fitting, and get ready
         to read and cache PSRs for different source directions.  The shape
@@ -235,6 +235,8 @@ class FastTSMap():
             lower_channel:upper_channel)
         spectrum : astromodels.functions
             Spectrum of the source.
+        max_cache_size : int or None
+            Maximum number of entries to store in PSRCache (None = no limit)
 
         Returns
         -------
@@ -269,12 +271,13 @@ class FastTSMap():
 
         flux = get_integrated_spectral_model(spectrum, self._response.axes["Ei"])
 
-        psr_cache = PSRCache(self._response, em_slice, valid_cells, flux)
+        psr_cache = PSRCache(self._response, em_slice, valid_cells, flux,
+                             maxSize = max_cache_size)
 
         return data_cds_array, bkg_model_cds_array, psr_cache
 
-    def fit(self, nside, energy_channel, spectrum,
-            cpu_cores = None):
+    def fit(self, nside, spectrum, energy_channel = None,
+            cpu_cores = None, max_cache_size = None):
         """
         Produce a ts map of specified resolution.
 
@@ -282,13 +285,18 @@ class FastTSMap():
         ----------
         nside : int
             HEALPix nside of ts map to produce
-        energy_channel : 2-element list of form [lower_channel, upper_channel]
-            Energy (Em) channels to use in fitting (Python range
-            lower_channel:upper_channel)
         spectrum : astromodels.functions
             Spectrum of the source.
+        energy_channel : 2-element list, of form
+                         [lower_channel, upper_channel], optional
+            Energy (Em) channels to use in fitting (Python range
+            lower_channel:upper_channel). If not specified, use all
+            Em channels.
         cpu_cores : int, optional
             Number of processors to use (default: do not restrict)
+        max_cache_size : int, optional
+            Maximum number of entries to store in PSRCache; if None,
+            no limit
 
         Returns
         -------
@@ -301,7 +309,7 @@ class FastTSMap():
             numba.set_num_threads(cpu_cores)
 
         data_cds_array, bkg_model_cds_array, psr_cache = \
-            self._prepare_inputs(energy_channel, spectrum)
+            self._prepare_inputs(energy_channel, spectrum, max_cache_size)
 
         hypothesis_coords = self._get_hypothesis_coords(nside)
 

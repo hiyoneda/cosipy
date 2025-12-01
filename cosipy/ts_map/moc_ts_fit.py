@@ -142,8 +142,9 @@ class MOCTSMap(FastTSMap):
 
             return hi_mask
 
-    def fit(self, max_nside, energy_channel, spectrum,
-            cpu_cores = None, init_nside = 1, strategy=None):
+    def fit(self, max_nside, spectrum, energy_channel = None,
+            cpu_cores = None, max_cache_size = None,
+            init_nside = 1, strategy = None):
         """
         Construct a multi-resolution map of ts statistics, selectively
         refining the highest-scoring pixels.
@@ -152,13 +153,18 @@ class MOCTSMap(FastTSMap):
         ----------
         max_nside : int
           highest possible nside reached during refinement
-        energy_channel : 2-element list of form [lower_channel, upper_channel]
-          energy (Em) channels to use in fitting (Python range
-          lower_channel:upper_channel)
         spectrum : astromodels.functions
           spectrum of the source.
+        energy_channel : 2-element list, of form
+                         [lower_channel, upper_channel], optional
+            Energy (Em) channels to use in fitting (Python range
+            lower_channel:upper_channel). If not specified, use all
+            Em channels.
         cpu_cores : int, optional
           number of processors to use (default: do not restrict)
+        max_cache_size : int, optional
+            Maximum number of entries to store in PSRCache; if None,
+            no limit
         init_nside : int, optional
           lowest nside used in map
         strategy : MOCTSMap.Strategy subclass, optional
@@ -199,7 +205,7 @@ class MOCTSMap(FastTSMap):
             numba.set_num_threads(cpu_cores)
 
         data_cds_array, bkg_model_cds_array, psr_cache = \
-            self._prepare_inputs(energy_channel, spectrum)
+            self._prepare_inputs(energy_channel, spectrum, max_cache_size)
 
         all_pix = []
         all_ts = []

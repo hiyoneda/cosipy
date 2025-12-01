@@ -6,48 +6,57 @@ import logging
 logger = logging.getLogger(__name__)
 
 class FastNormFit:
-    """
-    Perform a fast poisson maximum likelihood ratio fit of the normalization of a
-    source over background.
+    """Perform a fast poisson maximum likelihood ratio fit of the
+    normalization of a source over background.
 
-    The likelihood ratio as a function of the norm is computed as follow
+    The likelihood ratio as a function of the norm is computed as
+    follow
 
     .. math::
 
         TS(N) = 2 \\sum_i \\left( \\frac{\\log P(d_i; b_i+N e_i)}{\\log P(d_i; b_i)} \\right)
 
-    where :math:`P(d; \lambda)` is the Poisson probability of obtaining :math:`d`
-    count where :math:`\lambda` is expected on average; :math:`b` is the estimated
-    number of background counts; :math:`N` is the normalization; and :math:`e`
-    is the expected excess -i.e. signal- per normalization unit -i.e. the
-    number of excess counts equals :math:`N`.
+    where :math:`P(d; \lambda)` is the Poisson probability of
+    obtaining :math:`d` count where :math:`\lambda` is expected on
+    average; :math:`b` is the estimated number of background counts;
+    :math:`N` is the normalization; and :math:`e` is the expected
+    excess -i.e. signal- per normalization unit -i.e. the number of
+    excess counts equals :math:`N`.
 
-    It can be shown that :math:`TS(N)` has analytic derivative of arbitrary
-    order and that the Newton's method is guaranteed to converge if initialized
-    at :math:`N=0`.
-
-    .. note::
-
-        The background is not allowed to float. It is assumed the error on the
-        estimation of the background is small compared to the fluctuation of the
-        background itself (i.e. :math:`N_{B}/N_{off} \\lll 1`).
+    It can be shown that :math:`TS(N)` has analytic derivative of
+    arbitrary order and that the Newton's method is guaranteed to
+    converge if initialized at :math:`N=0`.
 
     .. note::
 
-        Because of the Poisson probability, :math:`TS(N)` is only well-defined
-        for :math:`N \geq 1`. By default, underfluctuations are set to
-        :math:`TS(N=0) = 0`. For cases when there is benefit in letting the
-        normalization float to negative values, you can use `allow_negative`,
-        but in that case the results are only valid in the Gaussian regime.
+        The background is not allowed to float. It is assumed the
+        error on the estimation of the background is small compared to
+        the fluctuation of the background itself
+        (i.e. :math:`N_{B}/N_{off} \\lll 1`).
+
+    .. note::
+
+        Because of the Poisson probability, :math:`TS(N)` is only
+        well-defined for :math:`N \geq 1`. By default,
+        underfluctuations are set to :math:`TS(N=0) = 0`. For cases
+        when there is benefit in letting the normalization float to
+        negative values, you can use `allow_negative`, but in that
+        case the results are only valid in the Gaussian regime.
 
     Args:
-        max_iter (int): Maximum number of iteration
-        conv_frac_tol (float): Convergence stopping condition, expressed as the
-            ratio between the size of the last step and the current norm value.
-        zero_ts_tol (float): If zero_ts_tol < TS < 0, then TS is set to 0
-            without failed flag status (analytically, TS < 0 should never happen)
-        allow_negative (bool): Allow the normalization to float toward
-            negative values
+        max_iter (int):
+           Maximum number of iteration
+        conv_frac_tol (float):
+           Convergence stopping condition, expressed as the ratio
+           between the size of the last step and the current norm
+           value.
+        zero_ts_tol (float):
+            If zero_ts_tol < TS < 0, then TS is set to 0 without
+            failed flag status (analytically, TS < 0 should never
+            happen)
+        allow_negative (bool):
+            Allow the normalization to float toward negative values
+
     """
 
     def __init__(self,

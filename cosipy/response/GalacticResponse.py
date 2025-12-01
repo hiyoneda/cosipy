@@ -237,7 +237,9 @@ class GalacticResponse(HealpixBase):
         em_dim = self._rest_axes.label_to_index("Em")
 
         if self._has_overflow:
-            # trim overflow when reading contents
+            # trim overflow when reading contents (this code may be
+            # removed once we resolve issue #445 by updating old
+            # precomputed response files)
             pix += 1
             all_slice = slice(1, -1)
 
