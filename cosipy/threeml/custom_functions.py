@@ -120,13 +120,13 @@ class SpecFromDat(Function1D, metaclass=FunctionMeta):
             A  spectrum loaded from a dat file
         parameters :
             K :
-                desc : Normalization
+                desc : Normalization factor
                 initial value : 1.0
                 is_normalization : True
                 min: 0.0 
                 max: 1e6
                 delta: 1.0
-                units:
+                units: ph/cm2/s/kev
         properties:
             dat:
                 desc: the data file to load
