@@ -74,31 +74,23 @@ class RspConverter():
     rsp_axis_order = ("Ei", "NuLambda", "Pol", "Em", "Phi", "PsiChi")
 
     def __init__(self,
-                 default_norm="Linear",
-                 default_emin=90,
-                 default_emax=10000,
-                 alpha=0,
+                 norm=None,
+                 norm_params=[],
                  quiet=False,
                  bufsize = 10000000):
 
         """
         Parameters
         ----------
-         default_norm : str
-             type of normalisation, if not specified in header;
-             one of {powerlaw, Mono, Linear, Gaussian}
-
-         default_emin, default_emax : float
-             emin/emax used in the simulation source file, if
-             not specified in header (for linear, powerlaw
-             normalization)
-
-         alpha : int
-             value of spectral index (for powerlaw normalization)
-
-         quiet : boolean
+        norm : str, optional
+             type of normalisation to use if none specified in header;
+             one of {powerlaw, Mono, Linear, Gaussian}. If not specified,
+             use Linear norm as default.
+        norm_params : list-like, optional
+             parameters of default norm.  If not specified, use values
+             [90, 10000] for Linear norm for compatibility with old API.
+        quiet : boolean
              disable logging and progress bars (default False)
-
         bufsize: int
              rough size of buffer to be used for reading/writing counts
 
@@ -107,11 +99,12 @@ class RspConverter():
         self.quiet = quiet
         self.bufsize = bufsize
 
-        self.default_norm = default_norm
-        self.default_emin = default_emin
-        self.default_emax = default_emax
-        self.alpha = alpha
-
+        if norm is None:
+            self.norm = "Linear"
+            self.norm_params = [90, 10000]
+        else:
+            self.norm = norm
+            self.norm_params = norm_params
 
     def convert_to_h5(self,
                       rsp_filename,
@@ -211,8 +204,8 @@ class RspConverter():
 
         hdr = {
             "nevents_sim" : 0,
-            "norm"        : self.default_norm,
-            "norm_params" : (self.default_emin, self.default_emax),
+            "norm"        : None,
+            "norm_params" : [],
             "area_sim"    : 0,
             "nbins"       : 0,
             "headers"     : {}
@@ -240,22 +233,15 @@ class RspConverter():
                     hdr["headers"][key] = " ".join(line[1:])
 
                 case 'SP':
+                    # norm information is only useful if non-empty
                     if len(line) > 1:
-                        hdr["norm"] = str(line[1])
-                        norm = hdr["norm"]
+                        norm = str(line[1])
+                        norm_params = self._validate_norm_params(norm, line[2:])
 
-                        if norm == "Linear" :
-                            # emin, emax
-                            hdr["norm_params"] = ( int(line[2]), int(line[3]) )
-                        elif norm == "Gaussian" :
-                            # Gauss_mean, Gauss_sig, Gauss_cutoff
-                            hdr["norm_params"] = ( float(line[2]), float(line[3]), float(line[4]) )
+                        hdr["norm"] = norm
+                        hdr["norm_params"] = norm_params
 
-                    else:
-                        logger.warning(f"norm not found in file! Assuming {hdr['norm']}")
-                        assert hdr['norm'] == 'Linear', "parameters not given for default norm"
-
-                    hdr["headers"][key] = " ".join(line[1:])
+                        hdr["headers"][key] = " ".join(line[1:])
 
                 case 'MS':
                     is_sparse = (line[1] == "true")
@@ -296,9 +282,22 @@ class RspConverter():
                 case _: # any other field
                     hdr["headers"][key] = " ".join(line[1:])
 
-        # check if the type of spectrum is known
-        assert hdr["norm"] in ("powerlaw", "Mono", "Linear", "Gaussian"), \
-            f"unknown normalisation {hdr['norm']}"
+
+        # if no spectral norm was specified, use the provided default
+        if hdr["norm"] is None:
+            logger.warning("RSP file does not specify spectral norm; "
+                           f"using default: {self.norm} {' '.join(str(x) for x in self.norm_params)}")
+
+            hdr["norm"] = self.norm
+            hdr["norm_params"] = self._validate_norm_params(self.norm, self.norm_params)
+
+            # add a synthetic SP header matching the default norm choice
+            if len(hdr["norm_params"]) > 0:
+                param_str = " " + " ".join(str(x) for x in hdr['norm_params'])
+            else:
+                param_str = ""
+
+            hdr["headers"]["SP"] = f"{self.norm}{param_str}"
 
         # check the number of simulated events is not 0
         assert hdr["nevents_sim"] != 0, \
@@ -307,7 +306,6 @@ class RspConverter():
         # check that we are ready to start consuming bin values
         assert hdr["nbins"] > 0, \
             "no bin count provided for response"
-
 
         axes_labels = [ RspConverter.axis_name_map[n] for n in axes_names ]
 
@@ -341,6 +339,54 @@ class RspConverter():
 
         return (axes, hdr)
 
+    def _validate_norm_params(self, norm, params):
+        """
+        Validate parameters for a spectral norm specification.
+
+        Parameters
+        ----------
+        norm : str
+           name of the norm
+        params : list-like
+           parameters for norm.  These may be either strings or other
+           types; they will be converted to the correct types for
+           their norm
+
+        Returns
+        -------
+        params : tuple
+           parsed parameters of types appropriate for norm
+
+        """
+
+        match norm:
+            case 'Mono':
+                if len(params) > 0:
+                    raise ValueError(f"Mono normalization takes zero params; {len(params)} given")
+                params = ()
+
+            case 'Linear':
+                if len(params) != 2:
+                    raise ValueError(f"Linear normalization takes two params; {len(params)} given")
+                # emin, emax
+                params = ( int(params[0]), int(params[1]) )
+
+            case 'Gaussian':
+                if len(params) != 3:
+                    raise ValueError(f"Gaussian normalization takes three params; {len(params)} given")
+                # mean, sig, cutoff
+                params = ( float(params[0]), float(params[1]), float(params[2]) )
+
+            case 'powerlaw':
+                if len(params) != 3:
+                    raise ValueError(f"powerlaw normalization takes three params; {len(params)} given")
+                # emin, emax, alpha
+                params = ( int(params[0]), int(params[1]), float(params[2]) )
+
+            case _:
+                raise ValueError(f"Unknown norm {norm}; must be one of Mono, Linear, Gaussian, or powerlaw")
+
+        return params
 
     def _get_eff_area(self, axes, hdr):
         """
@@ -403,14 +449,14 @@ class RspConverter():
                 nperchannel_norm = np.array([1.])
 
             case "powerlaw":
-                emin, emax = hdr["norm_params"]
+                emin, emax, alpha = hdr["norm_params"]
 
                 if not self.quiet:
-                    logger.info(f"normalisation: powerlaw with index {self.alpha} with energy range [{emin}-{emax}]keV")
+                    logger.info(f"normalisation: powerlaw with index {alpha} with energy range [{emin}-{emax}]keV")
 
                 # From powerlaw
-                e_lo = axes['Ei'].lower_bounds
-                e_hi = axes['Ei'].upper_bounds
+                e_lo = axes['Ei'].lower_bounds.value
+                e_hi = axes['Ei'].upper_bounds.value
 
                 e_lo = np.minimum(emax, e_lo)
                 e_hi = np.minimum(emax, e_hi)
@@ -418,10 +464,10 @@ class RspConverter():
                 e_lo = np.maximum(emin, e_lo)
                 e_hi = np.maximum(emin, e_hi)
 
-                if self.alpha == 1:
+                if alpha == 1:
                     nperchannel_norm = np.log(e_hi/e_lo) / np.log(emax/emin)
                 else:
-                    a = 1 - self.alpha
+                    a = 1 - alpha
                     nperchannel_norm = (e_hi**a - e_lo**a) / (emax**a - emin**a)
 
             case "Gaussian" :
