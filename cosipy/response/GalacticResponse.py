@@ -77,6 +77,11 @@ class GalacticResponse(HealpixBase):
         # when reading them!
         new._has_overflow = (new._contents.shape != new._axes.shape)
 
+        # dummy effective area correction; "counts" in Histogram
+        # have already had the effective area correction applied.
+        new._eff_area = np.ones(new._axes["Ei"].nbins,
+                                dtype=new._contents.dtype)
+
         return new
 
     @property
@@ -137,6 +142,18 @@ class GalacticResponse(HealpixBase):
         """
 
         return self._unit
+
+    @property
+    def eff_area_correction(self):
+        """
+        Effective area correction for bins with each Ei.
+
+        Returns
+        -------
+        :py:class:`np.ndarray`
+        """
+
+        return self._eff_area
 
     def __getitem__(self, pix):
         """

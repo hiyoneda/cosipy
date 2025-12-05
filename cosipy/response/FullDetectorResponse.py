@@ -109,7 +109,7 @@ class FullDetectorResponse(HealpixBase):
 
         new._unit = u.Unit(new._drm.attrs['UNIT'])
 
-        # effective area for counts
+        # effective area correction for counts
         ea = np.array(new._drm["EFF_AREA"])
 
         # eff_area type determines return type of __getitem__
@@ -203,9 +203,9 @@ class FullDetectorResponse(HealpixBase):
         return self._unit
 
     @property
-    def eff_area(self):
+    def eff_area_correction(self):
         """
-        Effective area of bins with each Ei.
+        Effective area correction for bins with each Ei.
 
         Returns
         -------

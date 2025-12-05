@@ -24,8 +24,8 @@ def test_open():
 
         assert response.shape == tuple(response.axes.nbins)
 
-        assert response.eff_area.dtype == np.float32
-        assert len(response.eff_area) == response.axes['Ei'].nbins
+        assert response.eff_area_correction.dtype == np.float32
+        assert len(response.eff_area_correction) == response.axes['Ei'].nbins
 
         assert arr_eq(response.axes.labels,
                       ['NuLambda', 'Ei', 'Em', 'Phi', 'PsiChi'])

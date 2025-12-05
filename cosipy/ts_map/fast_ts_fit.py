@@ -468,10 +468,7 @@ class PSRCache:
         self.em_slice = em_slice
         self.valid_cells = valid_cells
 
-        if isinstance(response, GalacticResponse):
-            self.ei_weights = flux.contents.value
-        else:
-            self.ei_weights = flux.contents.value * response.eff_area
+        self.ei_weights = flux.contents.value * response.eff_area_correction
 
         #self.nLookups = 0
         #self.nMisses = 0
@@ -574,8 +571,9 @@ class PSRCache:
         psr_sum = np.sum(counts, axis=1)
         psr = counts[:, self.valid_cells]
 
-        # convolve psr with flux (and also eff_area weights, which
-        # have not yet been applied) to remove Ei dimension
+        # convolve psr with flux (and also eff_area correction
+        # weights, which have not yet been applied) to remove Ei
+        # dimension
         psr_sum = np.dot(psr_sum, self.ei_weights)
         psr = np.tensordot(psr, self.ei_weights, axes=(0,0))
 

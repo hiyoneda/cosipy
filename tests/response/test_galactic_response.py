@@ -22,6 +22,9 @@ def test_open():
 
         assert response.shape == tuple(response.axes.nbins)
 
+        assert arr_eq(response.eff_area_correction,
+                      np.ones(response.axes['Ei'].nbins, response.dtype))
+
         assert arr_eq(response.axes.labels,
                       ['NuLambda', 'Ei', 'Em', 'Phi', 'PsiChi'])
 
