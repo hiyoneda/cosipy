@@ -79,16 +79,17 @@ class RspConverter():
                  quiet=False,
                  bufsize = 10000000):
 
-        """
-        Parameters
+        """Parameters
         ----------
         norm : str, optional
-             type of normalisation to use if none specified in header;
-             one of {powerlaw, Mono, Linear, Gaussian}. If not specified,
-             use Linear norm as default.
+             type of normalization to use to compute E_i weighting
+             for effective area correction if none specified in .rsp
+             file header; one of {powerlaw, Mono, Linear,
+             Gaussian}. If not specified, use Linear norm as default.
         norm_params : list-like, optional
-             parameters of default norm.  If not specified, use values
-             [90, 10000] for Linear norm for compatibility with old API.
+             parameters of default normalization.  If not specified,
+             use values [90, 10000] for Linear normalization for
+             compatibility with old API.
         quiet : boolean
              disable logging and progress bars (default False)
         bufsize: int
@@ -283,15 +284,16 @@ class RspConverter():
                     hdr["headers"][key] = " ".join(line[1:])
 
 
-        # if no spectral norm was specified, use the provided default
+        # if no spectral normalization was specified, use the provided
+        # default
         if hdr["norm"] is None:
-            logger.warning("RSP file does not specify spectral norm; "
+            logger.warning("RSP file does not specify spectral normalization; "
                            f"using default: {self.norm} {' '.join(str(x) for x in self.norm_params)}")
 
             hdr["norm"] = self.norm
             hdr["norm_params"] = self._validate_norm_params(self.norm, self.norm_params)
 
-            # add a synthetic SP header matching the default norm choice
+            # add a synthetic SP header matching the default normalization
             if len(hdr["norm_params"]) > 0:
                 param_str = " " + " ".join(str(x) for x in hdr['norm_params'])
             else:
@@ -341,21 +343,21 @@ class RspConverter():
 
     def _validate_norm_params(self, norm, params):
         """
-        Validate parameters for a spectral norm specification.
+        Validate parameters for a spectral normalization specification.
 
         Parameters
         ----------
         norm : str
-           name of the norm
+           name of the normaliztion scheme
         params : list-like
-           parameters for norm.  These may be either strings or other
-           types; they will be converted to the correct types for
-           their norm
+           parameters for normalization.  These may be either strings
+           or other types; they will be converted to the correct types
+           for their scheme.
 
         Returns
         -------
         params : tuple
-           parsed parameters of types appropriate for norm
+           parsed parameters of types appropriate for scheme
 
         """
 
@@ -384,7 +386,7 @@ class RspConverter():
                 params = ( int(params[0]), int(params[1]), float(params[2]) )
 
             case _:
-                raise ValueError(f"Unknown norm {norm}; must be one of Mono, Linear, Gaussian, or powerlaw")
+                raise ValueError(f"Unknown normalization {norm}; must be one of Mono, Linear, Gaussian, or powerlaw")
 
         return params
 
@@ -438,9 +440,9 @@ class RspConverter():
 
         norm = hdr["norm"]
 
-        # If we have one single bin, treat the Gaussian norm like the
-        # mono one.  Also check that the Gaussian spectrum is fully
-        # contained in that bin
+        # If we have one single bin, treat the Gaussian normalization
+        # like the mono one.  Also check that the Gaussian spectrum is
+        # fully contained in that bin
         if norm == "Gaussian" and len(ewidth) == 1:
 
             from scipy.special import erf
@@ -466,13 +468,13 @@ class RspConverter():
                 emin, emax = hdr["norm_params"]
 
                 if not self.quiet:
-                    logger.info(f"normalisation: linear with energy range [{emin}-{emax}]")
+                    logger.info(f"normalization: linear with energy range [{emin}-{emax}]")
 
                 nperchannel_norm = ewidth / (emax - emin)
 
             case "Mono" :
                 if not self.quiet:
-                    logger.info("normalisation: mono")
+                    logger.info("normalization: mono")
 
                 nperchannel_norm = np.array([1.])
 
@@ -480,7 +482,7 @@ class RspConverter():
                 emin, emax, alpha = hdr["norm_params"]
 
                 if not self.quiet:
-                    logger.info(f"normalisation: powerlaw with index {alpha} with energy range [{emin}-{emax}]keV")
+                    logger.info(f"normalization: powerlaw with index {alpha} with energy range [{emin}-{emax}]keV")
 
                 # From powerlaw
                 e_lo = axes['Ei'].lower_bounds.value
@@ -499,7 +501,7 @@ class RspConverter():
                     nperchannel_norm = (e_hi**a - e_lo**a) / (emax**a - emin**a)
 
             case "Gaussian" :
-                raise NotImplementedError("Gaussian norm for multiple bins not yet implemented")
+                raise NotImplementedError("Gaussian normalization for multiple bins not yet implemented")
 
         # If Nulambda is full-sky, its nbins will be 1, so division is a no-op.
         # We assume all FISBEL pixels have the same area.
