@@ -424,8 +424,9 @@ class PolarizationStokes():
         self._spectrum = source_spectrum
 
         self._nbins = self._response.axes['Pol'].nbins
+        print('Number of azimuthal angle bins used:', self._nbins)
 
-        self._binedges = Angle(np.linspace(-np.pi, np.pi, self._nbins), unit=u.rad)
+        # self._binedges = Angle(np.linspace(-np.pi, np.pi, self._nbins), unit=u.rad)
 
         self._reference_vector = self._convention.get_basis(source_vector)[0] 
     
@@ -662,9 +663,12 @@ class PolarizationStokes():
         if show_plots:
             plt.figure()
             plt.title('Azimuthal scattering angles')
-            plt.hist(azimuthal_angles, bins=50, alpha=0.5)
+            plt.hist(azimuthal_angles, bins=50, alpha=0.5, label='Data fine binning')
+            plt.hist(azimuthal_angles, bins=self._nbins, alpha=0.5, 
+                     histtype='step', linewidth=2, label='Response binning')
             plt.xlabel('Azimuthal angle (radians)')
             plt.ylabel('Counts')
+            plt.legend()
             plt.show()
         
         return azimuthal_angles
@@ -685,10 +689,10 @@ class PolarizationStokes():
         """
         print('Creating the 100% polarized ASADs (this may take a minute...)')
         polarized_asads = create_polarized_asads(self._spectrum, self._source_vector, self._ori, self._response, 
-                                                   self._convention, self._response_file, self._response_convention)
+                                                   self._convention, self._response_file, self._response_convention, bins=self._nbins)
         print('Creating the unpolarized ASAD...')
         unpolarized_asad = create_unpolarized_asad(self._spectrum, self._source_vector, self._ori, self._response, 
-                                                   self._convention, self._response_file, self._response_convention)
+                                                   self._convention, self._response_file, self._response_convention, bins=self._nbins)
         mu_100_list = []
         mu_100_uncertainties = []
 
@@ -908,7 +912,7 @@ class PolarizationStokes():
 
         unpolarized_asad = create_unpolarized_asad(self._spectrum, self._source_vector, self._ori,
                                                self._response, self._convention, 
-                                               self._response_file, self._response_convention)
+                                               self._response_file, self._response_convention, bins=self._nbins)
         azimuthal_bin_center = unpolarized_asad.axis.centers.value  # Get the bin edges of the azimuthal angle distribution
         # Create the spline from the unpol azimutal angle distrib
         spline_unpol = interpolate.interp1d(azimuthal_bin_center, unpolarized_asad.full_contents)
