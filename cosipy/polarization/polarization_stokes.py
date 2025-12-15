@@ -17,28 +17,29 @@ logger = logging.getLogger(__name__)
 #we can define all these functions in a separate file to import
 
 def R(x, A, B, C):
-    """ Function to fit to the modulation of the azimuthal angle distribution.
+    """ 
+    Function to fit to the modulation of the azimuthal angle distribution.
     """
     return A + B*(np.cos(x + C)**2)
 
 def constant(x, a):
-        """
-        Constant function to fit to mu_100 values.
+    """
+    Constant function to fit to mu_100 values.
         
-        Parameters
-        ----------
-        x : float
-            Mu_100
-        a : float
-            Parameter
+    Parameters
+    ----------
+    x : float
+        Mu_100
+    a : float
+        Parameter
             
-        Returns
-        -------
-        a : float
-            Constant value
-        """
+    Returns
+    -------
+    a : float
+        Constant value
+    """
 
-        return a
+    return a
 
 def stokes_u(phi):
     """
@@ -58,18 +59,18 @@ def stokes_u(phi):
 
 def stokes_q(phi):
     """
-        Calculate the Q Stokes parameter from the azimuthal angle phi.
+    Calculate the Q Stokes parameter from the azimuthal angle phi.
         
-        Parameters
-        ----------
-        phi : float
-            Azimuthal angle in radians
+    Parameters
+    ----------
+    phi : float
+        Azimuthal angle in radians
         
-        Returns
-        -------
-        q : float
-            Q Stokes parameter
-        """
+    Returns
+    -------
+    q : float
+        Q Stokes parameter
+    """
     return np.cos(phi * 2) * 2
 
 def rotate_points_to_x_axis(newPD, newPA):
@@ -123,86 +124,85 @@ def polar_chart_backbone(ax):
     plt.plot([1,-1], [-1,1], linewidth=1, color='k', linestyle='--', alpha=0.3)
 
 def calculate_azimuthal_scattering_angle(psi, chi, source_vector, reference_vector):
-        """
-        Calculate the azimuthal scattering angle of a scattered photon.
+    """
+    Calculate the azimuthal scattering angle of a scattered photon.
         
-        Parameters
-        ----------
-        psi : float
-            Polar angle (radians) of scattered photon in local coordinates
-        chi : float
-            Azimuthal angle (radians) of scattered photon in local coordinates
-        source_vector : astropy.coordinates.SkyCoord
-            Source direction
-        reference_vector : astropy.coordinates.SkyCoord
-            Reference direction (e.g. X-axis of spacecraft frame)
+    Parameters
+    ----------
+    psi : float
+        Polar angle (radians) of scattered photon in local coordinates
+    chi : float
+        Azimuthal angle (radians) of scattered photon in local coordinates
+    source_vector : astropy.coordinates.SkyCoord
+        Source direction
+    reference_vector : astropy.coordinates.SkyCoord
+        Reference direction (e.g. X-axis of spacecraft frame)
 
-        Returns
-        -------
-        azimuthal_angle : astropy.coordinates.Angle
-            Azimuthal scattering angle defined with respect to given reference vector
-        """
+    Returns
+    -------
+    azimuthal_angle : astropy.coordinates.Angle
+        Azimuthal scattering angle defined with respect to given reference vector
+    """
         
-        source_vector_cartesian = [source_vector.cartesian.x.value,
-                                   source_vector.cartesian.y.value, 
-                                   source_vector.cartesian.z.value]
-        reference_vector_cartesian = [reference_vector.cartesian.x.value, 
-                                      reference_vector.cartesian.y.value, 
-                                      reference_vector.cartesian.z.value]
+    source_vector_cartesian = [source_vector.cartesian.x.value,
+                               source_vector.cartesian.y.value, 
+                               source_vector.cartesian.z.value]
+    reference_vector_cartesian = [reference_vector.cartesian.x.value, 
+                                  reference_vector.cartesian.y.value, 
+                                  reference_vector.cartesian.z.value]
         
-        # Convert scattered photon vector from spherical to Cartesian coordinates
-        scattered_photon_vector = [np.sin(psi) * np.cos(chi), np.sin(psi) * np.sin(chi), np.cos(psi)]
+    # Convert scattered photon vector from spherical to Cartesian coordinates
+    scattered_photon_vector = [np.sin(psi) * np.cos(chi), np.sin(psi) * np.sin(chi), np.cos(psi)]
 
-        # Project scattered photon vector onto plane perpendicular to source direction
-        d = np.dot(scattered_photon_vector, source_vector_cartesian) / np.dot(source_vector_cartesian, source_vector_cartesian)
-        projection = [scattered_photon_vector[0] - (d * source_vector_cartesian[0]), 
-                      scattered_photon_vector[1] - (d * source_vector_cartesian[1]), 
-                      scattered_photon_vector[2] - (d * source_vector_cartesian[2])]
+    # Project scattered photon vector onto plane perpendicular to source direction
+    d = np.dot(scattered_photon_vector, source_vector_cartesian) / np.dot(source_vector_cartesian, source_vector_cartesian)
+    projection = [scattered_photon_vector[0] - (d * source_vector_cartesian[0]), 
+                  scattered_photon_vector[1] - (d * source_vector_cartesian[1]), 
+                  scattered_photon_vector[2] - (d * source_vector_cartesian[2])]
 
-        # Calculate angle between scattered photon vector & reference vector on plane perpendicular to source direction
-        cross_product = np.cross(projection, reference_vector_cartesian)
-        if np.dot(source_vector_cartesian, cross_product) < 0:
-            sign = -1
-        else:
-            sign = 1
-        normalization = np.sqrt(np.dot(projection, projection)) * np.sqrt(np.dot(reference_vector_cartesian, reference_vector_cartesian))
+    # Calculate angle between scattered photon vector & reference vector on plane perpendicular to source direction
+    cross_product = np.cross(projection, reference_vector_cartesian)
+    if np.dot(source_vector_cartesian, cross_product) < 0:
+        sign = -1
+    else:
+        sign = 1
+    normalization = np.sqrt(np.dot(projection, projection)) * np.sqrt(np.dot(reference_vector_cartesian, reference_vector_cartesian))
     
-        azimuthal_angle = Angle(sign * np.arccos(np.dot(projection, reference_vector_cartesian) / normalization), unit=u.rad)
+    azimuthal_angle = Angle(sign * np.arccos(np.dot(projection, reference_vector_cartesian) / normalization), unit=u.rad)
     
-        return azimuthal_angle
+    return azimuthal_angle
 
 def get_modulation(_x, _y, title='Modulation', show=False):
-    """ Function to estimate the modulation factor.
-        _x is the central value of the histogram bins
-        _y is the value of the bins on the histograms
+    """
+    Function to estimate the modulation factor.
 
-        Parameters
-        ----------
-        _x : array
-            Central values of the histogram bins
-        _y : array
-            Values of the histogram bins
-        title : str
-            Title of the plot
-        show : bool
-            Whether to show the plot or not
+    Parameters
+    ----------
+    _x : array
+        Central values of the histogram bins
+    _y : array
+        Values of the histogram bins
+    title : str
+        Title of the plot
+    show : bool
+        Whether to show the plot or not
 
-        Returns
-        -------
-        mu : float
-            Modulation factor
-        mu_err : float
-            Error on the modulation factor
+    Returns
+    -------
+    mu : float
+        Modulation factor
+    mu_err : float
+        Error on the modulation factor
     """
 
     popt, pcov = curve_fit(R, _x, _y ) #sigma=np.sqrt(_y), absolute_sigma=True
     pcov[0][0], pcov[1][1], pcov[2][2] = np.sqrt(pcov[0][0]), np.sqrt(pcov[1][1]), np.sqrt(pcov[2][2])
-    print('A = %.2f, B = %.2f, C = %.2f'%(popt[0], popt[1], popt[2]))
+    logger.info('A = %.2f, B = %.2f, C = %.2f'%(popt[0], popt[1], popt[2]))
 
     Rmax, Rmin = np.amax(R(_x, *popt)), np.amin(R(_x, *popt))
-    print('Rmax, Rmin:', Rmax, Rmin)
+    logger.info('Rmax, Rmin:', Rmax, Rmin)
     mu = (Rmax-Rmin)/(Rmax+Rmin)
-    print('Modulation mu = ', mu)
+    logger.info('Modulation mu = ', mu)
     
     mu_err = 2/(popt[1]+2*popt[0])**2 * np.sqrt(popt[1]**2 * pcov[0][0]**2 + popt[0]**2 * pcov[1][1]**2)
     
@@ -301,63 +301,63 @@ def create_asad_from_response(spectrum, polarization_level, polarization_angle, 
     return asad
 
 def create_unpolarized_asad(spectrum, source_vector, ori, response, convention, response_file, response_convention, bins=20):
-        """
-        Create unpolarized ASAD from response.
+    """
+    Create unpolarized ASAD from response.
 
-        Parameters
-        ----------
-        bins : int or astropy.units.quantity.Quantity, optional
-            Number of azimuthal scattering angle bins if int or array of edges of azimuthal scattering angle bins if Quantity
-        spectrum : :py:class:`threeML.Model`
-            Spectral model.
-        source_vector : astropy.coordinates.sky_coordinate.SkyCoord
-            Source direction:   
-        ori : cosipy.spacecraftfile.SpacecraftFile.SpacecraftFile
-            Spacecraft orientation
-        response : cosipy.response.FullDetectorResponse.FullDetectorResponse
-            Response object
-        convention : cosipy.polarization.PolarizationConvention 
-            Polarization convention
-        response_file : str or pathlib.Path
-            Path to detector response
-        response_convention : str
-            Response convention. If in the spacecraft frame, the angle must have the same convention as the response.
-        Returns
-        -------
-        asad : histpy.Histogram
-            Counts in each azimuthal scattering angle bin
-        """
-        pd = 0
-        pa = PolarizationAngle(Angle(0 * u.deg), source_vector, convention=convention)
-        unpolarized_asad = create_asad_from_response(spectrum, pd, pa, source_vector, ori, 
-                                                     response, convention, response_file, 
-                                                     response_convention, bins=bins)
+    Parameters
+    ----------
+    bins : int or astropy.units.quantity.Quantity, optional
+        Number of azimuthal scattering angle bins if int or array of edges of azimuthal scattering angle bins if Quantity
+    spectrum : :py:class:`threeML.Model`
+        Spectral model.
+    source_vector : astropy.coordinates.sky_coordinate.SkyCoord
+        Source direction:   
+    ori : cosipy.spacecraftfile.SpacecraftFile.SpacecraftFile
+        Spacecraft orientation
+    response : cosipy.response.FullDetectorResponse.FullDetectorResponse
+        Response object
+    convention : cosipy.polarization.PolarizationConvention 
+        Polarization convention
+    response_file : str or pathlib.Path
+        Path to detector response
+    response_convention : str
+        Response convention. If in the spacecraft frame, the angle must have the same convention as the response.
+    Returns
+    -------
+    asad : histpy.Histogram
+        Counts in each azimuthal scattering angle bin
+    """
+    pd = 0
+    pa = PolarizationAngle(Angle(0 * u.deg), source_vector, convention=convention)
+    unpolarized_asad = create_asad_from_response(spectrum, pd, pa, source_vector, ori, 
+                                                 response, convention, response_file, 
+                                                 response_convention, bins=bins)
         
-        return unpolarized_asad
+    return unpolarized_asad
 
 def create_polarized_asads(spectrum, source_vector, ori, response, convention, response_file, response_convention, bins=20):
-        """
-        Create 100% polarized ASADs for each polarization angle bin of response.
+    """
+    Create 100% polarized ASADs for each polarization angle bin of response.
         
-        Parameters
-        ----------
-        bins : int or astropy.units.quantity.Quantity, optional
-            Number of azimuthal scattering angle bins if int or array of edges of azimuthal scattering angle bins if Quantity
+    Parameters
+    ----------
+    bins : int or astropy.units.quantity.Quantity, optional
+        Number of azimuthal scattering angle bins if int or array of edges of azimuthal scattering angle bins if Quantity
 
-        Returns
-        -------
-        polarized_asads : dict of histpy.Histogram
-            Counts in each azimuthal scattering angle bin for each polarization angle bin
-        """
+    Returns
+    -------
+    polarized_asads : dict of histpy.Histogram
+        Counts in each azimuthal scattering angle bin for each polarization angle bin
+    """
     
-        polarized_asads = {}
-        for k in range(response.axes['Pol'].nbins):
-            pd = 1
-            pa = PolarizationAngle(Angle(response.axes['Pol'].centers.to_value(u.deg)[k] * u.deg), source_vector, convention=convention)
-            polarized_asads[k] = create_asad_from_response(spectrum, pd, pa, source_vector, ori,
-                                                            response, convention, response_file, 
-                                                            response_convention, bins=bins)
-        return polarized_asads
+    polarized_asads = {}
+    for k in range(response.axes['Pol'].nbins):
+        pd = 1
+        pa = PolarizationAngle(Angle(response.axes['Pol'].centers.to_value(u.deg)[k] * u.deg), source_vector, convention=convention)
+        polarized_asads[k] = create_asad_from_response(spectrum, pd, pa, source_vector, ori,
+                                                        response, convention, response_file, 
+                                                        response_convention, bins=bins)
+    return polarized_asads
 
 class PolarizationStokes():
     """
@@ -389,7 +389,7 @@ class PolarizationStokes():
 
         ###################### This will need to be changed into IAUPolarizationConvention hardcoded!
         ######################
-        print('This class loading takes around 30 seconds... \n')
+        logger.warning('This class loading takes around 30 seconds... \n')
         ######################
 
         if isinstance(fit_convention.frame, SpacecraftFrame) and not isinstance(source_vector.frame, SpacecraftFrame):
@@ -403,11 +403,6 @@ class PolarizationStokes():
             (isinstance(fit_convention, MEGAlibRelativeY) and response_convention != 'RelativeY') or
             (isinstance(fit_convention, MEGAlibRelativeZ) and response_convention != 'RelativeZ')):
             raise RuntimeError("If performing fit in spacecraft frame, fit convention must match convention of response.")
-
-        # if not type(data) == list:
-        #     self._data = [data]
-        # else:
-        #     self._data = data
 
         self._ori = sc_orientation
 
@@ -424,9 +419,8 @@ class PolarizationStokes():
         self._spectrum = source_spectrum
 
         self._nbins = self._response.axes['Pol'].nbins
-        print('Number of azimuthal angle bins used:', self._nbins)
 
-        # self._binedges = Angle(np.linspace(-np.pi, np.pi, self._nbins), unit=u.rad)
+        self._binedges = Angle(np.linspace(-np.pi, np.pi, self._nbins), unit=u.rad)
 
         self._reference_vector = self._convention.get_basis(source_vector)[0] 
     
@@ -434,7 +428,7 @@ class PolarizationStokes():
 
         self._energy_range = [min(self._response.axes['Em'].edges.value), max(self._response.axes['Em'].edges.value)]
         #print the energy range considered due to responses:
-        print(f'Energy range considered (by responses design): {self._energy_range[0]} - {self._energy_range[1]} keV')
+        logger.info(f'Energy range considered (by response design): {self._energy_range[0]} - {self._energy_range[1]} keV')
 
         # do a data cut before anything else! actually this should come as a separate routine: data selection and response 
         # prep shold be done before analyzing the data 
@@ -455,12 +449,12 @@ class PolarizationStokes():
 
         self._data_counts = self.get_data_counts()
 
-        self._data_azimuthal_angles = self.calculate_azimuthal_scattering_angles(self._data, show_plots=True)
+        self._data_azimuthal_angles = self.calculate_azimuthal_scattering_angles(self._data, show_plots=False)
 
         self._background = background
         
         if self._background is not None:
-            print('Background provided. Make sure there is enough statistics.')
+            logger.warning('Background provided. Make sure there is enough statistics.')
             if not type(background) == list:
                 iii = np.where((background['Energies'] >= self._energy_range[0]) & (background['Energies'] <= self._energy_range[1]))
                 self._background = [{key: background[key][iii] for key in background.keys()}]
@@ -475,7 +469,7 @@ class PolarizationStokes():
             self._background_azimuthal_angles = self.calculate_azimuthal_scattering_angles(self._background)
             self._background_duration = self.get_background_duration()
         else:
-            print('No background provided. Will not subtract background from data.')
+            logger.warning('No background provided. Will not subtract background from data.')
             self._background = None
             self._background_duration = 0
             self._background_azimuthal_angles = None
@@ -594,7 +588,7 @@ class PolarizationStokes():
         polarization_angle = PolarizationAngle(Angle(self._response.axes['Pol'].centers.to_value(u.deg)[0] * u.deg), self._source_vector, convention=self._convention)
         polarization_level = 0
         if isinstance(self._convention.frame, SpacecraftFrame):
-            print('>>> Convolving spectrum in spacecraft frame...')
+            logger.info('>>> Convolving spectrum in spacecraft frame...')
             target_in_sc_frame = self._ori.get_target_in_sc_frame(target_name='source', target_coord=self._source_vector.transform_to('galactic'))
             dwell_time_map = self._ori.get_dwell_map(response=self._response_file, src_path=target_in_sc_frame, pa_convention=self._response_convention)
             psr = self._response.get_point_source_response(exposure_map=dwell_time_map, coord=self._source_vector.transform_to('galactic'))
@@ -606,9 +600,9 @@ class PolarizationStokes():
                 psichi = SkyCoord(lat=(np.pi/2) - expectation.axes['PsiChi'].pix2ang(i)[0], lon=expectation.axes['PsiChi'].pix2ang(i)[1], unit=u.rad, frame=self._convention.frame)
                 azimuthal_angle = PolarizationAngle.from_scattering_direction(psichi, self._source_vector, self._convention)
                 azimuthal_angle_bins.append(azimuthal_angle.angle)
-        
+
         else:
-            print('>>> Convolving spectrum in ICRS frame...')
+            logger.info('>>> Convolving spectrum in ICRS frame...')
             scatt_map = self._ori.get_scatt_map(nside=self._response.nside*2, target_coord=self._source_vector, coordsys='galactic')
             psr = self._response.get_point_source_response(coord=self._source_vector, scatt_map=scatt_map)
             expectation = psr.get_expectation(spectrum, LinearPolarization(polarization_level * 100., polarization_angle.angle.deg))
@@ -663,12 +657,9 @@ class PolarizationStokes():
         if show_plots:
             plt.figure()
             plt.title('Azimuthal scattering angles')
-            plt.hist(azimuthal_angles, bins=50, alpha=0.5, label='Data fine binning')
-            plt.hist(azimuthal_angles, bins=self._nbins, alpha=0.5, 
-                     histtype='step', linewidth=2, label='Response binning')
+            plt.hist(azimuthal_angles, bins=50, alpha=0.5)
             plt.xlabel('Azimuthal angle (radians)')
             plt.ylabel('Counts')
-            plt.legend()
             plt.show()
         
         return azimuthal_angles
@@ -687,12 +678,12 @@ class PolarizationStokes():
         mu_100 : dict
             Modulation of 100% polarized source and uncertainty of constant function fit to modulation in all polarization angle bins
         """
-        print('Creating the 100% polarized ASADs (this may take a minute...)')
+        logger.info('Creating the 100% polarized ASADs (this may take a minute...)')
         polarized_asads = create_polarized_asads(self._spectrum, self._source_vector, self._ori, self._response, 
-                                                   self._convention, self._response_file, self._response_convention, bins=self._nbins)
-        print('Creating the unpolarized ASAD...')
+                                                   self._convention, self._response_file, self._response_convention)
+        logger.info('Creating the unpolarized ASAD...')
         unpolarized_asad = create_unpolarized_asad(self._spectrum, self._source_vector, self._ori, self._response, 
-                                                   self._convention, self._response_file, self._response_convention, bins=self._nbins)
+                                                   self._convention, self._response_file, self._response_convention)
         mu_100_list = []
         mu_100_uncertainties = []
 
@@ -912,7 +903,7 @@ class PolarizationStokes():
 
         unpolarized_asad = create_unpolarized_asad(self._spectrum, self._source_vector, self._ori,
                                                self._response, self._convention, 
-                                               self._response_file, self._response_convention, bins=self._nbins)
+                                               self._response_file, self._response_convention)
         azimuthal_bin_center = unpolarized_asad.axis.centers.value  # Get the bin edges of the azimuthal angle distribution
         # Create the spline from the unpol azimutal angle distrib
         spline_unpol = interpolate.interp1d(azimuthal_bin_center, unpolarized_asad.full_contents)
@@ -934,7 +925,7 @@ class PolarizationStokes():
 
         #Generate random samples from a uniform distribution and map them to azimuthal angles
         _qs_unpol_, _us_unpol_ = [], []
-        print('Simulating unpolarized Stokes parameters from the source data...')
+        logger.info('Simulating unpolarized Stokes parameters from the source data...')
         for _ in range(n_samples):
             unpol_azimuthal_angles = np.random.choice(fine_bins, size=self._data_counts, p=fine_probabilities) * u.rad  
             qs_unpol_, us_unpol_ = self.compute_pseudo_stokes(unpol_azimuthal_angles, show_plots=False)
@@ -1018,16 +1009,16 @@ class PolarizationStokes():
         pol_I = I = len(qs)
         pol_Q = np.sum(qs) / mu
         pol_U = np.sum(us) / mu
-        print('I, Q, U, mu', pol_I, pol_Q, pol_U, mu)
+        logger.info('I, Q, U, mu', pol_I, pol_Q, pol_U, mu)
         
         self.QN = pol_Q/pol_I 
         self.UN = pol_U/pol_I 
-        print('Q, U (unsubtracted:)', self.QN, self.UN)
+        logger.info('Q, U (unsubtracted:)', self.QN, self.UN)
 
         if bkg_qs is None or bkg_us is None:
-            print('No background data provided, assuming no background contribution.')
+            logger.info('No background data provided, assuming no background contribution.')
         else:
-            print('Unpolarized bkg (or simulation) provided, subtracting its contribution.')
+            logger.info('Unpolarized bkg (or simulation) provided, subtracting its contribution.')
             bkg_qs = np.array(bkg_qs)
             bkg_us = np.array(bkg_us)
             if bkg_qs.ndim == 1:
@@ -1035,7 +1026,7 @@ class PolarizationStokes():
                 unpol_Q = np.sum(bkg_qs) * BACKSCAL / mu
                 unpol_U = np.sum(bkg_us) * BACKSCAL / mu
                 I = pol_I - unpol_I
-                print('check I(src+bkg) vs I(src):', pol_I, I)
+                logger.info('check I(src+bkg) vs I(src):', pol_I, I)
             else:
                 BACKSCAL = 1
                 unpol_I = []
@@ -1048,25 +1039,24 @@ class PolarizationStokes():
                 unpol_I = np.mean(unpol_I)
                 unpol_Q = np.mean(unpol_Q)
                 unpol_U = np.mean(unpol_U)
-            # print('I unpolarized:', unpol_I)
-            print('Q, U unpolarized:', unpol_Q/unpol_I, unpol_U/unpol_I)
+            logger.info('Q, U unpolarized:', unpol_Q/unpol_I, unpol_U/unpol_I)
             unpol_modulation = mu * np.sqrt(unpol_Q**2. + unpol_U**2.) / unpol_I
             unpol_sI = np.sqrt(unpol_I)
             unpol_sQ = np.sqrt((2 - unpol_modulation**2) * unpol_sI**2 / unpol_I**2 / mu**2)
             unpol_sU = np.sqrt((2 - unpol_modulation**2) * unpol_sI**2 / unpol_I**2 / mu**2)
-            print('Q, U unpolarized uncertainty:', unpol_sQ*100, '%')
+            logger.info('Q, U unpolarized uncertainty:', unpol_sQ*100, '%')
 
             self.QN = np.sum([pol_Q/pol_I, unpol_Q/unpol_I * BACKSCAL])
             self.UN = np.sum([pol_U/pol_I, unpol_U/unpol_I * BACKSCAL])
 
-            print('Q, U, subtracted:', self.QN, self.UN)
+            logger.info('Q, U, subtracted:', self.QN, self.UN)
 
 
         pol_sI = np.sqrt(I)
         pol_sQ = np.sqrt((2 - self.QN**2) * pol_sI**2 / I**2 / mu**2)
         pol_sU = np.sqrt((2 - self.UN**2) * pol_sI**2 / I**2 / mu**2)
         pol_covQNUN = - (self.QN * self.UN) / I**2
-        print('Q/I, U/I, uncertainty:', pol_sQ, pol_sU, np.sqrt(pol_sQ))
+        logger.info('Q/I, U/I, uncertainty:', pol_sQ, pol_sU, np.sqrt(pol_sQ))
 
         # Reconstructed polarization fraction uncertainty: See eq 36 in Kislat 2015
         polarization_fraction = np.sqrt(self.QN**2. + self.UN**2.)
@@ -1082,10 +1072,10 @@ class PolarizationStokes():
             pol_PA += np.pi 
 
         pol_1sigmaPA = np.degrees(1 / (m * np.sqrt(2. * (I - 1.))))
-        print('\n ############################## \n')
-        print('     PD: %.2f'%(pol_PD), '+/- %.2f'%(pol_1sigmaPD), '%') 
-        print('     PA: %.2f'%(np.degrees(pol_PA)), '+/- %.2f'%pol_1sigmaPA, 'deg')
-        print('\n ############################## \n')
+        logger.info('\n ############################## \n')
+        logger.info('     PD: %.2f'%(pol_PD), '+/- %.2f'%(pol_1sigmaPD), '%') 
+        logger.info('     PA: %.2f'%(np.degrees(pol_PA)), '+/- %.2f'%pol_1sigmaPA, 'deg')
+        logger.info('\n ############################## \n')
 
         if show_plots:
 
@@ -1094,12 +1084,10 @@ class PolarizationStokes():
             polar_chart_backbone(ax)
 
             if ref_qu[0] != None:
-                # print('Drawing Reference point:', ref_qu)   
                 plt.plot(ref_qu[0], ref_qu[1], 'x', markersize=20, color='tab:green')
                 plt.annotate(ref_label, (ref_qu[0], ref_qu[1]), textcoords="offset points", xytext=(0,10), 
                              ha='center', fontsize=12)
             if ref_pdpa[0] != None:
-                # print('Drawing Reference point:', ref_pdpa)    
                 ref_q, ref_u = rotate_points_to_x_axis(ref_pdpa[0], np.radians(ref_pdpa[1]))
                 plt.plot(ref_q, ref_u, 'x', markersize=20, color='tab:green')
                 plt.annotate(ref_label, (ref_q, ref_u), textcoords="offset points", xytext=(0,10), ha='center', 
@@ -1164,7 +1152,5 @@ class PolarizationStokes():
 
 
 if __name__ == "__main__":
-
-    print('Just some tests here...')
 
     pass
