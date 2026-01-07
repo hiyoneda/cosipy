@@ -145,9 +145,14 @@ class ImageDeconvolution:
         # set self._model_class
         model_name = self.parameter['model_definition']['class']            # Options include "AllSkyImage", etc.
 
-        if not model_name in self.model_classes.keys():                     # See model_classes dictionary declared above
-            logger.error(f'The model class "{model_name}" does not exist!')
-            raise ValueError
+        if model_name not in self.model_classes.keys():                     # See model_classes dictionary declared above
+            available_models = ', '.join(self.model_classes.keys())
+            error_msg = (
+                f'Unknown model class "{model_name}". '
+                f'Available models: {available_models}'
+            )
+            logger.error(error_msg)
+            raise ValueError(error_msg)
 
         self._model_class = self.model_classes[model_name]
 
@@ -191,9 +196,14 @@ class ImageDeconvolution:
         algorithm_name = parameter_deconvolution['algorithm']
         algorithm_parameter = Configurator(parameter_deconvolution['parameter'])
 
-        if not algorithm_name in self.deconvolution_algorithm_classes.keys():
-            logger.error(f'The algorithm "{algorithm_name}" does not exist!')
-            raise ValueError
+        if algorithm_name not in self.deconvolution_algorithm_classes.keys():
+            available_algorithms = ', '.join(self.deconvolution_algorithm_classes.keys())
+            error_msg = (
+                f'Unknown deconvolution algorithm "{algorithm_name}". '
+                f'Available algorithms: {available_algorithms}'
+            )
+            logger.error(error_msg)
+            raise ValueError(error_msg)
 
         self._deconvolution_class = self.deconvolution_algorithm_classes[algorithm_name]        # Alias to class constructor
         self._deconvolution = self._deconvolution_class(initial_model = self.initial_model,     # Initialize object for relevant class
