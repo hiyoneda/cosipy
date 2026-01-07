@@ -360,3 +360,41 @@ class DeconvolutionAlgorithmBase(ABC):
 
         # write
         fits.HDUList(hdu_list).writeto(filename, overwrite=True)
+
+    def _save_standard_results(self, counter_name, histogram_keys, fits_filename, 
+                               values_key_name_format=None, dicts_key_name_format=None, lists_key_name_format=None):
+        """
+        Save standard results including histograms and FITS files.
+        
+        Parameters
+        ----------
+        counter_name : str
+            Name of the counter (e.g., "iteration")
+        histogram_keys : list of tuple
+            List of (key, filename, only_final_result) for histograms to save.
+        fits_filename : str
+            Path to the FITS file.
+        values_key_name_format : list of tuple, optional
+            List of (key, name, fits_format) for single values to save in FITS.
+        dicts_key_name_format : list of tuple, optional
+            List of (key, name, fits_format) for dictionaries to save in FITS.
+        lists_key_name_format : list of tuple, optional
+            List of (key, name, fits_format) for lists to save in FITS.
+        """
+        # Save histograms
+        for key, filename, only_final_result in histogram_keys:
+            self.save_histogram(
+                filename = filename,
+                counter_name = counter_name,
+                histogram_key = key,
+                only_final_result = only_final_result
+            )
+        
+        # Save FITS file (use default if not specified)
+        self.save_results_as_fits(
+            filename = fits_filename,
+            counter_name = counter_name,
+            values_key_name_format = values_key_name_format if values_key_name_format is not None else [],
+            dicts_key_name_format = dicts_key_name_format if dicts_key_name_format is not None else [],
+            lists_key_name_format = lists_key_name_format if lists_key_name_format is not None else []
+        )

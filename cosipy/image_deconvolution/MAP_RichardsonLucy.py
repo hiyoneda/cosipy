@@ -306,28 +306,25 @@ class MAP_RichardsonLucy(RichardsonLucySimple):
         """
         finalization after running the image deconvolution
         """
-
         if self.save_results == True:
             logger.info(f'Saving results in {self.save_results_directory}')
 
             counter_name = "iteration"
-               
+
             # model
-            histkey_filename = [("model", f"{self.save_results_directory}/model.hdf5"), 
-                                ("prior_filter", f"{self.save_results_directory}/prior_filter.hdf5")]
+            histogram_keys = [("model", f"{self.save_results_directory}/model.hdf5", self.save_only_final_result), 
+                              ("prior_filter", f"{self.save_results_directory}/prior_filter.hdf5", self.save_only_final_result)]
 
-            for key, filename in histkey_filename:
-
-                self.save_histogram(filename = filename, 
-                                    counter_name = counter_name,
-                                    histogram_key = key,
-                                    only_final_result = self.save_only_final_result)
-            
             #fits
             fits_filename = f'{self.save_results_directory}/results.fits'
 
-            self.save_results_as_fits(filename = fits_filename,
-                                      counter_name = counter_name,
-                                      values_key_name_format = [("log-posterior", "LOG-POSTERIOR", "D")],
-                                      dicts_key_name_format  = [("background_normalization", "BKG_NORM", "D"), ("log-prior", "LOG-PRIOR", "D")],
-                                      lists_key_name_format  = [("log-likelihood", "LOG-LIKELIHOOD", "D")])
+            values_key_name_format = [("log-posterior", "LOG-POSTERIOR", "D")]
+            dicts_key_name_format  = [("background_normalization", "BKG_NORM", "D"), ("log-prior", "LOG-PRIOR", "D")]
+            lists_key_name_format  = [("log-likelihood", "LOG-LIKELIHOOD", "D")]
+
+            self._save_standard_results(counter_name, 
+                                        histogram_keys, 
+                                        fits_filename, 
+                                        values_key_name_format,
+                                        dicts_key_name_format,
+                                        lists_key_name_format)
