@@ -7,6 +7,8 @@ from histpy import Histogram
 
 from .deconvolution_algorithm_base import DeconvolutionAlgorithmBase
 
+from .constants import DEFAULT_BKG_NORM_RANGE, DEFAULT_RESPONSE_WEIGHTING_INDEX
+
 class RichardsonLucySimple(DeconvolutionAlgorithmBase):
     """
     A class for the original RichardsonLucy algorithm. 
@@ -37,12 +39,12 @@ class RichardsonLucySimple(DeconvolutionAlgorithmBase):
         # background normalization optimization
         self.do_bkg_norm_optimization = parameter.get('background_normalization_optimization:activate', False)
         if self.do_bkg_norm_optimization:
-            self.dict_bkg_norm_range = parameter.get('background_normalization_optimization:range', {key: [0.0, 100.0] for key in self.dict_bkg_norm.keys()})
+            self.dict_bkg_norm_range = parameter.get('background_normalization_optimization:range', {key: DEFAULT_BKG_NORM_RANGE for key in self.dict_bkg_norm.keys()})
 
         # response_weighting
         self.do_response_weighting = parameter.get('response_weighting:activate', False)
         if self.do_response_weighting:
-            self.response_weighting_index = parameter.get('response_weighting:index', 0.5)
+            self.response_weighting_index = parameter.get('response_weighting:index', DEFAULT_RESPONSE_WEIGHTING_INDEX)
 
         # saving results
         self.save_results = parameter.get('save_results:activate', False)

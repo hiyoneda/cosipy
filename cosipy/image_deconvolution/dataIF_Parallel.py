@@ -19,6 +19,7 @@ from histpy import Histogram, Axes, Axis, HealpixAxis
 
 from cosipy.response import FullDetectorResponse
 from cosipy.image_deconvolution import ImageDeconvolutionDataInterfaceBase
+from .constants import NUMERICAL_ZERO
 
 def load_response_matrix(comm, start_col, end_col, filename):
     '''
@@ -255,7 +256,7 @@ class DataIF_Parallel(ImageDeconvolutionDataInterfaceBase):
 
         logger.info("Finished...")
 
-    def calc_expectation(self, model, dict_bkg_norm = None, almost_zero = 1e-12):
+    def calc_expectation(self, model, dict_bkg_norm = None, almost_zero = NUMERICAL_ZERO):
         """
         Calculate expected counts from a given model.
 
@@ -265,7 +266,7 @@ class DataIF_Parallel(ImageDeconvolutionDataInterfaceBase):
             Model map
         dict_bkg_norm : dict, default None
             background normalization for each background model, e.g, {'albedo': 0.95, 'activation': 1.05}
-        almost_zero : float, default 1e-12
+        almost_zero : float, default NUMERICAL_ZERO 
             In order to avoid zero components in extended count histogram, a tiny offset is introduced.
             It should be small enough not to effect statistics.
 

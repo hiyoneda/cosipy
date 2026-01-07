@@ -6,6 +6,8 @@ from abc import ABC, abstractmethod
 import logging
 logger = logging.getLogger(__name__)
 
+from .constants import NUMERICAL_ZERO, DEFAULT_MINIMUM_FLUX, DEFAULT_ITERATION_MAX, CHUNK_SIZE_FITS
+
 class DeconvolutionAlgorithmBase(ABC):
     """
     A base class for image deconvolution algorithms.
@@ -59,7 +61,7 @@ class DeconvolutionAlgorithmBase(ABC):
         logger.debug(f'dict_dataset_indexlist_for_bkg_models: {self.dict_dataset_indexlist_for_bkg_models}')
 
         # minimum flux
-        self.minimum_flux = parameter.get('minimum_flux:value', 0.0)
+        self.minimum_flux = parameter.get('minimum_flux:value', DEFAULT_MINIMUM_FLUX)
 
         minimum_flux_unit = parameter.get('minimum_flux:unit', initial_model.unit)
         if minimum_flux_unit is not None:
@@ -67,7 +69,7 @@ class DeconvolutionAlgorithmBase(ABC):
 
         # parameters of the iteration
         self.iteration_count = 0
-        self.iteration_max = parameter.get('iteration_max', 1)
+        self.iteration_max = parameter.get('iteration_max', DEFAULT_ITERATION_MAX)
 
     @abstractmethod
     def initialization(self):
@@ -168,7 +170,7 @@ class DeconvolutionAlgorithmBase(ABC):
 
         return stop_iteration
 
-    def calc_expectation_list(self, model, dict_bkg_norm = None, almost_zero = 1e-12):
+    def calc_expectation_list(self, model, dict_bkg_norm = None, almost_zero = NUMERICAL_ZERO):
         """
         Calculate a list of expected count histograms corresponding to each data in the registered dataset.
 
@@ -178,7 +180,7 @@ class DeconvolutionAlgorithmBase(ABC):
             Model
         dict_bkg_norm : dict, default None
             background normalization for each background model, e.g, {'albedo': 0.95, 'activation': 1.05}
-        almost_zero : float, default 1e-12
+        almost_zero : float, default NUMERICAL_ZERO 
             In order to avoid zero components in extended count histogram, a tiny offset is introduced.
             It should be small enough not to effect statistics.
 
@@ -331,7 +333,7 @@ class DeconvolutionAlgorithmBase(ABC):
 
             dict_keys = list(self.results[0][key].keys())
 
-            chunk_size = 998 # when the number of columns >= 1000, the fits file may not be saved.
+            chunk_size = CHUNK_SIZE_FITS # when the number of columns >= 1000, the fits file may not be saved.
             for i_chunk, chunked_dict_keys in enumerate([dict_keys[i:i+chunk_size] for i in range(0, len(dict_keys), chunk_size)]):
 
                 cols_dict = [fits.Column(name=dict_key, array=[result[key][dict_key] for result in self.results], format=fits_format) for dict_key in chunked_dict_keys]

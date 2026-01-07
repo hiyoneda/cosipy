@@ -9,8 +9,8 @@ logger = logging.getLogger(__name__)
 from histpy import Histogram
 
 from .RichardsonLucySimple import RichardsonLucySimple
-
 from .prior_tsv import PriorTSV
+from .constants import DEFAULT_STOPPING_THRESHOLD
 
 class MAP_RichardsonLucy(RichardsonLucySimple):
     """
@@ -79,7 +79,7 @@ class MAP_RichardsonLucy(RichardsonLucySimple):
 
         # stopping criteria
         self.stopping_criteria_statistics = parameter.get('stopping_criteria:statistics', "log-posterior")
-        self.stopping_criteria_threshold  = parameter.get('stopping_criteria:threshold', 1e-2)
+        self.stopping_criteria_threshold  = parameter.get('stopping_criteria:threshold', DEFAULT_STOPPING_THRESHOLD)
 
         if not self.stopping_criteria_statistics in ["log-likelihood", "log-posterior"]:
             raise ValueError

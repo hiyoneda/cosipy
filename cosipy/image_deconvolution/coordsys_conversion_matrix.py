@@ -10,6 +10,7 @@ from scoords import Attitude, SpacecraftFrame
 from histpy import Histogram, Axes, Axis, HealpixAxis
 
 from .dataIF_COSI_DC2 import tensordot_sparse
+from .constants import EARTH_RADIUS_KM
 
 class CoordsysConversionMatrix(Histogram):
     """
@@ -143,7 +144,7 @@ class CoordsysConversionMatrix(Histogram):
         return coordsys_conv_matrix
 
     @classmethod
-    def _calc_exposure_time_map(cls, nside_model, num_pointings, earth_zenith, altitude, delta_time, is_nest_model = False, r_earth = 6378.0):
+    def _calc_exposure_time_map(cls, nside_model, num_pointings, earth_zenith, altitude, delta_time, is_nest_model = False, r_earth = EARTH_RADIUS_KM):
         """
         Calculate exposure time map considering Earth occultation.
 
@@ -167,7 +168,7 @@ class CoordsysConversionMatrix(Histogram):
             Array of time intervals in seconds for each pointing.
         is_nest_model : bool, default False
             If True, use nested HEALPix pixel ordering scheme. If False, use ring ordering.
-        r_earth : float, default 6378.0
+        r_earth : float, default EARTH_RADIUS_KM
             Earth's radius in kilometers.
 
         Returns
