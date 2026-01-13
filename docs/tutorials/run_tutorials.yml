@@ -224,3 +224,6 @@ tutorials:
           unzip: True
           checksum: 92ed7e22b1dafce6b57611d5cdb6cf70
 
+    gti:
+      notebook: event_selection/GTI.ipynb
+
