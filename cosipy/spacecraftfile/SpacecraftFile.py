@@ -257,23 +257,22 @@ class SpacecraftFile():
     @staticmethod
     def _cart_to_polar(v):
         """
-        Convert one or more Cartesian 3D unit direction
-        vectors to polar coordinates.
+        Convert Cartesian 3D unit direction vectors to polar coordinates.
 
         Parameters
         ----------
-        v : np.ndarray(float) [3] or [N x 3]
-          3D unit vector or array of N such vectors
+        v : np.ndarray(float) [N x 3]
+          array of N 3D unit vectors
 
         Returns
         -------
         lon, colat : np.ndarray(float) [N]
           longitude and co-latitude corresponding to v in radians
+
         """
 
         lon   = np.arctan2(v[:,1], v[:,0])
         colat = np.arccos(v[:,2])
-
         return (lon, colat)
 
     def source_interval(self, start, stop):
@@ -773,9 +772,10 @@ class SpacecraftFile():
 
         angle_axis = Axis(np.linspace(0., 2*np.pi, num=angle_nbins+1), unit=u.rad)
 
-        r_lon, r_colat = self._cart_to_polar(rot_dirs)
-        dir_bins = dir_axis.find_bin(theta=r_colat.value,
-                                     phi=r_lon.value)
+        r_lon, r_colat = self._cart_to_polar(rot_dirs.value)
+
+        dir_bins = dir_axis.find_bin(theta=r_colat,
+                                     phi=r_lon)
         angle_bins = angle_axis.find_bin(rot_angles)
 
         # compute list of unique rotvec bins occurring in input,

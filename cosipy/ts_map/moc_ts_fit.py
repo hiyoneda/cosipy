@@ -296,7 +296,7 @@ class MOCTSMap(FastTSMap):
         if containment is None:
             moc_map.plot(ax = axMoll)
         else:
-            critical = FastTSMap.get_chi_critical_value(containment = 0.9)
+            critical = FastTSMap.get_chi_critical_value(containment = containment)
             max_ts = np.max(moc_ts)
             moc_map.plot(ax = axMoll,
                          vmin = max_ts - critical,

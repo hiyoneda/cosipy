@@ -2,15 +2,12 @@ from pathlib import Path
 
 import numpy as np
 
-import h5py as h5
-
-from astropy.units import Quantity
 import astropy.units as u
 from astropy.coordinates import SkyCoord
 
 from mhealpy import HealpixBase
 
-from histpy import Axes, HealpixAxis
+from histpy import Axes
 
 from .DetectorResponse import DetectorResponse
 from .PointSourceResponse import PointSourceResponse
@@ -160,6 +157,9 @@ class GalacticResponse(HealpixBase):
         Extract the portion of the response corresponding to a
         single source sky pixel on the NuLambda axis.
 
+        NB: does NOT support deprecated padded response Histogram; see
+        issue #445
+
         Parameters
         ----------
         pix : integer
@@ -185,6 +185,9 @@ class GalacticResponse(HealpixBase):
     def to_dr(self):
         """
         Load the full response in memory.
+
+        NB: does NOT support deprecated padded response Histogram; see
+        issue #445
 
         Returns
         -------
