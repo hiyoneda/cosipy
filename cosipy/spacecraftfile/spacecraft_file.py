@@ -6,7 +6,9 @@ import astropy.units as u
 import astropy.constants as c
 
 from astropy.time import Time
-from astropy.coordinates import SkyCoord, EarthLocation, GCRS, SphericalRepresentation, CartesianRepresentation
+from astropy.coordinates import SkyCoord, EarthLocation, GCRS, SphericalRepresentation, CartesianRepresentation, \
+    UnitSphericalRepresentation
+from astropy.units import Quantity
 from mhealpy import HealpixBase
 from histpy import Histogram, TimeAxis
 from mhealpy import HealpixMap
@@ -32,10 +34,10 @@ class SpacecraftHistory:
                  location: GCRS,
                  livetime: u.Quantity = None):
         """
-        Handles the spacecraft orientation. Calculates the dwell obstime
-        map and point source response over a certain orientation period. 
-        Exports the point source response as RMF and ARF files that can be read by XSPEC.
-        
+        Handles the spacecraft orientation. Calculates the dwell time
+        map and point source response over a certain orientation
+        period.
+
         Parameters
         ----------
         obstime:
@@ -240,30 +242,85 @@ class SpacecraftHistory:
 
         return cls(time, attitude, gcrs2, livetime)
 
-    def _interp_attitude(self, points, weights) -> Attitude:
+    @staticmethod
+    def _interp_location(t, d1, d2):
         """
+        Compute a direction that linearly interpolates between
+        directions d1 and d2 using SLERP.
+
+        The two directions are assumed to have the same frame,
+        which is also used for the interpolated result.
 
         Parameters
         ----------
-        points
-        weights
+        t : float in [0, 1]
+          interpolation fraction
+        d1 : GCRS
+          1st direction
+        d2 : GCRS
+          2nd direction
 
         Returns
         -------
+        SkyCoord: interpolated direction
 
         """
 
-        # TODO: we could do a better interpolation using more points, or
-        #   additional ACS data e.g. the rotation speed
+        if d1 == d2:
+            return d1
 
-        rot_matrix = self._attitude.as_matrix()
+        v1 = d1.cartesian.xyz.value
+        v2 = d2.cartesian.xyz.value
+        unit = d1.cartesian.xyz.unit
 
-        # In case of multiple points
-        weights = np.expand_dims(weights, (weights.ndim, weights.ndim+1))
+        # angle between v1, v2
+        theta = np.arccos(np.dot(v1, v2)/d1.distance.value/d2.distance.value)
 
-        interp_attitude = Attitude.from_matrix(rot_matrix[points[0]]*weights[0] + rot_matrix[points[1]]*weights[1], frame = self._attitude.frame)
+        # SLERP interpolated vector
+        den = np.sin(theta)
+        vi = (np.sin((1 - t) * theta) * v1 + np.sin(t * theta) * v2) / den
 
-        return interp_attitude
+        dvi = GCRS(*Quantity(vi, unit = unit, copy = False),  representation_type='cartesian')
+
+        return dvi
+
+    @staticmethod
+    def _interp_attitude(t, att1, att2):
+        """
+        Compute an Attitude that linearly interpolates between
+        att1 and att2 using SLERP on their quaternion
+        representations.
+
+        The two Attitudes are assumed to have the same frame,
+        which is also used for the interpolated result.
+
+        Parameters
+        ----------
+        t : float in [0, 1]
+          interpolation fraction
+        att1 : Attitude
+        att2 : Attitude
+
+        Returns
+        -------
+        Attitude : interpolated attitude
+
+        """
+
+        if att1 == att2:
+            return att1
+
+        p1 = att1.as_quat()
+        p2 = att2.as_quat()
+
+        # angle between quaternions p1, p2 (xyzw order)
+        theta = 2 * np.arccos(np.dot(p1, p2))
+
+        # SLERP interpolated quaternion
+        den = np.sin(theta)
+        pi = (np.sin((1 - t) * theta) * p1 + np.sin(t * theta) * p2) / den
+
+        return Attitude.from_quat(pi, frame=att1.frame)
 
     def interp_attitude(self, time) -> Attitude:
         """
@@ -275,33 +332,9 @@ class SpacecraftHistory:
 
         points, weights = self.interp_weights(time)
 
-        return self._interp_attitude(points, weights)
+        return self.__class__._interp_attitude(weights[1], self._attitude[points[0]], self._attitude[points[1]])
 
-    def _interp_location(self, points, weights) -> GCRS:
-        """
-
-        Parameters
-        ----------
-        points
-        weights
-
-        Returns
-        -------
-
-        """
-
-        # TODO: we could do a better interpolation using more points and orbital dynamics
-        x, y, z = self._gcrs.represent_as('cartesian').xyz
-
-        x_interp = x[points[0]] * weights[0] + x[points[1]] * weights[1]
-        y_interp = y[points[0]] * weights[0] + y[points[1]] * weights[1]
-        z_interp = z[points[0]] * weights[0] + z[points[1]] * weights[1]
-
-        interp_gcrs = GCRS(x=x_interp, y=y_interp, z=z_interp, representation_type = 'cartesian')
-
-        return interp_gcrs
-
-    def interp_location(self, time) -> EarthLocation:
+    def interp_location(self, time) -> GCRS:
         """
 
         Returns
@@ -310,7 +343,7 @@ class SpacecraftHistory:
 
         points, weights = self.interp_weights(time)
 
-        return self._interp_location(points, weights)
+        return self.__class__._interp_location(weights[1], self._gcrs[points[0]], self._gcrs[points[1]])
 
     def _cumulative_livetime(self, points, weights) -> u.Quantity:
 
