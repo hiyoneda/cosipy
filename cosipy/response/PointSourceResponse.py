@@ -42,7 +42,7 @@ class PointSourceResponse(Histogram):
         Physical units, if not specified as part of ``contents``. Units of ``area*time``
         are expected.
     """
-    
+
     @property
     def photon_energy_axis(self):
         """
@@ -52,14 +52,14 @@ class PointSourceResponse(Histogram):
         -------
         :py:class:`histpy.Axes`
         """
-        
+
         return self.axes['Ei']
 
     @property
     def measurement_axes(self):
         return self.axes['Em', 'Phi', 'PsiChi']
 
-    def get_expectation(self, spectrum, polarization=None):
+    def get_expectation(self, spectrum, polarization=None, flux=None):
         """
         Convolve the response with a spectral (and optionally, polarization) hypothesis to obtain the expected
         excess counts from the source.
@@ -70,7 +70,9 @@ class PointSourceResponse(Histogram):
             Spectral hypothesis.
         polarization : 'astromodels.core.polarization.LinearPolarization', optional
             Polarization angle and degree. The angle is assumed to have same convention as point source response.
-        
+        flux : 1D Histogram, optional
+            Pre-computed integrated flux of spectrum for each bin on Ei axis
+
         Returns
         -------
         :py:class:`histpy.Histogram`
@@ -90,7 +92,7 @@ class PointSourceResponse(Histogram):
         else:
 
             if not 'Pol' in self.axes.labels:
-                
+
                 raise RuntimeError("Response must have polarization angle axis to include polarization in point source response")
 
             polarization_angle = polarization.angle.value
@@ -99,22 +101,23 @@ class PointSourceResponse(Histogram):
             if polarization_angle == 180.:
                 polarization_angle = 0.
 
-            unpolarized_weights = np.full(self.axes['Pol'].nbins, (1. - polarization_level) / self.axes['Pol'].nbins)
-            polarized_weights = np.zeros(self.axes['Pol'].nbins)
+            pol_axis = self.axes['Pol']
 
-            polarization_bin_index = self.axes['Pol'].find_bin(polarization_angle * u.deg)
-            polarized_weights[polarization_bin_index] = polarization_level
+            # unpolarized weights
+            weights = np.full(pol_axis.nbins, (1. - polarization_level) / pol_axis.nbins)
 
-            weights = unpolarized_weights + polarized_weights
+            # add polarized weights
+            polarization_bin_index = pol_axis.find_bin(polarization_angle * u.deg)
+            weights[polarization_bin_index] += polarization_level
 
-            contents = np.tensordot(weights, self.contents, axes=([0], [self.axes.label_to_index('Pol')]))
+            contents = np.tensordot(weights, self.contents, axes=(0, self.axes.label_to_index('Pol')))
 
 
-        energy_axis = self.photon_energy_axis
+        if flux is None:
+            energy_axis = self.photon_energy_axis
+            flux = get_integrated_spectral_model(spectrum, energy_axis)
 
-        flux = get_integrated_spectral_model(spectrum, energy_axis)
-        
-        expectation = np.tensordot(contents, flux.contents, axes=([0], [0]))
+        expectation = np.tensordot(contents, flux.contents, axes=(0, 0))
 
         # if self is sparse, expectation will be a SparseArray with
         # no units, so set the result's unit explicitly

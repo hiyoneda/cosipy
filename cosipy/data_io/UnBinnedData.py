@@ -32,13 +32,16 @@ logger = logging.getLogger(__name__)
 class UnBinnedData(DataIO):
     """Handles unbinned data."""
 
-    def read_tra(self, output_name=None, run_test=False, use_ori=False,
+    def read_tra(self, input_name=None, output_name=None, run_test=False, use_ori=False,
             event_min=None, event_max=None):
         
         """Reads MEGAlib .tra (or .tra.gz) file and creates cosi datset.
         
         Parameters
         ----------
+	    input_name : str, optional
+            Path of input file (default is None, in which case the
+	        input file name is taken from the yaml file).
         output_name : str, optional
             Prefix of output file (default is None, in which case no 
             output is written). 
@@ -79,7 +82,8 @@ class UnBinnedData(DataIO):
                         'Psi local':psi_loc,\
                         'Distance':dist,\
                         'Chi galactic':chi_gal,\
-                        'Psi galactic':psi_gal}\
+                        'Psi galactic':psi_gal,\
+                        'CO seq':CO_seq}\
             Arrays contain unbinned photon data. 
         
         Notes
@@ -91,7 +95,9 @@ class UnBinnedData(DataIO):
         This method sets the instance attribute, cosi_dataset, 
         but it does not explicitly return this.  
         """
-   
+        if input_name != None:
+            self.data_file = input_name
+
         start_time = time.time()
 
         # Initialise empty lists:
@@ -124,6 +130,10 @@ class UnBinnedData(DataIO):
         dg_x = []
         dg_y = []
         dg_z = []
+
+        # Compton seq
+        CO_seq = []
+
 
         # Define electron rest energy, which is used in calculation
         # of Compton scattering angle.
@@ -209,6 +219,7 @@ class UnBinnedData(DataIO):
                         erg.pop()
                         phi.pop()
                         tt.pop()
+                        CO_seq.pop()
                         # Not all sims include ori info,
                         # so also need to check before pop:
                         if len(lonX) != 0:
@@ -279,7 +290,12 @@ class UnBinnedData(DataIO):
                 lonZ.append(this_lonZ)
                 latZ.append(this_latZ)
             
-            # Interaction position information: 
+
+            #number of interaction
+            if this_line[0] == "SQ":
+                CO_seq.append(int(this_line[1]))
+
+            # Interaction position information:
             if (this_line[0] == "CH"):
                 
                 # First interaction:
@@ -322,7 +338,8 @@ class UnBinnedData(DataIO):
         dg_x = np.array(dg_x)
         dg_y = np.array(dg_y)
         dg_z = np.array(dg_z)
- 
+        CO_seq = np.array(CO_seq)
+
         # Check if the input data has pointing information, 
         # if not, set dummy values:
         if (use_ori == False) & (len(lonZ)==0):
@@ -409,7 +426,8 @@ class UnBinnedData(DataIO):
                         'Psi local':psi_loc,
                         'Distance':dist,
                         'Chi galactic':chi_gal,
-                        'Psi galactic':psi_gal} 
+                        'Psi galactic':psi_gal,
+                       'Compton Seq':CO_seq}
         self.cosi_dataset = cosi_dataset
 
         # Option to write unbinned data to file (either fits or hdf5):
@@ -446,7 +464,7 @@ class UnBinnedData(DataIO):
 
         # Get ori info:
         ori = SpacecraftHistory.open(self.ori_file)
-        time_tags = ori._load_time
+        time_tags = ori.obstime.to_value(format="unix")
         x_pointings = ori.x_pointings
         z_pointings = ori.z_pointings
 
@@ -548,10 +566,18 @@ class UnBinnedData(DataIO):
         """
 
         # Data units:
-        units=['keV','s','rad','rad',
-                'rad','rad','rad','rad','cm','deg','deg']
+        #check for the old data structure when CO_seq was not added
+		#This should be remove for DC4
+        if len(self.cosi_dataset.keys())==11:
+            units=['keV','s','rad','rad',
+                    'rad','rad','rad','rad','cm','deg','deg']
             
-        # For fits output: 
+        # New DC4 structure of the data
+        else:
+             units=['keV','s','rad','rad',
+                    'rad','rad','rad','rad','cm','deg','deg','']
+
+        # For fits output:
         if self.unbinned_output == 'fits':
             table = Table(list(self.cosi_dataset.values()),\
                     names=list(self.cosi_dataset.keys()), \
@@ -721,6 +747,47 @@ class UnBinnedData(DataIO):
             self.write_unbinned_output(output_name)
 
         return
+
+    def select_data_COseq(self, seqmin, seqmax, output_name=None, unbinned_data=None):
+
+        """Applies CO sequence cuts [seqmin,seqmax) to unbinnned data dictionary.
+
+        Parameters
+        ----------
+        seqmin :  int
+            Minimum number of interaction.
+        seqmax :  int
+            Maximum number of interaction.
+        unbinned_data : str, optional
+            Name of unbinned dictionary file.
+        output_name : str, optional
+            Prefix of output file (default is None, in which case no
+            file is saved).
+        """
+
+        logger.info("Making data selections on Compton Sequence...")
+
+        # Option to read in unbinned data file:
+        if unbinned_data:
+            self.cosi_dataset = self.get_dict(unbinned_data)
+
+        # Get energy cut index:
+        COseq_array = self.cosi_dataset["Compton Seq"]
+        COseq_cut_index = (COseq_array >= seqmin) & (COseq_array < seqmax)
+
+        # Apply cuts to dictionary:
+        for key in self.cosi_dataset:
+
+            self.cosi_dataset[key] = self.cosi_dataset[key][COseq_cut_index]
+
+        # Write unbinned data to file (either fits or hdf5):
+        if output_name != None:
+            logger.info("Saving file...")
+            self.write_unbinned_output(output_name)
+
+        return
+
+
 
     def combine_unbinned_data(self, input_files, output_name=None):
 

@@ -23,7 +23,7 @@ class BinnedData(UnBinnedData):
 
     def get_binned_data(self, unbinned_data=None, output_name=None, \
             make_binning_plots=False, show_plots=False, \
-            psichi_binning="galactic", event_range=None):
+            psichi_binning="galactic", event_range=None,weights=None):
 
         """Bin the data using histpy and mhealpy.
         
@@ -44,7 +44,10 @@ class BinnedData(UnBinnedData):
             'local' for binning in local coordinates. Default is Galactic. 
         event_range : list of integers, optional 
             min and max event to use for the binning. 
-        
+        weights : value or array of values, optional
+            weight to use when filling the Histogram, if not set histpy will 
+            use weight of 1
+            
         Returns
         -------
         binned_data : histpy:Histogram
@@ -117,14 +120,14 @@ class BinnedData(UnBinnedData):
             self.binned_data.fill(self.cosi_dataset['TimeTags']*u.s, 
                     self.cosi_dataset['Energies']*u.keV, 
                     np.rad2deg(self.cosi_dataset['Phi'])*u.deg, 
-                    coords)
+                    coords,weight=weights)
         if event_range != None:
             low = int(event_range[0])
             high = int(event_range[1])
             self.binned_data.fill(self.cosi_dataset['TimeTags'][low:high]*u.s, 
                     self.cosi_dataset['Energies'][low:high]*u.keV, 
                     np.rad2deg(self.cosi_dataset['Phi'][low:high])*u.deg, 
-                    coords[low:high])
+                    coords[low:high],weight=weights)
 
         # Save binned data to hdf5 file:
         if output_name != None:
