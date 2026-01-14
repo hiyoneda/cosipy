@@ -72,10 +72,9 @@ tutorials:
           checksum: c8f167ed46b0d84904d1758b27d22f0b
         COSI-SMEX/develop/Data/Responses/SMEXv12.Continuum.HEALPixO3_10bins_log_flat.binnedimaging.imagingresponse.h5:
           checksum: eb72400a1279325e9404110f909c7785
-        COSI-SMEX/DC2/Responses/PointSourceReponse/psr_gal_continuum_DC2.h5.zip:
+        COSI-SMEX/develop/Data/Responses/PointSourceResponse/psr_gal_continuum_DC2.h5.gz:
           unzip: True
-          unzip_output: psr_gal_DC2.h5
-          checksum: e817e1d4b5d1add566a56338cba38410
+          checksum: 92c934f2c8ad9cc04ef0694e55314068
 
     spectral_fit_grb:
       notebook: spectral_fits/continuum_fit/grb/SpectralFit_GRB.ipynb
@@ -133,9 +132,8 @@ tutorials:
           checksum: 9b005571860d36905bd5aee975036236
         COSI-SMEX/cosipy_tutorials/extended_source_spectral_fit_galactic_frame/combined_binned_data_thin_disk.hdf5:
           checksum: 3690422b417e73014de546642799d6e3
-        COSI-SMEX/DC2/Responses/PointSourceReponse/psr_gal_511_DC2.h5.gz:
-          unzip: True
-          checksum: daaace1b814728b8410aee0367e449a3
+        COSI-SMEX/develop/Data/Responses/PointSourceResponse/psr_gal_511_DC2.h5:
+          checksum: 50eb36c2bc0089ba230af457ec768fa0
 
     imaging_511_scatt:
       notebook:
