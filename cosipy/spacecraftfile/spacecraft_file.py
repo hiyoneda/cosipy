@@ -12,6 +12,7 @@ from astropy.units import Quantity
 from mhealpy import HealpixBase
 from histpy import Histogram, TimeAxis
 from mhealpy import HealpixMap
+from ndindex.ndindex import newaxis
 
 from scoords import Attitude, SpacecraftFrame
 
@@ -266,7 +267,7 @@ class SpacecraftHistory:
 
         """
 
-        if d1 == d2:
+        if np.all(d1 == d2):
             return d1
 
         v1 = d1.cartesian.xyz.value
@@ -274,7 +275,7 @@ class SpacecraftHistory:
         unit = d1.cartesian.xyz.unit
 
         # angle between v1, v2
-        theta = np.arccos(np.dot(v1, v2)/d1.distance.value/d2.distance.value)
+        theta = np.arccos(np.einsum('i...,i...->...',v1, v2)/d1.distance.value/d2.distance.value)
 
         # SLERP interpolated vector
         den = np.sin(theta)
@@ -314,7 +315,11 @@ class SpacecraftHistory:
         p2 = att2.as_quat()
 
         # angle between quaternions p1, p2 (xyzw order)
-        theta = 2 * np.arccos(np.dot(p1, p2))
+        theta = 2 * np.arccos(np.einsum('i...,i...->...',p1.transpose(), p2.transpose()))
+
+        # Makes it work with scalars or any input shape
+        t = t[..., np.newaxis]
+        theta = theta[..., np.newaxis]
 
         # SLERP interpolated quaternion
         den = np.sin(theta)
@@ -407,8 +412,8 @@ class SpacecraftHistory:
 
         points, weights = self.interp_weights(times)
 
-        interp_attitude = self._interp_attitude(points, weights)
-        interp_location = self._interp_location(points, weights)
+        interp_attitude = self._interp_attitude(weights[1], self._attitude[points[0]], self._attitude[points[1]])
+        interp_location = self._interp_location(weights[1], self._gcrs[points[0]], self._gcrs[points[1]])
 
         cum_livetime = self._cumulative_livetime(points, weights)
         diff_livetime = cum_livetime[1:] - cum_livetime[:-1]
@@ -459,10 +464,10 @@ class SpacecraftHistory:
                                np.append(start.jd2, new_obstime.jd2),
                                format = 'jd')
 
-            start_attitude = self._interp_attitude(start_points, start_weights)
+            start_attitude = self._interp_attitude(start_weights[1], self._attitude[start_points[0]], self._attitude[start_points[1]])
             new_attitude = np.append(start_attitude.as_matrix()[None], new_attitude, axis=0)
 
-            start_location = self._interp_location(start_points, start_weights)[None].cartesian.xyz
+            start_location = self._interp_location(start_weights[1], self._gcrs[start_points[0]], self._gcrs[start_points[1]])[None].cartesian.xyz
             new_location = np.append(start_location, new_location, axis = 1)
 
             first_livetime = self.livetime[start_points[0]] * start_weights[0]
@@ -475,11 +480,11 @@ class SpacecraftHistory:
                            np.append(new_obstime.jd2, stop.jd2),
                            format='jd')
 
-        stop_attitude = self._interp_attitude(stop_points, stop_weights)
+        stop_attitude = self._interp_attitude(stop_weights[1], self._attitude[stop_points[0]], self._attitude[stop_points[1]])
         new_attitude = np.append(new_attitude, stop_attitude.as_matrix()[None], axis=0)
         new_attitude = Attitude.from_matrix(new_attitude, frame=self._attitude.frame)
 
-        stop_location = self._interp_location(stop_points, stop_weights)[None].cartesian.xyz
+        stop_location = self._interp_location(stop_weights[1], self._gcrs[stop_points[0]], self._gcrs[stop_points[1]])[None].cartesian.xyz
         new_location = np.append(new_location, stop_location, axis=1)
 
         new_location = GCRS(x = new_location[0], y = new_location[1], z = new_location[2],
