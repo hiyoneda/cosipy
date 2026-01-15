@@ -259,6 +259,11 @@ class SourceInjector():
         self.components.  Return the expected counts for all injected
         sources combined.
 
+        Note that this method only makes sense if all the models use
+        the same underlying response.  It is not possible to combine,
+        e.g., a point source using an instrument-frame response with
+        an extended source using a galactic response.
+
         Parameters
         ----------
         model : astromodels.Model
