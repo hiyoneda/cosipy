@@ -74,7 +74,7 @@ tutorials:
           checksum: eb72400a1279325e9404110f909c7785
         COSI-SMEX/develop/Data/Responses/PointSourceResponse/psr_gal_continuum_DC2.h5.gz:
           unzip: True
-          checksum: 92c934f2c8ad9cc04ef0694e55314068
+          checksum: d2c03731b6f7fbfed0baa630c6f7fdbc
 
     spectral_fit_grb:
       notebook: spectral_fits/continuum_fit/grb/SpectralFit_GRB.ipynb
