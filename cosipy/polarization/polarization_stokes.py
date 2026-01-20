@@ -380,12 +380,16 @@ class PolarizationStokes():
         Path to detector response
     sc_orientation : cosipy.spacecraftfile.SpacecraftFile.SpacecraftFile
         Spacecraft orientation
+    fit_convention : cosipy.polarization.PolarizationConvention
+        Polarization convention for the fit
+    show_plots : bool
+        Whether to show plots or not
     """
     
 
     def __init__(self, source_vector, source_spectrum, data,  
                  response_file, sc_orientation, background=None, response_convention='RelativeX', 
-                 fit_convention=IAUPolarizationConvention()):
+                 fit_convention=IAUPolarizationConvention(), asad_bin_edges=None, show_plots=False):
 
         ###################### This will need to be changed into IAUPolarizationConvention hardcoded!
         ######################
@@ -409,6 +413,8 @@ class PolarizationStokes():
         # else:
         #     self._data = data
 
+        self.SHOW_PLOTS = show_plots
+
         self._ori = sc_orientation
 
         self._convention = fit_convention
@@ -425,6 +431,8 @@ class PolarizationStokes():
 
         self._nbins = self._response.axes['Pol'].nbins
         print('Number of azimuthal angle bins used:', self._nbins)
+
+        self.asad_bin_edges = asad_bin_edges
 
         # self._binedges = Angle(np.linspace(-np.pi, np.pi, self._nbins), unit=u.rad)
 
@@ -455,7 +463,7 @@ class PolarizationStokes():
 
         self._data_counts = self.get_data_counts()
 
-        self._data_azimuthal_angles = self.calculate_azimuthal_scattering_angles(self._data, show_plots=True)
+        self._data_azimuthal_angles = self.calculate_azimuthal_scattering_angles(self._data, show_plots=self.SHOW_PLOTS)
 
         self._background = background
         
@@ -480,7 +488,7 @@ class PolarizationStokes():
             self._background_duration = 0
             self._background_azimuthal_angles = None
 
-        self._mu100 = self.calculate_average_mu100(show_plots=False)
+        self._mu100 = self.calculate_average_mu100(asad_bin_edges=self.asad_bin_edges, show_plots=False)
 
         self._mdp99 = self.calculate_mdp(modulation_factor=self._mu100['mu'])
 
@@ -624,7 +632,7 @@ class PolarizationStokes():
     
     def calculate_azimuthal_scattering_angles(self, unbinned_data, show_plots=False):
         """
-        Calculate the azimuthal scattering angles for all events in a dataset.
+        Calculate the azimuthal scattering angles for all events in a dataset. 
         
         Parameters
         ----------
@@ -673,12 +681,14 @@ class PolarizationStokes():
         
         return azimuthal_angles
 
-    def calculate_average_mu100(self, show_plots=False):
+    def calculate_average_mu100(self, asad_bin_edges=None, show_plots=False):
         """
         Calculate the modulation (mu) of an 100% polarized source.
         
         Parameters
         ----------
+        asad_bin_edges : array-like, optional
+            Bin edges for the ASAD. If None, default binning is used.
         show_plots : bool, optional
             Option to show plots. Default is False
 
@@ -687,12 +697,17 @@ class PolarizationStokes():
         mu_100 : dict
             Modulation of 100% polarized source and uncertainty of constant function fit to modulation in all polarization angle bins
         """
+
+        if asad_bin_edges is not None:
+            self._nbins = asad_bin_edges
+            print('Custom Number of azimuthal angle bins used:', self._nbins)
+        
         print('Creating the 100% polarized ASADs (this may take a minute...)')
         polarized_asads = create_polarized_asads(self._spectrum, self._source_vector, self._ori, self._response, 
-                                                   self._convention, self._response_file, self._response_convention, bins=self._nbins)
+                                                self._convention, self._response_file, self._response_convention, bins=self._nbins)
         print('Creating the unpolarized ASAD...')
         unpolarized_asad = create_unpolarized_asad(self._spectrum, self._source_vector, self._ori, self._response, 
-                                                   self._convention, self._response_file, self._response_convention, bins=self._nbins)
+                                                    self._convention, self._response_file, self._response_convention, bins=self._nbins)
         mu_100_list = []
         mu_100_uncertainties = []
 
@@ -958,7 +973,7 @@ class PolarizationStokes():
         
         return _qs_unpol_, _us_unpol_
 
-    def calculate_polarization(self, qs, us, mu, bkg_qs=None, bkg_us=None, show_plots=True, ref_qu=(None, None),
+    def calculate_polarization(self, qs, us, mu, bkg_qs=None, bkg_us=None, show_plots=False, ref_qu=(None, None),
                                ref_pdpa=(None, None), ref_label=None, mdp=None):
         """
         Calculate the polarization degree (PD), polarization angle (PA),
