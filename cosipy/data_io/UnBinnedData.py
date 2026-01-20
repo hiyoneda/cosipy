@@ -427,11 +427,12 @@ class UnBinnedData(DataIO):
                 
         #For simulation the timetags are shuffle so we need to sort it by ascending order
         # Build sorting index
+        logger.info("Sorting the dictionary by ascending TimeTags")        
         idx = np.argsort(cosi_dataset["TimeTags"])
 
         # Reorder all columns using the same index
         for key in cosi_dataset:
-            cosi_dataset[key] = unbinned_signal.cosi_dataset[key][idx]        
+            cosi_dataset[key] = cosi_dataset[key][idx]        
         
         self.cosi_dataset = cosi_dataset
 
