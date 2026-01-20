@@ -271,7 +271,8 @@ def create_asad_from_response(spectrum, polarization_level, polarization_angle, 
     
     else:
         
-        scatt_map = ori.get_scatt_map(nside=response.nside*2, target_coord=source_vector, coordsys='galactic')
+        scatt_map = ori.get_scatt_map(nside=response.nside*2, target_coord=source_vector)
+        # scatt_map = ori.get_scatt_map(nside=response.nside*2, target_coord=source_vector, coordsys='galactic')
         psr = response.get_point_source_response(coord=source_vector, scatt_map=scatt_map)
         expectation = psr.get_expectation(spectrum, LinearPolarization(polarization_level * 100., polarization_angle.angle.deg))
 
