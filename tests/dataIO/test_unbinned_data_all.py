@@ -98,11 +98,12 @@ def test_unbinned_data_all(tmp_path):
     analysis.select_data_COseq(3,4,unbinned_data=tmp_path/"test_h5.hdf5")
     assert np.amax(analysis.cosi_dataset['Compton Seq']) < 4
     assert np.amin(analysis.cosi_dataset['Compton Seq']) >= 3
-    
+
     # Test reading tra with no pointing info:
-    analysis.data_file = os.path.join(test_data.path,\
+    with pytest.raises(ValueError):
+        analysis.data_file = os.path.join(test_data.path,
             "GalacticScan.inc1.id1.crab10sec.extracted.testsample.nopointinginfo.tra.gz")
-    analysis.read_tra()
+        analysis.read_tra()
 
     # Test SAA cut:
     analysis.cut_SAA_events(unbinned_data=tmp_path/"test_h5.hdf5")
