@@ -71,7 +71,6 @@ class COSILike(PluginPrototype):
 
         # User inputs needed to compute the likelihood
         self._name = name
-        self._rsp_path = dr
         self._dr = FullDetectorResponse.open(dr)
         self._data = data
         self._bkg = bkg
@@ -117,6 +116,9 @@ class COSILike(PluginPrototype):
             logger.info("... loading the pre-computed image response ...")
             self.image_response = ExtendedSourceResponse.open(self.precomputed_psr_file)
             logger.info("--> done")
+
+        # Temporary fix to only print log-likelihood warning once max per fit
+        self._printed_warning = False
         
     def set_model(self, model):
         """
@@ -128,11 +130,7 @@ class COSILike(PluginPrototype):
             Any model supported by astromodels
         """
         
-        # Temporary fix to only print log-likelihood warning once max per fit
-        if inspect.stack()[1][3] == '_assign_model_to_data':
-            self._printed_warning = False
-    
-        # Get point sources and extended sources from model: 
+        # Get point sources and extended sources from model:
         point_sources = model.point_sources
         extended_sources = model.extended_sources
         
@@ -264,7 +262,7 @@ class COSILike(PluginPrototype):
         
         # Recompute the expectation if any parameter in the model changed
         if self._model is None:
-            log.error("You need to set the model first")
+            logger.error("You need to set the model first")
        
         # Set model:
         self.set_model(self._model)
@@ -320,7 +318,7 @@ class COSILike(PluginPrototype):
         """
         
         src_path = self._sc_orientation.get_target_in_sc_frame(coord)
-        dwell_time_map = self._sc_orientation.get_dwell_map(response = self._rsp_path,
+        dwell_time_map = self._sc_orientation.get_dwell_map(base = self._dr,
                                                             src_path = src_path)
         
         return dwell_time_map
