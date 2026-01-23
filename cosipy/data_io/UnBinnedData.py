@@ -400,9 +400,11 @@ class UnBinnedData(DataIO):
             'Compton Seq' : CO_seq
         }
         
-        # For simulation the timetags are shuffle so we need to sort it
-        # by ascending order Build sorting index
-        logger.info("Sorting the dictionary by ascending TimeTags")        
+        # For simulation the timetags are shuffled, so we need to sort
+        # it by ascending order .
+        logger.info("Sorting the dictionary by ascending TimeTags")
+
+        # Build sorting index
         idx = np.argsort(cosi_dataset["TimeTags"])
 
         # Reorder all columns using the same index
@@ -410,7 +412,6 @@ class UnBinnedData(DataIO):
             cosi_dataset[key] = cosi_dataset[key][idx]        
         
         self.cosi_dataset = cosi_dataset
->>>>>>> develop
 
         if output_name is not None:
             # write unbinned data to file
