@@ -384,7 +384,8 @@ class UnBinnedData(DataIO):
 
         # Make observation dictionary
         logger.info("Making dictionary...")
-        self.cosi_dataset = {
+
+        cosi_dataset = {
             'Energies' : erg,
             'TimeTags' : tt,
             'Xpointings (glon,glat)' : np.column_stack((lonX,latX)),
@@ -398,6 +399,18 @@ class UnBinnedData(DataIO):
             'Psi galactic' : psi_gal,
             'Compton Seq' : CO_seq
         }
+        
+        # For simulation the timetags are shuffle so we need to sort it
+        # by ascending order Build sorting index
+        logger.info("Sorting the dictionary by ascending TimeTags")        
+        idx = np.argsort(cosi_dataset["TimeTags"])
+
+        # Reorder all columns using the same index
+        for key in cosi_dataset:
+            cosi_dataset[key] = cosi_dataset[key][idx]        
+        
+        self.cosi_dataset = cosi_dataset
+>>>>>>> develop
 
         if output_name is not None:
             # write unbinned data to file
