@@ -196,13 +196,7 @@ class PointSourceResponse(Histogram):
 
         psr = Quantity(np.empty(shape=axes.shape), unit = u.cm * u.cm * u.s)
 
-        for i, (pixels, exposure) in \
-                enumerate(zip(scatt_map.contents.coords.transpose(),
-                              scatt_map.contents.data * scatt_map.unit)):
-
-            att = Attitude.from_axes(x=scatt_map.axes['x'].pix2skycoord(pixels[0]),
-                                     y=scatt_map.axes['y'].pix2skycoord(pixels[1]))
-
+        for att, exposure in zip(scatt_map.attitudes, scatt_map.weights):
 
             response.differential_effective_area(data,
                                                  coord,

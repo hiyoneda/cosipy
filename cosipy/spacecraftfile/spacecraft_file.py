@@ -10,7 +10,7 @@ from astropy.coordinates import SkyCoord, EarthLocation, GCRS, SphericalRepresen
     UnitSphericalRepresentation
 from astropy.units import Quantity
 from mhealpy import HealpixBase
-from histpy import Histogram, TimeAxis
+from histpy import Histogram, TimeAxis, HealpixAxis, Axis
 from mhealpy import HealpixMap
 from ndindex.ndindex import newaxis
 
@@ -597,77 +597,143 @@ class SpacecraftHistory:
         return dwell_map
 
     def get_scatt_map(self,
-                       nside,
-                       target_coord=None,
-                       scheme = 'ring',
-                       coordsys = 'galactic',
-                       earth_occ = True
-                       ) -> SpacecraftAttitudeMap:
+                      nside,
+                      target_coord=None,
+                      earth_occ=True,
+                      angle_nbins=None) -> SpacecraftAttitudeMap:
 
         """
-        Bin the spacecraft attitude history into a 4D histogram that 
-        contains the accumulated obstime the axes of the spacecraft where
-        looking at a given direction. 
+        Bin the spacecraft attitude history into a list of discretized
+        attitudes with associated time weights.  Discretization is
+        performed on the rotation-vector representation of the
+        attitude; the supplied nside parameter describes a HEALPix
+        grid that discretizes the rotvec's direction, while a multiple
+        of nside defines the number of bins to discretize its angle.
+
+        If a target coordinate is provided and earth_occ is True,
+        attitudes for which the view of the target is occluded by
+        the earth are excluded.
 
         Parameters
         ----------
-        target_coord : astropy.coordinates.SkyCoord, optional
-            The coordinates of the target object. 
         nside : int
             The nside of the scatt map.
-        scheme : str, optional
-            The scheme of the scatt map (the default is "ring")
-        coordsys : str, optional
-            The coordinate system used in the scatt map (the default is "galactic).
+        target_coord : astropy.coordinates.SkyCoord, optional
+            The coordinates of the target object.
         earth_occ : bool, optional
             Option to include Earth occultation in scatt map calculation.
-            Default is True. 
+            Default is True.
+        angle_nbins : int (optional)
+            Number of bins used for the rotvec's angle. If none
+            specified, default is 8*nside
 
         Returns
         -------
-        h_ori : cosipy.spacecraftfile.scatt_map.SpacecraftAttitudeMap
+        cosipy.spacecraftfile.scatt_map.SpacecraftAttitudeMap
             The spacecraft attitude map.
+
         """
 
-        # Check if target_coord is needed
-        if earth_occ and target_coord is None:
-            raise ValueError("target_coord is needed when earth_occ = True")
+        def _cart_to_polar(v):
+            """
+            Convert Cartesian 3D unit direction vectors to polar coordinates.
 
-        # Get orientations
-        attitudes = self.attitude
+            Parameters
+            ----------
+            v : np.ndarray(float) [N x 3]
+              array of N 3D unit vectors
 
-        # Altitude at each point in the orbit:
-        gcrs_cart = self._gcrs.represent_as(CartesianRepresentation)
-        dist_earth_center = gcrs_cart.norm()
+            Returns
+            -------
+            lon, colat : np.ndarray(float) [N]
+              longitude and co-latitude corresponding to v in radians
 
-        # Fill (only 2 axes needed to fully define the orientation)
-        h_ori = SpacecraftAttitudeMap(nside = nside,
-                                      scheme = scheme,
-                                      coordsys = coordsys)
-        
-        x,y,z = attitudes[:-1].as_axes()
-       
-        # Get max angle based on altitude:
-        max_angle = np.pi*u.rad - np.arcsin(c.R_earth/dist_earth_center)
+            """
 
-        # Define weights and set to 0 if blocked by Earth:
-        weight = self.livetime
+            lon = np.arctan2(v[:, 1], v[:, 0])
+            colat = np.arccos(v[:, 2])
+            return (lon, colat)
+
+        source = target_coord
 
         if earth_occ:
-            # Calculate angle between source direction and Earth zenith
-            # for each obstime stamp:
-            src_angle = target_coord.separation(self.earth_zenith)
 
-            # Get pointings that are occulted by Earth:
-            earth_occ_index = src_angle >= max_angle
+            # earth radius
+            r_earth = 6378.0
 
-            # Mask
-            weight[earth_occ_index[:-1]] = 0
-        
-        # Fill histogram:
-        h_ori.fill(x, y, weight = weight)
+            # Need a source location to compute earth occultation
+            if source is None:
+                raise ValueError("target_coord is needed when earth_occ is True")
 
-        return h_ori
+            # calculate angle between source direction and Earth zenith
+            # for each time stamp
+            src_angle = source.separation(self.earth_zenith)
+
+            # get max angle based on altitude
+            max_angle = np.pi - np.arcsin(r_earth/(r_earth + self.location.distance.km))
+
+            # get pointings that are occluded by Earth
+            is_occluded = src_angle.rad >= max_angle
+
+            # zero out weights of time bins corresponding to occluded pointings
+            time_weights = np.where(is_occluded[:-1], 0, self.livetime.value)
+
+        else:
+            source = None # w/o occultation, result is not dependent on source
+            time_weights = self.livetime.value
+
+        # Get orientations as rotation vectors (center dir, angle around center)
+
+        rot_vecs   = self._attitude[:-1].as_rotvec()
+        rot_angles = np.linalg.norm(rot_vecs, axis=-1)
+        rot_dirs   = rot_vecs / rot_angles[:,None]
+
+        # discretize rotvecs for input Attitudes
+
+        dir_axis = HealpixAxis(nside=nside, coordsys=self._attitude.frame)
+
+        if angle_nbins is None:
+            angle_nbins = 8*nside
+
+        angle_axis = Axis(np.linspace(0., 2*np.pi, num=angle_nbins+1), unit=u.rad)
+
+        r_lon, r_colat = _cart_to_polar(rot_dirs.value)
+
+        dir_bins = dir_axis.find_bin(theta=r_colat,
+                                     phi=r_lon)
+        angle_bins = angle_axis.find_bin(rot_angles)
+
+        # compute list of unique rotvec bins occurring in input,
+        # along with mapping from time to rotvec bin
+        shape = (dir_axis.nbins, angle_axis.nbins)
+
+        att_bins = np.ravel_multi_index((dir_bins, angle_bins),
+                                        shape)
+
+        # compute an Attitude for each unique rotvec bin
+
+        unique_atts, time_to_att_map = np.unique(att_bins,
+                                                 return_inverse=True)
+        (unique_dirs, unique_angles) = np.unravel_index(unique_atts,
+                                                        shape)
+        v = dir_axis.pix2vec(unique_dirs)
+
+        binned_attitudes = Attitude.from_rotvec(np.column_stack(v) *
+                                                angle_axis.centers[unique_angles][:,None],
+                                                frame = self._attitude.frame)
+
+        # sum weights for all attitudes mapping to each bin
+        binned_weights = np.zeros(len(unique_atts))
+        np.add.at(binned_weights, time_to_att_map, time_weights)
+
+        # remove any attitudes with zero weight
+        binned_attitudes = binned_attitudes[binned_weights > 0]
+        binned_weights   = binned_weights[binned_weights > 0]
+
+        return SpacecraftAttitudeMap(binned_attitudes,
+                                     u.Quantity(binned_weights, unit=self.livetime.unit, copy=False),
+                                     source = source)
+
 
 
 
