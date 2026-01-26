@@ -31,6 +31,7 @@ class UnBinnedData(DataIO):
 
     def read_tra(self, input_name=None, output_name=None,
                  run_test=False, use_ori=False,
+                 sc_orientation = None,
                  event_min=None, event_max=None):
 
         """Reads MEGAlib .tra or .tra.gz file and creates COSI datset.
@@ -50,8 +51,13 @@ class UnBinnedData(DataIO):
             Option to get pointing information from the orientation
             file, based on event time-stamps (default is False, in
             which case the pointing information comes from the event
-            file itself). Note: this is an option for now, but will
-            later be the default.
+            file itself).
+        sc_orientation : Path/string or Attitude, optional
+            If not None, either a single orientation (Attitude of length 1)
+            or the name of a file with spacecraft orientation data. This will
+            be used to compute X and Z axes for each data point, overriding
+            any values in either the .tra file or any orientation data
+            that is part of the UnbinnedData object.
         event_min : int, optional
             Minimum valid event number to process (inclusive). All
             valid events before this one will be skipped.
@@ -315,10 +321,32 @@ class UnBinnedData(DataIO):
         dg_y = np.array(dg_y)
         dg_z = np.array(dg_z)
 
-        if use_ori:
+        if sc_orientation is not None:
+            if isinstance(sc_orientation, Attitude):
+                # input is an Attitude to be applied to all time points
+                
+                if sc_orientation.shape != (): # not a scalar Attitude
+                    if sc_orientation.shape == (1,): 
+                        sc_orientation = sc_orientation[0] # extract scalar version
+                    else:
+                        raise ValueError("Attitude supplied as sc_orientation must contain only a single pointing")
+
+                x, _, z = sc_orientation.as_axes()
+                lonX = np.full(len(tt), x.l.rad)
+                latX = np.full(len(tt), x.b.rad)
+                lonZ = np.full(len(tt), z.l.rad)
+                latZ = np.full(len(tt), z.b.rad)
+            else:
+                # input is name of orientation file to use
+                self.instrument_pointing(sc_orientation)
+                lonX = self.xl_interp(tt)
+                latX = self.xb_interp(tt)
+                lonZ = self.zl_interp(tt)
+                latZ = self.zb_interp(tt)
+        elif use_ori:
             # Use the X and Z pointing information in the orientation
             # file; ignore any info read from the .tra file
-            self.instrument_pointing()
+            self.instrument_pointing(self.ori_file)
             lonX = self.xl_interp(tt)
             latX = self.xb_interp(tt)
             lonZ = self.zl_interp(tt)
@@ -423,7 +451,7 @@ class UnBinnedData(DataIO):
         logger.info(f"total processing time [s]: {processing_time}")
 
 
-    def instrument_pointing(self):
+    def instrument_pointing(self, ori_file):
 
         """Get pointing information from ori file.
 
@@ -444,7 +472,7 @@ class UnBinnedData(DataIO):
         """
 
         # Get ori info:
-        ori = SpacecraftFile.parse_from_file(self.ori_file)
+        ori = SpacecraftFile.parse_from_file(ori_file)
         time_tags = ori.get_time().to_value(format="unix")
         x_pointings = ori.x_pointings
         z_pointings = ori.z_pointings
