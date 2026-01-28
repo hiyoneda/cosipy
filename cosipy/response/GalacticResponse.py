@@ -157,9 +157,6 @@ class GalacticResponse(HealpixBase):
         Extract the portion of the response corresponding to a
         single source sky pixel on the NuLambda axis.
 
-        NB: does NOT support deprecated padded response Histogram; see
-        issue #445
-
         Parameters
         ----------
         pix : integer
@@ -185,9 +182,6 @@ class GalacticResponse(HealpixBase):
     def to_dr(self):
         """
         Load the full response in memory.
-
-        NB: does NOT support deprecated padded response Histogram; see
-        issue #445
 
         Returns
         -------
@@ -256,22 +250,9 @@ class GalacticResponse(HealpixBase):
 
         em_dim = self._rest_axes.label_to_index("Em")
 
-        if self._has_overflow:
-            # trim overflow when reading contents (this code may be
-            # removed once we resolve issue #445 by updating old
-            # precomputed response files)
-            pix += 1
-            all_slice = slice(1, -1)
-
-            if em_slice is None:
-                em_slice = all_slice
-            else:
-                em_slice = slice(em_slice.start + 1,
-                                 em_slice.stop + 1)
-        else:
-            all_slice = slice(None)
-            if em_slice is None:
-                em_slice = all_slice
+        all_slice = slice(None)
+        if em_slice is None:
+            em_slice = all_slice
 
         idx  = [pix]
         idx += [all_slice] * em_dim

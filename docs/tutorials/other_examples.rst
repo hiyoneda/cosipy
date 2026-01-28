@@ -1,9 +1,6 @@
 Other examples
 ==============
 
-.. warning::
-   Under construction.
-   
 .. toctree::
    :maxdepth: 1
    
@@ -12,3 +9,5 @@ Other examples
    Galactic diffuse continuum spectral fit <spectral_fits/galactic_diffuse_continuum/galdiff_continuum.ipynb> 
 
    Good time intervals <event_selection/GTI.ipynb>
+
+   Extended source injector <source_injector/Extended_source_injector.ipynb>
