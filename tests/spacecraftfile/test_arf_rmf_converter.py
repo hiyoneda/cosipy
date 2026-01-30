@@ -6,7 +6,7 @@ from astropy.coordinates import SkyCoord
 from astropy.io import fits
 from cosipy import test_data, SpacecraftHistory
 from cosipy.response import FullDetectorResponse
-from cosipy.spacecraftfile import RspArfRmfConverter
+from cosipy.response import RspArfRmfConverter
 
 from astropy import units as u
 

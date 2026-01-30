@@ -1,7 +1,7 @@
 from typing import Union
 
 import numpy as np
-from astropy.coordinates import SkyCoord, Angle, BaseCoordinateFrame, frame_transform_graph
+from astropy.coordinates import SkyCoord, Angle, BaseCoordinateFrame, frame_transform_graph, ICRS
 import astropy.units as u
 import inspect
 from scoords import Attitude, SpacecraftFrame
@@ -141,12 +141,16 @@ class OrthographicConvention(PolarizationConvention):
             Set the reference vector, defaulting to celestial north if not provided 
             (IAU convention). Alternatively, pass the cartesian representation and set a frame.
         frame : BaseCoordinateFrame
-            Only used if ref_vector is a bare cartesian vector.
+            Only used if ref_vector is a bare cartesian vector. Default: ICRS
         clockwise : bool
             Direction of increasing PA, when looking at the source. Default is false 
             --i.e. counter-clockwise when looking outwards.
             
         """
+
+        if frame is None:
+            frame = ICRS
+
         if ref_vector is None:
             self._ref_vector = np.asarray([0,0,1])
             self._frame = frame

@@ -19,7 +19,7 @@ from threeML import Powerlaw
 from histpy import Histogram
 
 from cosipy import test_data
-from cosipy import FastTSMap, MOCTSMap, SpacecraftFile
+from cosipy import FastTSMap, MOCTSMap, SpacecraftHistory
 
 def test_ts_fit():
 

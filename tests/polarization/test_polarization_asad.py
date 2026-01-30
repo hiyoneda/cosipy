@@ -3,7 +3,7 @@ from astropy.coordinates import Angle, SkyCoord
 from astropy import units as u
 from scoords import SpacecraftFrame
 
-from cosipy.polarization import PolarizationASAD
+from cosipy.polarization_fitting import PolarizationASAD
 from cosipy.polarization.conventions import IAUPolarizationConvention, MEGAlibRelativeZ
 from cosipy.spacecraftfile import SpacecraftHistory
 from cosipy import BinnedData
@@ -17,7 +17,7 @@ binned_data = analysis.binned_data
 
 response_path = test_data.path / 'test_polarization_response.h5'
 sc_orientation = SpacecraftHistory.open(test_data.path / 'polarization_ori.ori')
-attitude = sc_orientation.get_attitude()[0]
+attitude = sc_orientation.attitude[0]
 
 a = 10. * u.keV
 b = 10000. * u.keV

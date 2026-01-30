@@ -1,4 +1,11 @@
-from cosipy import COSILike, test_data, BinnedData
+import sys
+
+from cosipy import test_data, BinnedData
+from cosipy.background_estimation import FreeNormBinnedBackground
+from cosipy.data_io import EmCDSBinnedData
+from cosipy.interfaces import ThreeMLPluginInterface
+from cosipy.response import BinnedThreeMLModelFolding, FullDetectorResponse, BinnedInstrumentResponse, \
+    BinnedThreeMLPointSourceResponse
 from cosipy.spacecraftfile import SpacecraftHistory
 import astropy.units as u
 import numpy as np
@@ -6,16 +13,18 @@ from threeML import Band, PointSource, Model, JointLikelihood, DataList
 from astromodels import Parameter
 from astropy.coordinates import SkyCoord
 
+from cosipy.statistics import PoissonLikelihood
+
 data_path = test_data.path
 
 sc_orientation = SpacecraftHistory.open(data_path / "20280301_2s.ori")
-dr = str(data_path / "test_full_detector_response.h5") # path to detector response
+dr_path = str(data_path / "test_full_detector_response.h5") # path to detector response
 
-data = BinnedData(data_path / "test_spectral_fit.yaml")
-background = BinnedData(data_path / "test_spectral_fit.yaml")
+crab = BinnedData(data_path / "test_spectral_fit.yaml")
+bkg_dist = BinnedData(data_path / "test_spectral_fit.yaml")
 
-data.load_binned_data_from_hdf5(binned_data=data_path / "test_spectral_fit_data.h5")
-background.load_binned_data_from_hdf5(binned_data=data_path / "test_spectral_fit_background.h5")
+crab.load_binned_data_from_hdf5(binned_data=data_path / "test_spectral_fit_data.h5")
+bkg_dist.load_binned_data_from_hdf5(binned_data=data_path / "test_spectral_fit_background.h5")
 
 bkg_par = Parameter("background_cosi",                                         # background parameter
                     1,                                                         # initial value of parameter
@@ -52,14 +61,38 @@ source = PointSource("source",                     # Name of source (arbitrary, 
 
 model = Model(source)
 
-def test_point_source_spectral_fit():
+def test_point_source_spectral_fit(background=None):
 
-    cosi = COSILike("cosi",                                                        # COSI 3ML plugin
-                    dr = dr,                                                       # detector response
-                    data = data.binned_data.project('Em', 'Phi', 'PsiChi'),        # data (source+background)
-                    bkg = background.binned_data.project('Em', 'Phi', 'PsiChi'),   # background model
-                    sc_orientation = sc_orientation,                               # spacecraft orientation
-                    nuisance_param = bkg_par)                                      # background parameter
+    dr = FullDetectorResponse.open(dr_path)
+    instrument_response = BinnedInstrumentResponse(dr)
+
+    # Workaround to avoid inf values. Out bkg should be smooth, but currently it's not.
+    # Reproduces results before refactoring. It's not _exactly_ the same, since this fudge value was 1e-12, and
+    # it was added to the expectation, not the normalized bkg
+    global bkg_dist # Was giving the error "UnboundLocalError: cannot access local variable 'bkg_dist' where it is not associated with a value"
+    bkg_dist = bkg_dist.binned_data.project('Em', 'Phi', 'PsiChi')
+    bkg_dist += sys.float_info.min
+
+    data = EmCDSBinnedData(crab.binned_data.project('Em', 'Phi', 'PsiChi') + bkg_dist)
+    bkg = FreeNormBinnedBackground(bkg_dist,
+                                   sc_history=sc_orientation,
+                                   copy=False)
+
+    psr = BinnedThreeMLPointSourceResponse(data=data,
+                                           instrument_response=instrument_response,
+                                           sc_history=sc_orientation,
+                                           energy_axis=dr.axes['Ei'],
+                                           polarization_axis=dr.axes['Pol'] if 'Pol' in dr.axes.labels else None,
+                                           nside=2 * data.axes['PsiChi'].nside)
+
+    response = BinnedThreeMLModelFolding(data=data, point_source_response=psr)
+
+    like_fun = PoissonLikelihood(data, response, bkg)
+
+    cosi = ThreeMLPluginInterface('cosi',
+                                  like_fun,
+                                  response,
+                                  bkg)
 
     plugins = DataList(cosi)
 
@@ -76,7 +109,3 @@ def test_point_source_spectral_fit():
     assert np.allclose([cosi.get_log_like()],
                        [213.14242014103897],
                        atol=[1.0])
-
-    # Test scatt map method:
-    coord = SkyCoord(l=184.56*u.deg,b=-5.78*u.deg,frame="galactic")
-    cosi._get_scatt_map(coord)

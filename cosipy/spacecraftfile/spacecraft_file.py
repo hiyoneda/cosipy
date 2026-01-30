@@ -12,7 +12,6 @@ from astropy.units import Quantity
 from mhealpy import HealpixBase
 from histpy import Histogram, TimeAxis, HealpixAxis, Axis
 from mhealpy import HealpixMap
-from ndindex.ndindex import newaxis
 
 from scoords import Attitude, SpacecraftFrame
 
