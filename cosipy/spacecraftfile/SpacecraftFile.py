@@ -29,6 +29,8 @@ logger = logging.getLogger(__name__)
 
 class SpacecraftFile():
 
+    file_version = "20260130" # change if FITS on-disk format changes
+
     def __init__(self, time,
                  x_pointings = None,
                  y_pointings = None,
@@ -208,6 +210,9 @@ class SpacecraftFile():
             # other array lengths for writing
             t['LiveTime'] = np.concatenate((self.livetime, [0]))
 
+        # ensure the VERSION card ends up in the table's hdu header
+        t.meta["VERSION"] = self.file_version
+
         filename = Path(filename)
 
         if compress and filename.suffix != ".gz":
@@ -219,6 +224,12 @@ class SpacecraftFile():
             raise RuntimeError(f"Not overwriting existing file '{filename}'")
         else:
             t.write(filename, format='fits', overwrite=True)
+
+            # reopen the FITS file to add the VERSION card
+            # to the PRIMARY header in hdu 0 as well. HEASARC
+            # requires the version in all hdus in the file.
+            with fits.open(filename, mode="update") as hdul:
+                hdul[0].header["VERSION"] = self.file_version
 
     @classmethod
     def open(cls, filename, frame='galactic'):
@@ -258,6 +269,13 @@ class SpacecraftFile():
         """
 
         t = QTable.read(filename)
+
+        # make sure we have version info, and that we support this version
+        if "VERSION" not in t.meta:
+            raise ValueError("FITS orientation file has no version info")
+        elif t.meta["VERSION"] > SpacecraftFile.file_version:
+            raise ValueError(f"FITS orientation file has version {t.meta['VERSION']} "
+                             f"which exceeds max supported version {SpacecraftFile.file_version}")
 
         time_stamps = Time(t['TimeStamp'], format = "unix")
 
