@@ -19,13 +19,16 @@ from tqdm.autonotebook import tqdm
 
 class RspConverter():
     """
-    Converter between response files stored in .rsp.gz format and
+    Converter between response files stored in .rsp format and
     optimized HDF5 format on disk.
 
-    Use method convert_to_h5() to convert a .rsp.gz file to .h5.
+    Use method convert_to_h5() to convert a .rsp file to .h5.
 
     Use method convert_to_rsp() to convert a FullDetectorResponse
-    (backed by an .h5 file) to .rsp.gz.
+    (backed by an .h5 file) to .rsp.
+
+    To read and write compressed .rsp files, add ".gz" to the end of
+    the .rsp filename.
 
     """
 
@@ -107,6 +110,33 @@ class RspConverter():
             self.norm = norm
             self.norm_params = norm_params
 
+    @staticmethod
+    def _open_rsp(rsp_filename, mode):
+        """
+        Open an .rsp file with or without .gz extension.  If .gz,
+        use gzip to open; otherwise, open as a regular file.
+        The resulting file object can be used in a context manager.
+
+        Parameters
+        ----------
+        rsp_filename : Path or string
+          name of file
+        mode : str
+          mode in which to open file
+
+        Returns
+        -------
+        open file or gzip stream object
+
+        """
+
+        rsp_path = Path(rsp_filename)
+
+        if rsp_path.suffix == ".gz":
+            return gzip.open(rsp_filename, mode)
+        else:
+            return open(rsp_filename, mode)
+
     def convert_to_h5(self,
                       rsp_filename,
                       h5_filename = None,
@@ -115,7 +145,7 @@ class RspConverter():
                       elt_type = None):
 
         """
-        Given a response file in .rsp.gz format, read it
+        Given a response file in .rsp format, read it
         and write it out as an HDF5 file
 
         Parameters
@@ -144,7 +174,7 @@ class RspConverter():
         if h5_filename is None:
             rsp_path = Path(rsp_filename)
 
-            # strip .rsp and .gz from end of path and add .h5
+            # strip any .rsp and .gz from end of path and add .h5
             h5_path = rsp_path.parent / rsp_path.stem
             while h5_path.suffix in {".rsp", "gz"}:
                 h5_path = h5_path.with_suffix("")
@@ -155,7 +185,7 @@ class RspConverter():
             raise RuntimeError(f"Not overwriting existing HDF5 file {h5_filename}")
 
         # read all info from the .rsp file
-        with gzip.open(rsp_filename, "rt") as f:
+        with self._open_rsp(rsp_filename, "rt") as f:
 
             axes, hdr = self._read_response_header(f)
             eff_area = self._get_eff_area_correction(axes, hdr)
@@ -200,7 +230,7 @@ class RspConverter():
 
         Parameters
         ----------
-        rsp_file : file handle to open .rsp.gz file
+        rsp_file : file handle to open .rsp file
 
         Returns
         -------
@@ -683,7 +713,7 @@ class RspConverter():
 
         """
 
-        with gzip.open(rsp_filename, "rt") as rsp_file:
+        with self._open_rsp(rsp_filename, "rt") as rsp_file:
 
             nbins = None
             for line in rsp_file:
@@ -740,7 +770,7 @@ class RspConverter():
         Parameters
         ----------
         rsp_file : file handle
-           open .rsp.gz file
+           open .rsp file
         nbins : int
            number of bins to read from file
         axes : Axes object
@@ -839,7 +869,7 @@ class RspConverter():
                        overwrite = False):
         """
         Convert a FullDetectorResponse object backed by an HDF5 file
-        into a textual .rsp.gz response.  We reuse the header
+        into a textual .rsp or .rsp.gz response.  We reuse the header
         information stored in the HDF5 file, along with its axes and
         counts.
 
@@ -848,14 +878,15 @@ class RspConverter():
         fullDetectorResponse : FullDetectorResponse
            object to be converted
         rsp_filename : string
-           path to write .rsp.gz file (should end with .rsp.gz)
+           path to write .rsp file; if extension is .rsp.gz, the file
+           will be gzipped.
         overwrite : bool
            if true, overwrite existing response if it exists
 
         """
 
         if Path(rsp_filename).exists() and not overwrite:
-            raise RuntimeError(f"Not overwriting existing .rsp.gz file {rsp_filename}")
+            raise RuntimeError(f"Not overwriting existing file {rsp_filename}")
 
         # reorder axes if needed to match the expected order for an .rsp file
         axes = fullDetectorResponse._axes
@@ -875,7 +906,7 @@ class RspConverter():
 
     def _write_rsp(self, headers, axes, counts, rsp_filename):
         """
-        Write an .rsp.gz file with all necessary info.
+        Write an .rsp file with all necessary info.
 
         Parameters
         ----------
@@ -886,7 +917,8 @@ class RspConverter():
         counts :
           counts of Histogram
         rsp_filename :
-           name of response file to write (should be .rsp.gz).
+           path to write .rsp file; if extension is .rsp.gz, the file
+           will be gzipped.
 
         """
 
@@ -895,7 +927,7 @@ class RspConverter():
         for desc in RspConverter.axis_name_map:
             axis_names[RspConverter.axis_name_map[desc]] = desc
 
-        with gzip.open(rsp_filename, "wt") as f:
+        with self._open_rsp(rsp_filename, "wt") as f:
 
             f.write("# computed reduced response\n")
 
