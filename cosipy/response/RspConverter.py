@@ -121,7 +121,7 @@ class RspConverter():
         Parameters
         ----------
         rsp_filename: string
-           name of input file (must end with .rsp.gz)
+           name of input file (must end with .rsp or .rsp.gz)
         h5_filename : string (optional)
            name of output file (should end with .h5); if not
            specified, use base name of rsp_filename with .h5 extension
@@ -142,19 +142,26 @@ class RspConverter():
         """
 
         if h5_filename is None:
-            h5_filename = str(rsp_filename).replace(".rsp.gz", ".h5")
+            rsp_path = Path(rsp_filename)
+
+            # strip .rsp and .gz from end of path and add .h5
+            h5_path = rsp_path.parent / rsp_path.stem
+            while h5_path.suffix in {".rsp", "gz"}:
+                h5_path = h5_path.with_suffix("")
+
+            h5_filename = str(rsp_filename) + ".h5"
 
         if Path(h5_filename).exists() and not overwrite:
             raise RuntimeError(f"Not overwriting existing HDF5 file {h5_filename}")
-
-        if elt_type is None:
-            elt_type = self._get_min_elt_type(rsp_filename)
 
         # read all info from the .rsp file
         with gzip.open(rsp_filename, "rt") as f:
 
             axes, hdr = self._read_response_header(f)
             eff_area = self._get_eff_area_correction(axes, hdr)
+
+            if elt_type is None:
+                elt_type = self._get_min_elt_type(rsp_filename)
 
             nbins = hdr["nbins"]
             counts = self._read_counts(f, axes, nbins, elt_type)
@@ -678,12 +685,16 @@ class RspConverter():
 
         with gzip.open(rsp_filename, "rt") as rsp_file:
 
+            nbins = None
             for line in rsp_file:
                 # consume the file header
                 line = line.split()
                 if len(line) > 0 and line[0] == "StartStream":
                     nbins = int(line[1])
                     break
+
+            if nbins is None:
+                ValueError("Could not find start of data in .rsp file")
 
             tq = tqdm(total=nbins,
                       desc="Getting type for counts",
