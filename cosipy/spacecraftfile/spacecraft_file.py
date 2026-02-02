@@ -274,7 +274,7 @@ class SpacecraftHistory:
         unit = d1.cartesian.xyz.unit
 
         # angle between v1, v2
-        theta = np.arccos(np.einsum('i...,i...->...',v1, v2)/d1.distance.value/d2.distance.value)
+        theta = np.arccos(np.einsum('i...,i...->...',v1, v2)/d1.spherical.distance.value/d2.spherical.distance.value)
 
         # SLERP interpolated vector
         den = np.sin(theta)
@@ -669,7 +669,7 @@ class SpacecraftHistory:
             src_angle = source.separation(self.earth_zenith)
 
             # get max angle based on altitude
-            max_angle = np.pi - np.arcsin(r_earth/(r_earth + self.location.distance.km))
+            max_angle = np.pi - np.arcsin(r_earth/(r_earth + self.location.spherical.distance.km))
 
             # get pointings that are occluded by Earth
             is_occluded = src_angle.rad >= max_angle
