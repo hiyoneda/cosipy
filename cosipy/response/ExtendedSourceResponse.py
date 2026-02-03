@@ -1,8 +1,11 @@
-from histpy import Histogram
 import numpy as np
+
 import astropy.units as u
-import gc
-from astromodels.functions.function import Function1D, FunctionMeta, ModelAssertionViolation, Function2D, Function3D
+
+from astromodels import Function3D
+
+from histpy import Histogram
+
 from .functions import get_integrated_extended_model
 from .functions_3d import get_integrated_extended_model_3d
 
@@ -64,7 +67,7 @@ class ExtendedSourceResponse(Histogram):
 
         if resp.is_sparse:
             resp = resp.to_dense()
- 
+
         return resp
 
     def get_expectation(self, allsky_image_model):
@@ -73,7 +76,7 @@ class ExtendedSourceResponse(Histogram):
 
         Parameters
         ----------
-        allsky_image_model : Histogram 
+        allsky_image_model : Histogram
             The all-sky image model to use for calculation.
 
         Returns
@@ -86,12 +89,12 @@ class ExtendedSourceResponse(Histogram):
             and np.all(self.axes[0].edges == allsky_image_model.axes[0].edges) \
             and np.all(self.axes[1].edges == allsky_image_model.axes[1].edges) \
             and allsky_image_model.unit == u.Unit('1/(s*cm*cm*sr)'):
-            
+
             contents = np.tensordot(allsky_image_model.contents, self.contents, axes=([0,1], [0,1]))
             contents *= self.axes[0].pixarea()
 
             return Histogram(edges=self.axes[2:], contents=contents, copy_contents=False)
-        
+
         else:
             raise ValueError(f"The input allskymodel mismatches with the extended source response.")
 
@@ -115,13 +118,14 @@ class ExtendedSourceResponse(Histogram):
             A histogram representing the calculated expectation based on the
             provided extended source model.
         """
-      
+
         if isinstance(source.spatial_shape, Function3D):
-
-            allsky_image_model = get_integrated_extended_model_3d(source, image_axis = self.axes[0], energy_axis = self.axes[1])
-        
+            allsky_image_model = get_integrated_extended_model_3d(source,
+                                                                  image_axis = self.axes[0],
+                                                                  energy_axis = self.axes[1])
         else:
+            allsky_image_model = get_integrated_extended_model(source,
+                                                               image_axis = self.axes[0],
+                                                               energy_axis = self.axes[1])
 
-            allsky_image_model = get_integrated_extended_model(source, image_axis = self.axes[0], energy_axis = self.axes[1]) 
-        
         return self.get_expectation(allsky_image_model)
