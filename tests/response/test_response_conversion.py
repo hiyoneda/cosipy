@@ -4,6 +4,8 @@ from cosipy import test_data
 
 from cosipy.response import FullDetectorResponse, RspConverter
 
+from pytest import raises
+
 rspgz_response_path = test_data.path / "test_full_detector_response.rsp.gz"
 
 rspgz_nonorm_response_path = test_data.path / "test_full_detector_response_no_norm.rsp.gz"
@@ -85,10 +87,9 @@ def test_default_norms(tmp_path):
                     h5_filename = tmp_h5_filename,
                     overwrite = True)
 
-    fdr = FullDetectorResponse.open(tmp_h5_filename)
-    norm_info = fdr.headers["SP"]
-    assert norm_info == "Linear 50 10000"
-    fdr.close()
+    with FullDetectorResponse.open(tmp_h5_filename) as fdr:
+        norm_info = fdr.headers["SP"]
+        assert norm_info == "Linear 50 10000"
 
     c = RspConverter(bufsize = 100000,
                      norm = "Mono",
@@ -98,10 +99,26 @@ def test_default_norms(tmp_path):
                     h5_filename = tmp_h5_filename,
                     overwrite = True)
 
-    fdr = FullDetectorResponse.open(tmp_h5_filename)
-    norm_info = fdr.headers["SP"]
-    assert norm_info == "Mono 511"
-    fdr.close()
+    with FullDetectorResponse.open(tmp_h5_filename) as fdr:
+        norm_info = fdr.headers["SP"]
+        assert norm_info == "Mono 511"
+
+        # bins with no defined spectral normalization should
+        # have their eff_area set to zero, not -inf or NaN
+        assert all(np.isfinite(fdr.eff_area_correction))
+
+    # if no monoenergetic energy is given, Mono is
+    # undefined with multiple Ei bins
+    with raises(ValueError):
+        c = RspConverter(bufsize = 100000,
+                         norm = "Mono")
+
+        c.convert_to_h5(rspgz_nonorm_response_path,
+                        h5_filename = tmp_h5_filename,
+                        overwrite = True)
+
+    # cannot test Mono with no param without an .rsp file
+    # containing only a single Ei axis bin
 
     c = RspConverter(bufsize = 100000,
                      norm = "powerlaw",
@@ -111,10 +128,9 @@ def test_default_norms(tmp_path):
                     h5_filename = tmp_h5_filename,
                     overwrite = True)
 
-    fdr = FullDetectorResponse.open(tmp_h5_filename)
-    norm_info = fdr.headers["SP"]
-    assert norm_info == "powerlaw 50 10000 0.9"
-    fdr.close()
+    with FullDetectorResponse.open(tmp_h5_filename) as fdr:
+        norm_info = fdr.headers["SP"]
+        assert norm_info == "powerlaw 50 10000 0.9"
 
     c = RspConverter(bufsize = 100000,
                      norm = "powerlaw",
@@ -124,11 +140,11 @@ def test_default_norms(tmp_path):
                     h5_filename = tmp_h5_filename,
                     overwrite = True)
 
-    fdr = FullDetectorResponse.open(tmp_h5_filename)
-    norm_info = fdr.headers["SP"]
-    assert norm_info == "powerlaw 50 10000 1.0"
-    fdr.close()
+    with FullDetectorResponse.open(tmp_h5_filename) as fdr:
+        norm_info = fdr.headers["SP"]
+        assert norm_info == "powerlaw 50 10000 1.0"
 
+    # powerlaw norm that does not span all of Ei
     c = RspConverter(bufsize = 100000,
                      norm = "powerlaw",
                      norm_params = [500, 1000, 1])
@@ -137,14 +153,13 @@ def test_default_norms(tmp_path):
                     h5_filename = tmp_h5_filename,
                     overwrite = True)
 
-    fdr = FullDetectorResponse.open(tmp_h5_filename)
-    norm_info = fdr.headers["SP"]
-    assert norm_info == "powerlaw 500 1000 1.0"
+    with FullDetectorResponse.open(tmp_h5_filename) as fdr:
+        norm_info = fdr.headers["SP"]
+        assert norm_info == "powerlaw 500 1000 1.0"
 
-    # bins with no defined spectral normalization should
-    # have their eff_area set to zero, not -inf or NaN
-    assert all(np.isfinite(fdr.eff_area_correction))
-    fdr.close()
+        # bins with no defined spectral normalization should
+        # have their eff_area set to zero, not -inf or NaN
+        assert all(np.isfinite(fdr.eff_area_correction))
 
     # cannot test Gaussian norm because it can only be used on
     # a response with a single Ei bin
