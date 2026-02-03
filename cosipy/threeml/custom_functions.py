@@ -234,6 +234,7 @@ class Wide_Asymm_Gaussian_on_sphere(Function2D, metaclass=FunctionMeta):
 
     def evaluate(self, x, y, lon0, lat0, a, e, theta):
 
+        from astromodels.utils.angular_distance import angular_distance
         from past.utils import old_div
 
         lon, lat = x, y
