@@ -91,7 +91,8 @@ def test_default_norms(tmp_path):
     fdr.close()
 
     c = RspConverter(bufsize = 100000,
-                     norm = "Mono")
+                     norm = "Mono",
+                     norm_params = [511])
 
     c.convert_to_h5(rspgz_nonorm_response_path,
                     h5_filename = tmp_h5_filename,
@@ -99,7 +100,7 @@ def test_default_norms(tmp_path):
 
     fdr = FullDetectorResponse.open(tmp_h5_filename)
     norm_info = fdr.headers["SP"]
-    assert norm_info == "Mono"
+    assert norm_info == "Mono 511"
     fdr.close()
 
     c = RspConverter(bufsize = 100000,

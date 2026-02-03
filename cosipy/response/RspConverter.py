@@ -400,9 +400,10 @@ class RspConverter():
 
         match norm:
             case 'Mono':
-                if len(params) > 0:
-                    raise ValueError(f"Mono normalization takes zero params; {len(params)} given")
-                params = ()
+                if len(params) > 1:
+                    raise ValueError(f"Mono normalization takes a most one param; {len(params)} given")
+                # emono if given, else dummy value
+                params = (None,) if len(params) == 0 else ( int(params[0]), )
 
             case 'Linear':
                 if len(params) != 2:
@@ -474,18 +475,22 @@ class RspConverter():
         """
 
         norm = hdr["norm"]
+        params = hdr["norm_params"]
+
+        ei_axis = axes['Ei']
+        e_lo = ei_axis.lower_bounds.value
+        e_hi = ei_axis.upper_bounds.value
 
         # If we have one single bin, treat the Gaussian normalization
         # like the mono one.  Also check that the Gaussian spectrum is
         # fully contained in that bin
-        if norm == "Gaussian" and axes['Ei'].nbins == 1:
+        if norm == "Gaussian" and ei_axis.nbins == 1:
 
             from scipy.special import erf
 
-            Gauss_mean = hdr["norm_params"][0]
-            Gauss_sdev = hdr["norm_params"][1]
+            Gauss_mean, Gauss_sdev = params
 
-            edges = axes['Ei'].edges.value  # only two edges for 1 bin
+            edges = ei_axis.edges.value  # only two edges for 1 bin
 
             z = (edges - Gauss_mean)/(Gauss_sdev * np.sqrt(2))
             gauss_int = np.diff(0.5*(1 + erf(z)))
@@ -496,18 +501,15 @@ class RspConverter():
                 logger.info("Only one bin so we will use the Mono normalisation")
 
             norm = "Mono"
+            params = (None,)
 
         match norm:
 
             case "Linear":
-
-                emin, emax = hdr["norm_params"]
+                emin, emax = params
 
                 if not self.quiet:
                     logger.info(f"normalization: linear with energy range [{emin}-{emax}]")
-
-                e_lo = axes['Ei'].lower_bounds.value
-                e_hi = axes['Ei'].upper_bounds.value
 
                 e_lo = np.minimum(emax, e_lo)
                 e_hi = np.minimum(emax, e_hi)
@@ -521,16 +523,23 @@ class RspConverter():
                 if not self.quiet:
                     logger.info("normalization: mono")
 
-                nperchannel_norm = np.array([1.])
+                emono = params[0]
+                if emono is None:
+                    if ei_axis.nbins > 1:
+                        raise ValueError("Cannot specify Mono norm without energy for Ei axis with multiple bins")
+                    else:
+                        # all energy is in the single bin
+                        nperchannel_norm = np.array([1.])
+                else:
+                    # set just the Ei bin containing the mono energy to 1
+                    nperchannel_norm = np.zeros(ei_axis.nbins)
+                    nperchannel_norm[(e_lo <= emono) & (e_hi >= emono)] = 1.
 
             case "powerlaw":
-                emin, emax, alpha = hdr["norm_params"]
+                emin, emax, alpha = params
 
                 if not self.quiet:
                     logger.info(f"normalization: powerlaw with index {alpha} with energy range [{emin}-{emax}]keV")
-
-                e_lo = axes['Ei'].lower_bounds.value
-                e_hi = axes['Ei'].upper_bounds.value
 
                 e_lo = np.minimum(emax, e_lo)
                 e_hi = np.minimum(emax, e_hi)
