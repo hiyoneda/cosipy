@@ -65,8 +65,8 @@ class Band_Eflux(Function1D, metaclass=FunctionMeta):
         self.E0.unit = x_unit
 
         # alpha and beta are dimensionless
-        self.alpha.unit = astropy_units.dimensionless_unscaled
-        self.beta.unit = astropy_units.dimensionless_unscaled
+        self.alpha.unit = u.dimensionless_unscaled
+        self.beta.unit = u.dimensionless_unscaled
 
         # a and b have the same units of x
         self.a.unit = x_unit
@@ -233,6 +233,8 @@ class Wide_Asymm_Gaussian_on_sphere(Function2D, metaclass=FunctionMeta):
         self.theta.unit = u.degree
 
     def evaluate(self, x, y, lon0, lat0, a, e, theta):
+
+        from past.utils import old_div
 
         lon, lat = x, y
 
