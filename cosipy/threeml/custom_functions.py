@@ -235,7 +235,6 @@ class Wide_Asymm_Gaussian_on_sphere(Function2D, metaclass=FunctionMeta):
     def evaluate(self, x, y, lon0, lat0, a, e, theta):
 
         from astromodels.utils.angular_distance import angular_distance
-        from past.utils import old_div
 
         lon, lat = x, y
 
@@ -267,15 +266,15 @@ class Wide_Asymm_Gaussian_on_sphere(Function2D, metaclass=FunctionMeta):
 
         sin_2phi = np.sin(2.0 * phi * np.pi / 180.0)
 
-        A = old_div(cos2_phi, (2.0 * b**2)) + old_div(sin2_phi, (2.0 * a**2))
+        A = cos2_phi / (2.0 * b**2) + sin2_phi / (2.0 * a**2)
 
-        B = old_div(-sin_2phi, (4.0 * b**2)) + old_div(sin_2phi, (4.0 * a**2))
+        B = -sin_2phi / (4.0 * b**2) + sin_2phi / (4.0 * a**2)
 
-        C = old_div(sin2_phi, (2.0 * b**2)) + old_div(cos2_phi, (2.0 * a**2))
+        C = sin2_phi / (2.0 * b**2) + cos2_phi / (2.0 * a**2)
 
         E = -A * np.power(dX, 2) + 2.0 * B * dX * dY - C * np.power(dY, 2)
 
-        return np.power(old_div(180, np.pi), 2) * 1.0 / (2 * np.pi * a * b) * np.exp(E)
+        return np.power(180 / np.pi, 2) * 1.0 / (2 * np.pi * a * b) * np.exp(E)
 
     def get_boundaries(self):
 
