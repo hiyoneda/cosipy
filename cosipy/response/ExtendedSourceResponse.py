@@ -44,7 +44,7 @@ class ExtendedSourceResponse(Histogram):
         """
         Do init operations specific to our subclass
         """
-        if not list(self.axes.labels) == ['NuLambda', 'Ei', 'Em', 'Phi', 'PsiChi']:
+        if not tuple(self.axes.labels) == ('NuLambda', 'Ei', 'Em', 'Phi', 'PsiChi'):
             # 'NuLambda' should be 'lb' if it is in the gal. coordinates?
             raise ValueError(f"The input axes {self.axes.labels} is not supported by ExtendedSourceResponse class.")
 
@@ -98,7 +98,7 @@ class ExtendedSourceResponse(Histogram):
             A histogram representing the calculated expectation.
         """
 
-        if self.axes[:2] != allsky_image_model.axes[:2] or \
+        if allsky_image_model.axes[:2] != self.axes[:2] or \
            allsky_image_model.unit != self._exp_unit:
             raise ValueError(f"The input allskymodel mismatches with the extended source response.")
 
@@ -106,7 +106,6 @@ class ExtendedSourceResponse(Histogram):
         contents *= self.axes[0].pixarea()
 
         return Histogram(edges=self.axes[2:], contents=contents, copy_contents=False)
-
 
     def get_expectation_from_astromodel(self, source):
         """
