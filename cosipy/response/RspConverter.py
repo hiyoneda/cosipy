@@ -179,7 +179,7 @@ class RspConverter():
             while h5_path.suffix in {".rsp", "gz"}:
                 h5_path = h5_path.with_suffix("")
 
-            h5_filename = str(rsp_filename) + ".h5"
+            h5_filename = h5_path.parent / (h5_path.stem + ".h5")
 
         if Path(h5_filename).exists() and not overwrite:
             raise RuntimeError(f"Not overwriting existing HDF5 file {h5_filename}")
@@ -488,11 +488,11 @@ class RspConverter():
 
             from scipy.special import erf
 
-            Gauss_mean, Gauss_sdev = params
+            mean, sdev, cutoff = params
 
             edges = ei_axis.edges.value  # only two edges for 1 bin
 
-            z = (edges - Gauss_mean)/(Gauss_sdev * np.sqrt(2))
+            z = (edges - mean)/(sdev * np.sqrt(2))
             gauss_int = np.diff(0.5*(1 + erf(z)))
 
             assert gauss_int == 1, "The gaussian spectrum is not fully contained in this single bin!"
