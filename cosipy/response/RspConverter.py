@@ -403,7 +403,7 @@ class RspConverter():
                 if len(params) > 1:
                     raise ValueError(f"Mono normalization takes a most one param; {len(params)} given")
                 # emono if given, else dummy value
-                params = (None,) if len(params) == 0 else ( int(params[0]), )
+                params = () if len(params) == 0 else ( int(params[0]), )
 
             case 'Linear':
                 if len(params) != 2:
@@ -506,14 +506,18 @@ class RspConverter():
                 if not self.quiet:
                     logger.info("normalization: mono")
 
-                emono = params[0]
-                if emono is None:
+                if params == ():
                     if ei_axis.nbins > 1:
                         raise ValueError("Cannot specify Mono norm without energy for Ei axis with multiple bins")
                     else:
                         # all energy is in the single bin
                         nperchannel_norm = np.array([1.])
+
+                        # fill in a header value so we don't write "None"
+                        hdr["norm_params"] = (ei_axis.centers[0],)
                 else:
+                    emono = params[0]
+
                     # set just the Ei bin containing the mono energy to 1
                     nperchannel_norm = np.zeros(ei_axis.nbins)
                     nperchannel_norm[(e_lo <= emono) & (e_hi >= emono)] = 1.
@@ -538,8 +542,11 @@ class RspConverter():
 
             case "Gaussian" :
                 mean, sdev, cutoff = params
+
                 emin = mean - cutoff * sdev
                 emax = mean + cutoff * sdev
+
+                logger.info(f"normalization: Gaussian with energy range [{emin}-{emax}]keV")
 
                 e_lo = np.minimum(emax, e_lo)
                 e_hi = np.minimum(emax, e_hi)

@@ -10,6 +10,8 @@ rspgz_response_path = test_data.path / "test_full_detector_response.rsp.gz"
 
 rspgz_nonorm_response_path = test_data.path / "test_full_detector_response_no_norm.rsp.gz"
 
+rspgz_mono_nonorm_response_path = test_data.path / "test_full_detector_response_mono_no_norm.rsp.gz"
+
 h5_response_path = test_data.path / "test_full_detector_response.h5"
 
 
@@ -107,6 +109,23 @@ def test_default_norms(tmp_path):
         # have their eff_area set to zero, not -inf or NaN
         assert all(np.isfinite(fdr.eff_area_correction))
 
+    # mono norm with no energy should work for single-bin response
+    c = RspConverter(bufsize = 100000,
+                     norm = "Mono",
+                     norm_params = [])
+
+    c.convert_to_h5(rspgz_mono_nonorm_response_path,
+                    h5_filename = tmp_h5_filename,
+                    overwrite = True)
+
+    with FullDetectorResponse.open(tmp_h5_filename) as fdr:
+        norm_info = fdr.headers["SP"]
+        assert norm_info == "Mono"
+
+        # bins with no defined spectral normalization should
+        # have their eff_area set to zero, not -inf or NaN
+        assert all(np.isfinite(fdr.eff_area_correction))
+
     # if no monoenergetic energy is given, Mono is
     # undefined with multiple Ei bins
     with raises(ValueError):
@@ -116,9 +135,6 @@ def test_default_norms(tmp_path):
         c.convert_to_h5(rspgz_nonorm_response_path,
                         h5_filename = tmp_h5_filename,
                         overwrite = True)
-
-    # cannot test Mono with no param without an .rsp file
-    # containing only a single Ei axis bin
 
     c = RspConverter(bufsize = 100000,
                      norm = "powerlaw",
