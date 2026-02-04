@@ -1,8 +1,7 @@
 import numpy as np
+
 import astropy.units as u
-from astropy.units import Quantity
 from astropy.coordinates import Galactic
-from scipy import integrate
 
 from histpy import Histogram
 
