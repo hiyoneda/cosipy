@@ -57,6 +57,9 @@ class Band_Eflux(Function1D, metaclass=FunctionMeta):
             fix: yes
     """
 
+    def _setup(self):
+        self._params = np.full(5, np.nan)
+
     def _set_units(self, x_unit, y_unit):
         # The normalization has the unit of x * y
         self.K.unit = y_unit * x_unit
@@ -83,12 +86,10 @@ class Band_Eflux(Function1D, metaclass=FunctionMeta):
         # Cache the normalizing integral so we can reuse its value
         # instead of recomputing it if its parameters have not
         # changed. We must test for change in all the parameters of
-        # spectrum_, as testing equality of two Band objects always
-        # returns False.
+        # spectrum.
 
         params = np.array([a, b, alpha, beta, E0])
-        if not hasattr(self, "_params") or \
-           not np.array_equal(self._params, params):
+        if not np.array_equal(self._params, params):
             self._params = params
 
             spectrum = Band_grbm(alpha=alpha,
@@ -151,178 +152,40 @@ class SpecFromDat(Function1D, metaclass=FunctionMeta):
                     energy: keV
                     flux: ph/cm2/s/kev
         """
+
+        def _setup(self):
+            self._dat_file = None
+
         def _set_units(self, x_unit, y_unit):
 
             self.K.unit = y_unit
 
         def evaluate(self, x, K):
-            data = np.genfromtxt(self.dat.value,comments = "#",
-                                 usecols = (1,2),
-                                 skip_footer=1,
-                                 skip_header=5)
-            dataEn = data[:,0]
-            dataFlux = data[:,1]
 
-            # Calculate the widths of the energy bins
-            ewidths = np.diff(dataEn, append=dataEn[-1])
+            if self.dat.value != self._dat_file:
 
-            # Normalize dataFlux using the energy bin widths
-            dataFlux /= np.sum(dataFlux * ewidths)
+                # data file property changed -- reload and rebuild
+                # interpolator function
 
-            fun = interp1d(dataEn, dataFlux, fill_value=0, bounds_error=False)
+                self._dat_file = self.dat.value
 
-            return K * fun(x)
+                data = np.genfromtxt(self.dat.value,comments = "#",
+                                     usecols = (1,2),
+                                     skip_footer=1,
+                                     skip_header=5)
+                dataEn = data[:,0]
+                dataFlux = data[:,1]
 
+                # Calculate the widths of the energy bins
+                ewidths = np.diff(dataEn, append=dataEn[-1])
 
-class Wide_Asymm_Gaussian_on_sphere(Function2D, metaclass=FunctionMeta):
-    r"""
-    description :
+                # Normalize dataFlux using the energy bin widths
+                dataFlux /= np.sum(dataFlux * ewidths)
 
-        A bidimensional Gaussian function on a sphere (in spherical coordinates)
+                self._fun = interp1d(dataEn, dataFlux, fill_value=0, bounds_error=False)
 
-        see https://en.wikipedia.org/wiki/Gaussian_function#Two-dimensional_Gaussian_function
+            return K * self._fun(x)
 
-    parameters :
-
-        lon0 :
-
-            desc : Longitude of the center of the source
-            initial value : 0.0
-            min : 0.0
-            max : 360.0
-
-        lat0 :
-
-            desc : Latitude of the center of the source
-            initial value : 0.0
-            min : -90.0
-            max : 90.0
-
-        a :
-
-            desc : Standard deviation of the Gaussian distribution (major axis)
-            initial value : 10
-            min : 0
-            max : 90
-
-        e :
-
-            desc : Excentricity of Gaussian ellipse, e^2 = 1 - (b/a)^2, where b is the standard deviation of the Gaussian distribution (minor axis)
-            initial value : 0.9
-            min : 0
-            max : 1
-
-        theta :
-
-            desc : inclination of major axis to a line of constant latitude
-            initial value : 10.
-            min : -90.0
-            max : 90.0
-
-    """
-    def _set_units(self, x_unit, y_unit, z_unit):
-
-        # lon0 and lat0 and a have most probably all units of degrees. However,
-        # let's set them up here just to save for the possibility of using the
-        # formula with other units (although it is probably never going to happen)
-
-        self.lon0.unit = x_unit
-        self.lat0.unit = y_unit
-        self.a.unit = x_unit
-        self.e.unit = u.dimensionless_unscaled
-        self.theta.unit = u.degree
-
-    def evaluate(self, x, y, lon0, lat0, a, e, theta):
-
-        from astromodels.utils.angular_distance import angular_distance
-
-        lon, lat = x, y
-
-        b = a * np.sqrt(1.0 - e**2)
-
-        dX = np.atleast_1d(angular_distance(lon0, lat0, lon, lat0))
-        dY = np.atleast_1d(angular_distance(lon0, lat0, lon0, lat))
-
-        dlon = lon - lon0
-        if isinstance(dlon, u.Quantity):
-            dlon = (dlon.to(u.degree)).value
-
-        idx = np.logical_and(
-            np.logical_or(dlon < 0, dlon > 180),
-            np.logical_or(dlon > -180, dlon < -360),
-        )
-        dX[idx] = -dX[idx]
-
-        idx = lat < lat0
-        dY[idx] = -dY[idx]
-
-        if isinstance(theta, u.Quantity):
-            phi = (theta.to(u.degree)).value + 90.0
-        else:
-            phi = theta + 90.0
-
-        cos2_phi = np.power(np.cos(phi * np.pi / 180.0), 2)
-        sin2_phi = np.power(np.sin(phi * np.pi / 180.0), 2)
-
-        sin_2phi = np.sin(2.0 * phi * np.pi / 180.0)
-
-        A = cos2_phi / (2.0 * b**2) + sin2_phi / (2.0 * a**2)
-
-        B = -sin_2phi / (4.0 * b**2) + sin_2phi / (4.0 * a**2)
-
-        C = sin2_phi / (2.0 * b**2) + cos2_phi / (2.0 * a**2)
-
-        E = -A * np.power(dX, 2) + 2.0 * B * dX * dY - C * np.power(dY, 2)
-
-        return np.power(180 / np.pi, 2) * 1.0 / (2 * np.pi * a * b) * np.exp(E)
-
-    def get_boundaries(self):
-
-        # Truncate the gaussian at 2 times the max of sigma allowed
-
-        min_lat = max(-90.0, self.lat0.value - 2 * self.a.max_value)
-        max_lat = min(90.0, self.lat0.value + 2 * self.a.max_value)
-
-        max_abs_lat = max(np.absolute(min_lat), np.absolute(max_lat))
-
-        if (
-            max_abs_lat > 89.0
-            or 2 * self.a.max_value / np.cos(max_abs_lat * np.pi / 180.0) >= 180.0
-        ):
-
-            min_lon = 0.0
-            max_lon = 360.0
-
-        else:
-
-            min_lon = self.lon0.value - 2 * self.a.max_value / np.cos(
-                max_abs_lat * np.pi / 180.0
-            )
-            max_lon = self.lon0.value + 2 * self.a.max_value / np.cos(
-                max_abs_lat * np.pi / 180.0
-            )
-
-            if min_lon < 0.0:
-
-                min_lon = min_lon + 360.0
-
-            elif max_lon > 360.0:
-
-                max_lon = max_lon - 360.0
-
-        return (min_lon, max_lon), (min_lat, max_lat)
-
-    def get_total_spatial_integral(self, z=None):
-        """
-        Returns the total integral (for 2D functions) or the integral over the spatial components (for 3D functions).
-        needs to be implemented in subclasses.
-
-        :return: an array of values of the integral (same dimension as z).
-        """
-
-        if isinstance(z, u.Quantity):
-            z = z.value
-        return np.ones_like(z)
 
 class GalpropHealpixModel(Function3D, metaclass=FunctionMeta):
 
@@ -417,10 +280,10 @@ class GalpropHealpixModel(Function3D, metaclass=FunctionMeta):
         if x.shape != y.shape:
             raise ValueError("x and y must have the same shape")
 
-        if self._fitsfile == None:
+        if self._fitsfile is None:
             raise RuntimeError("Need to either specify or load a fits file")
 
-        if self._file_loaded == False:
+        if not self._file_loaded:
             self.load_file(self._fitsfile)
 
         if self._frame != "galactic":
@@ -463,29 +326,26 @@ class GalpropHealpixModel(Function3D, metaclass=FunctionMeta):
 
         # access with results.optimized_model["galprop_source"].spatial_shape.nside
 
-        if nside != None:
+        if nside is not None:
             # Get spatial grid from nside
             n_pixels = hp.nside2npix(nside)
             ipix = np.arange(n_pixels)
-            coords = hp.pix2ang(nside, ipix, lonlat=True)
+            x, y = hp.pix2ang(nside, ipix, lonlat=True)
             logger.info(f"using nside={nside} from user input in evaluate method")
 
         else:
             # Get spatial grid from GALPROP map:
             self.load_file(self._fitsfile)
             ipix = np.arange(self.n_pixels)
-            coords = hp.pix2ang(self.nside, ipix, lonlat=True)
+            x, y = hp.pix2ang(self.nside, ipix, lonlat=True)
             logger.info(f"using nside={self.nside} from GALPROP map in evaluate method")
-
-        x = coords[0]
-        y = coords[1]
 
         intensity_3d = self.evaluate(x, y, z, self.K.value)
 
         # We are calculating the average intensity (and not the total in)
-        intensity_2d = np.sum(intensity_3d,axis=0)
+        intensity_2d = np.sum(intensity_3d, axis=0)
 
-        if avg_int == True:
+        if avg_int:
             intensity_2d /= len(intensity_3d) # return average intensity
 
         return intensity_2d
