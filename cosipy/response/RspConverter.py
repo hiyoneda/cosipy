@@ -474,34 +474,17 @@ class RspConverter():
 
         """
 
+        def gauss_int(x, mu, sigma):
+            from scipy.special import erf
+            z = (x - mu)/(sigma * np.sqrt(2))
+            return 0.5*(1 + erf(z))
+
         norm = hdr["norm"]
         params = hdr["norm_params"]
 
         ei_axis = axes['Ei']
         e_lo = ei_axis.lower_bounds.value
         e_hi = ei_axis.upper_bounds.value
-
-        # If we have one single bin, treat the Gaussian normalization
-        # like the mono one.  Also check that the Gaussian spectrum is
-        # fully contained in that bin
-        if norm == "Gaussian" and ei_axis.nbins == 1:
-
-            from scipy.special import erf
-
-            mean, sdev, cutoff = params
-
-            edges = ei_axis.edges.value  # only two edges for 1 bin
-
-            z = (edges - mean)/(sdev * np.sqrt(2))
-            gauss_int = np.diff(0.5*(1 + erf(z)))
-
-            assert gauss_int == 1, "The gaussian spectrum is not fully contained in this single bin!"
-
-            if not self.quiet:
-                logger.info("Only one bin so we will use the Mono normalisation")
-
-            norm = "Mono"
-            params = (None,)
 
         match norm:
 
@@ -554,7 +537,17 @@ class RspConverter():
                     nperchannel_norm = (e_hi**a - e_lo**a) / (emax**a - emin**a)
 
             case "Gaussian" :
-                raise NotImplementedError("Gaussian normalization for multiple bins not yet implemented")
+                mean, sdev, cutoff = params
+                emin = mean - cutoff * sdev
+                emax = mean + cutoff * sdev
+
+                e_lo = np.minimum(emax, e_lo)
+                e_hi = np.minimum(emax, e_hi)
+
+                e_lo = np.maximum(emin, e_lo)
+                e_hi = np.maximum(emin, e_hi)
+
+                nperchannel_norm = (gauss_int(e_hi, mean, sdev) - gauss_int(e_lo, mean, sdev)) / (emax - emin)
 
         # If Nulambda is full-sky, its nbins will be 1, so division is a no-op.
         # We assume all FISBEL pixels have the same area.

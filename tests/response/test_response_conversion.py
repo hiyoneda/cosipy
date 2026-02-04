@@ -161,8 +161,23 @@ def test_default_norms(tmp_path):
         # have their eff_area set to zero, not -inf or NaN
         assert all(np.isfinite(fdr.eff_area_correction))
 
-    # cannot test Gaussian norm because it can only be used on
-    # a response with a single Ei bin
+    # Gaussian norm
+    c = RspConverter(bufsize = 100000,
+                     norm = "Gaussian",
+                     norm_params = [100, 100, 3])
+
+    c.convert_to_h5(rspgz_nonorm_response_path,
+                    h5_filename = tmp_h5_filename,
+                    overwrite = True)
+
+    with FullDetectorResponse.open(tmp_h5_filename) as fdr:
+        norm_info = fdr.headers["SP"]
+        assert norm_info == "Gaussian 100.0 100.0 3.0"
+
+        # bins with no defined spectral normalization should
+        # have their eff_area set to zero, not -inf or NaN
+        assert all(np.isfinite(fdr.eff_area_correction))
+
 
 def test_convert_h5_to_rsp(tmp_path):
 
