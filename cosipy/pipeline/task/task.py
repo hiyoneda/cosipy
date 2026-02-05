@@ -117,7 +117,7 @@ def cosi_bindata(argv=None):
     #Apply optional time selection:
     if config.get("tmin") is not None and config.get("tmax") is not None:
         #
-        print("Applying time selection %f-%f to the unbinned data" % (tmin,tmax))
+        logger.info("Applying time selection %f-%f to the unbinned data" % (tmin,tmax))
         #
         tseldata_name="tsel_unbinned_data" if not args.suffix else str("tsel_unbinned_data_"+args.suffix)
         tseldata_path=odir/tseldata_name
@@ -140,8 +140,8 @@ def cosi_bindata(argv=None):
         raise RuntimeError(f"{bdata_path} already exists. If you mean to replace it then use --overwrite.")
     get_binned_data(yaml_path,data_path,bdata_path, psichi_coo)
     #
-    print(str(" Binning configuration file " + str(yaml_path) + " is ready"))
-    print(str(" Binned data file "+str(bdata_path)+" is ready for analysis"))
+    logger.info(str(" Binning configuration file " + str(yaml_path) + " is ready"))
+    logger.info(str(" Binned data file "+str(bdata_path)+" is ready for analysis"))
 
 
 if __name__ == "__main__":
@@ -258,14 +258,14 @@ def cosi_threemlfit(argv=None):
     results.display()
     results.write_to(odir/result_name, overwrite=args.overwrite)
 
-    print("Median and errors:")
+    logger.info("Median and errors:")
     fitted_par_err = get_fit_par(results)
     for par_name,(par_median,par_err) in fitted_par_err.items():
-        print(f"{par_name} = {par_median:.2e} +/- {par_err:.2e}")
+        logger.info(f"{par_name} = {par_median:.2e} +/- {par_err:.2e}")
 
-    print("Total flux:")
+    logger.info("Total flux:")
     fl, el_fl, eh_fl = get_fit_fluxes(results)
-    print("flux=%f +%f -%f" % (fl, el_fl, eh_fl))
+    logger.info("flux=%f +%f -%f" % (fl, el_fl, eh_fl))
 
     plot_filename = odir/plot_name
     if plot_filename.exists() and not args.overwrite:
