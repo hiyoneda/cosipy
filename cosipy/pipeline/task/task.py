@@ -258,14 +258,14 @@ def cosi_threemlfit(argv=None):
     results.display()
     results.write_to(odir/result_name, overwrite=args.overwrite)
 
-    logger.info("Median and errors:")
+    print("Median and errors:")
     fitted_par_err = get_fit_par(results)
     for par_name,(par_median,par_err) in fitted_par_err.items():
-        logger.info(f"{par_name} = {par_median:.2e} +/- {par_err:.2e}")
+        print(f"{par_name} = {par_median:.2e} +/- {par_err:.2e}")
 
-    logger.info("Total flux:")
+    print("Total flux:")
     fl, el_fl, eh_fl = get_fit_fluxes(results)
-    logger.info("flux=%f +%f -%f" % (fl, el_fl, eh_fl))
+    print("flux=%f +%f -%f" % (fl, el_fl, eh_fl))
 
     plot_filename = odir/plot_name
     if plot_filename.exists() and not args.overwrite:
