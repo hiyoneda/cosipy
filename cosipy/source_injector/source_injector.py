@@ -286,7 +286,8 @@ class SourceInjector():
                      make_PsiChi_plot=False,
                      data_save_path=None,
                      project_axes=None,
-                     polarization=None):
+                     polarization=None,
+                     fluctuate=False):
         """
         Build an injected source by combining all the sources in a
         model.  Each injected source is stored by name in a dictionary
@@ -320,6 +321,8 @@ class SourceInjector():
             point sources. If a given point source response does not
             include a `Pol` axis, the injector will fall back to an
             unpolarized expectation for that source.
+        fluctuate : bool,optional
+            Add poisson fluctuations on the injected source
 
         Returns
         -------
@@ -380,6 +383,9 @@ class SourceInjector():
             else:
                 injected_all += component
 
+        if fluctuate :
+            injected_all[:] = np.random. Poisson(injected_all)
+                         
         if data_save_path is not None:
             injected_all.write(data_save_path)
 
@@ -396,5 +402,5 @@ class SourceInjector():
                                                            ax_kw={'coord': 'G'})
             ax.get_figure().set_figwidth(4)
             ax.get_figure().set_figheight(3)
-
+            
         return injected_all
