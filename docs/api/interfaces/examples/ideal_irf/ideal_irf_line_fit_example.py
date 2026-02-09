@@ -156,8 +156,8 @@ likelihood = UnbinnedLikelihood(expectation)
 # We'll only free one parameter at a time, and set all others to known values.
 # The flux will always be a "nuisance" parameter
 
-fit_energy = True
-fit_direction = True
+fit_energy = False
+fit_direction = False
 direction_nside = 128 # Decrease/increase it to get a better/worse TS map. It'll be faster/slower
 fit_pa_pd = True
 

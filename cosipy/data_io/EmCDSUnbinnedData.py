@@ -151,15 +151,16 @@ class TimeTagEmCDSEventDataInSCFrameFromArrays(TimeTagEmCDSEventDataInSCFrameInt
             new_scatt_lon = []
 
             nevents = 0
-            for event in selection(self):
-                new_id.append(event.id)
-                new_jd1.append(event.jd1)
-                new_jd2.append(event.jd2)
-                new_energy.append(event.energy_keV)
-                new_scatt_angle.append(event.scattering_angle_rad)
-                new_scatt_lat.append(event.scattered_lat_rad_sc)
-                new_scatt_lon.append(event.scattered_lon_rad_sc)
-                nevents +=  1
+            for select,event in zip(selection.select(self), self):
+                if select:
+                    new_id.append(event.id)
+                    new_jd1.append(event.jd1)
+                    new_jd2.append(event.jd2)
+                    new_energy.append(event.energy_keV)
+                    new_scatt_angle.append(event.scattering_angle_rad)
+                    new_scatt_lat.append(event.scattered_lat_rad_sc)
+                    new_scatt_lon.append(event.scattered_lon_rad_sc)
+                    nevents +=  1
 
             self._nevents = nevents
 

@@ -7,7 +7,7 @@ from typing import Union, Iterable
 import numpy as np
 from astropy.time import Time
 
-from cosipy.interfaces import TimeTagEventInterface, EventInterface
+from cosipy.interfaces import TimeTagEventInterface, EventInterface, TimeTagEventDataInterface
 from cosipy.interfaces.event_selection import EventSelectorInterface
 from cosipy.util.iterables import itertools_batched
 
@@ -91,51 +91,41 @@ class TimeSelector(EventSelectorInterface):
 
         return selector
 
-    def _select(self, event:TimeTagEventInterface) -> bool:
-        # Single event
-        return next(iter(self.select([event])))
+    def _select(self, events:TimeTagEventDataInterface, early_stop:bool = True) -> Iterable[bool]:
 
-    def select(self, events:Union[TimeTagEventInterface, Iterable[TimeTagEventInterface]]) -> Union[bool, Iterable[bool]]:
+        # Working in chunks/batches.
+        # This can optimized based on the system and if events is pre-cached
+        # (e.g. events.jd1 and events.jd2 are numpy arrays)
 
-        if isinstance(events, EventInterface):
-            # Single event
-            return self._select(events)
-        else:
-            # Multiple
+        for chunk in itertools_batched(events, self._batch_size):
 
-            # Working in chunks/batches.
-            # This can optimized based on the system
+            jd1 = []
+            jd2 = []
 
-            for chunk in itertools_batched(events, self._batch_size):
+            for event in chunk:
+                jd1.append(event.jd1)
+                jd2.append(event.jd2)
 
-                jd1 = []
-                jd2 = []
+            time = Time(jd1, jd2, format = 'jd')
 
-                for event in chunk:
-                    jd1.append(event.jd1)
-                    jd2.append(event.jd2)
+            if self._tstart_list is None and self._tstop_list is None:
+                result = np.ones(len(time), dtype=bool)
 
-                time = Time(jd1, jd2, format = 'jd')
+            elif self._tstart_list is None:
+                result = time <= self._tstop_list[0]
 
-                if self._tstart_list is None and self._tstop_list is None:
-                    result = np.ones(len(time), dtype=bool)
-                
-                elif self._tstart_list is None:
-                    result = time <= self._tstop_list[0]
-                
-                elif self._tstop_list is None:
-                    result = time > self._tstart_list[0]
-                
-                else:
-                    indices = np.searchsorted(self._tstart_list, time, side='right') - 1
-                    valid = (indices >= 0) & (indices < len(self._tstop_list))
-                    result = np.zeros(len(time), dtype=bool)
-                    result[valid] = time[valid] <= self._tstop_list[indices[valid]]
+            elif self._tstop_list is None:
+                result = time > self._tstart_list[0]
 
-                for sel in result:
-                    yield sel
+            else:
+                indices = np.searchsorted(self._tstart_list, time, side='right') - 1
+                valid = (indices >= 0) & (indices < len(self._tstop_list))
+                result = np.zeros(len(time), dtype=bool)
+                result[valid] = time[valid] <= self._tstop_list[indices[valid]]
 
-                if self._tstop_list is not None and len(time) > 0:
-                    if time[-1] > self._tstop_list[-1]:
-                        # Stop further loading of event
-                        return
+            for sel in result:
+                yield sel
+
+            if early_stop and (self._tstop_list is not None and len(time) > 0) and time[-1] > self._tstop_list[-1]:
+                # Stop further loading of event
+                return

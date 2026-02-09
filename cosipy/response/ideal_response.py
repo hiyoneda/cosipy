@@ -1,6 +1,7 @@
 import itertools
 import warnings
 from collections.abc import Callable
+from itertools import repeat
 from typing import Iterable, Tuple, Union, Iterator
 
 from astropy.coordinates import Angle, SkyCoord
@@ -21,9 +22,10 @@ import numpy as np
 from cosipy.interfaces.event import EmCDSEventInSCFrameInterface
 from cosipy.interfaces.instrument_response_interface import FarFieldInstrumentResponseFunctionInterface
 from cosipy.interfaces.photon_parameters import PhotonInterface, PhotonWithDirectionAndEnergyInSCFrameInterface, \
-    PhotonWithEnergyInterface, PhotonWithDirectionInSCFrameInterface
+    PhotonWithEnergyInterface, PhotonWithDirectionInSCFrameInterface, PhotonListWithDirectionAndEnergyInSCFrameInterface
 from cosipy.response.photon_types import \
     PolarizedPhotonWithDirectionAndEnergyInSCFrameStereographicConventionInterface as PolDirESCPhoton, \
+    PolarizedPhotonListWithDirectionAndEnergyInSCFrameStereographicConventionInterface as PolDirESCPhotonList, \
     PhotonWithDirectionAndEnergyInSCFrame, PolarizedPhotonWithDirectionAndEnergyInSCFrameStereographicConvention
 from scipy.special import erfi, erf
 
@@ -524,7 +526,7 @@ class LogGaussianCosThetaEffectiveArea:
             for photon in batch:
 
                 energy.append(photon.energy_keV)
-                latitude.append(photon.direction_lat_radians)
+                latitude.append(photon.direction_lat_rad_sc)
 
             energy = np.asarray(energy)
             latitude = np.asarray(latitude)
@@ -590,8 +592,8 @@ class ConstantTimesExponentialCutoffFullAbsorption:
 class UnpolarizedIdealComptonIRF(FarFieldInstrumentResponseFunctionInterface):
 
     # The photon class and event class that the IRF implementation can handle
-    photon_type = PhotonWithDirectionAndEnergyInSCFrameInterface
-    event_type = EmCDSEventInSCFrameInterface
+    photon_list_type = PhotonListWithDirectionAndEnergyInSCFrameInterface
+    event_data_type = EmCDSEventDataInSCFrameInterface
 
     def __init__(self,
                  effective_area:Callable[[Iterable[PhotonInterface]], Quantity],
@@ -665,9 +667,9 @@ class UnpolarizedIdealComptonIRF(FarFieldInstrumentResponseFunctionInterface):
     def _random_az(self, photon, phi):
         return 2*np.pi*uniform.rvs()
 
-    def _event_probability(self, photon:PolDirESCPhoton,
-                           phi:float,
-                           events:Iterable[EmCDSEventInSCFrameInterface]) -> Iterable[float]:
+    def _event_probability_const_phi(self, photon:PolDirESCPhoton,
+                                     phi:float,
+                                     events:Iterable[EmCDSEventInSCFrameInterface]) -> Iterable[float]:
         """
         Computes the probability for a given set of photon parameters, and for all events with the same phi
 
@@ -700,7 +702,7 @@ class UnpolarizedIdealComptonIRF(FarFieldInstrumentResponseFunctionInterface):
 
         return prob
 
-    def event_probability(self, query: Iterable[Tuple[PolDirESCPhoton, EmCDSEventInSCFrameInterface]]) -> Iterable[float]:
+    def _event_probability(self, photons: PolDirESCPhotonList, events:EmCDSEventDataInSCFrameInterface) -> Iterable[float]:
         """
         Return the probability density of measuring a given event given a photon.
 
@@ -717,7 +719,7 @@ class UnpolarizedIdealComptonIRF(FarFieldInstrumentResponseFunctionInterface):
         last_phi = None
         cached_events = []
 
-        for photon,event in query:
+        for photon,event in zip(photons, events):
 
             phi = event.scattering_angle_rad
 
@@ -736,7 +738,7 @@ class UnpolarizedIdealComptonIRF(FarFieldInstrumentResponseFunctionInterface):
                     cached_events.append(event)
                 else:
                     # It's not longer the same. We now need to evaluate and yield what we have so far
-                    yield from self._event_probability(last_photon, last_phi, cached_events)
+                    yield from self._event_probability_const_phi(last_photon, last_phi, cached_events)
 
                     # Restart
                     last_photon = photon
@@ -745,7 +747,7 @@ class UnpolarizedIdealComptonIRF(FarFieldInstrumentResponseFunctionInterface):
 
             else:
                 # It's not longer the same. We now need to evaluate and yield what we have so far
-                yield from self._event_probability(last_photon, last_phi, cached_events)
+                yield from self._event_probability_const_phi(last_photon, last_phi, cached_events)
 
                 # Restart
                 last_photon = photon
@@ -753,9 +755,12 @@ class UnpolarizedIdealComptonIRF(FarFieldInstrumentResponseFunctionInterface):
                 cached_events = [event]
 
         # Yield the probability for the leftover events
-        yield from self._event_probability(last_photon, last_phi, cached_events)
+        yield from self._event_probability_const_phi(last_photon, last_phi, cached_events)
 
-    def random_events(self, photons: Iterable[PolDirESCPhoton]) -> Iterable[EmCDSEventInSCFrameInterface]:
+    def _random_events(self, photons: PolDirESCPhotonList) -> EmCDSEventDataInSCFrameInterface:
+        return self.event_data_type.fromiter(self._random_events_iter(photons), photons.nphotons)
+
+    def _random_events_iter(self, photons: PolDirESCPhotonList) -> Iterable[EmCDSEventInSCFrameInterface]:
         """
         Return a stream of random events, photon by photon.
         """
@@ -786,7 +791,7 @@ class UnpolarizedIdealComptonIRF(FarFieldInstrumentResponseFunctionInterface):
             yield EmCDSEventInSCFrame(measured_energy_keV, phi, psichi.lon.rad, psichi.lat.rad)
 
 
-    def effective_area_cm2(self, photons: Iterable[PolDirESCPhoton]) -> Iterable[float]:
+    def _effective_area_cm2(self, photons: PolDirESCPhotonList) -> Iterable[float]:
         """
 
         """
@@ -798,11 +803,11 @@ class IdealComptonIRF(UnpolarizedIdealComptonIRF):
     photon_type = PolDirESCPhoton
 
     def _az_prob(self, photon, phi, az):
-        pa = photon.polarization_angle_rad
+        pa = photon.polarization_angle_rad_stereo
         return KleinNishinaAzimuthalScatteringAngleDist(photon.energy, phi).pdf((az - pa) % (2 * np.pi))
 
     def _random_az(self, photon, phi):
-        pa = photon.polarization_angle_rad
+        pa = photon.polarization_angle_rad_stereo
         return KleinNishinaAzimuthalScatteringAngleDist(photon.energy, phi).rvs() + pa
 
 class RandomEventDataFromLineInSCFrame(EmCDSEventDataInSCFrameInterface):
@@ -848,7 +853,7 @@ class RandomEventDataFromLineInSCFrame(EmCDSEventDataInSCFrameInterface):
                                                                          source_direction_lat_rad,
                                                                          energy_keV)
 
-        unpolarized_expected_counts = next(iter(irf.effective_area_cm2([unpolarized_photon]))) * flux_cm2_s * duration_s
+        unpolarized_expected_counts = irf.effective_area_cm2(unpolarized_photon) * flux_cm2_s * duration_s
 
         if polarization_degree is None:
             polarization_degree = 0
@@ -859,7 +864,7 @@ class RandomEventDataFromLineInSCFrame(EmCDSEventDataInSCFrameInterface):
         if polarization_degree == 0:
             polarized_irf = None
             polarized_expected_counts = 0
-
+            polarized_photon = None
         else:
 
             polarized_irf = polarized_irf
@@ -875,18 +880,20 @@ class RandomEventDataFromLineInSCFrame(EmCDSEventDataInSCFrameInterface):
                                                                                                             polarization_angle_rad)
 
             unpolarized_expected_counts *= (1 - polarization_degree)
-            polarized_expected_counts = polarization_degree * next(iter(polarized_irf.effective_area_cm2([polarized_photon]))) * flux_cm2_s * duration_s
+            polarized_expected_counts = polarization_degree * polarized_irf.effective_area_cm2(polarized_photon) * flux_cm2_s * duration_s
 
         unpolarized_counts = poisson(unpolarized_expected_counts).rvs()
         polarized_counts = poisson(polarized_expected_counts).rvs()
 
         self._events = []
 
-        unpolarized_events = iter(unpolarized_irf.random_events(itertools.repeat(unpolarized_photon, unpolarized_counts)))
+        unpolarized_photons = unpolarized_irf.photon_list_type.from_photon(unpolarized_photon, repeat = unpolarized_counts)
+        unpolarized_events = iter(unpolarized_irf.random_events(unpolarized_photons))
 
         polarized_events = None
         if polarized_counts > 0:
-            polarized_events = iter(polarized_irf.random_events(itertools.repeat(polarized_photon, polarized_counts)))
+            polarized_photons = unpolarized_irf.photon_list_type.from_photon(polarized_photon,repeat=polarized_counts)
+            polarized_events = iter(polarized_irf.random_events(polarized_photons))
 
         nthrown_unpolarized = 0
         nthrown_polarized = 0
@@ -1025,18 +1032,18 @@ class ExpectationFromLineInSCFrame(ExpectationDensityInterface):
             or self._polarization_degree != self._cached_pol_degree):
             #Either it's the first time or the energy changed
 
-            unpolarized_diff_aeff = (1 - self._polarization_degree) * next(
-                iter(self._unpolarized_irf.effective_area_cm2([self._unpolarized_photon])))
+            unpolarized_diff_aeff = (1 - self._polarization_degree) * self._unpolarized_irf.effective_area_cm2(self._unpolarized_photon)
 
             if (self._cached_event_probability_unpolarized is None
                     or self._energy_keV != self._cached_energy_keV
                     or self._direction != self._cached_direction):
                 # Energy or direction can affect the unpolarized response, but not PA nor PD
-                self._cached_event_probability_unpolarized = np.fromiter(self._unpolarized_irf.event_probability([(self._unpolarized_photon, e) for e in self._data]),dtype=float)
+                unpolarized_photons = self._unpolarized_irf.photon_list_type.from_photon(self._unpolarized_photon, repeat = self._data.nevents)
+                self._cached_event_probability_unpolarized = np.fromiter(self._unpolarized_irf.event_probability(unpolarized_photons, self._data),dtype=float)
 
             if self._polarization_degree > 0:
 
-                polarized_diff_aeff = self._polarization_degree * next(iter(self._polarized_irf.effective_area_cm2([self._polarized_photon])))
+                polarized_diff_aeff = self._polarization_degree * self._polarized_irf.effective_area_cm2(self._polarized_photon)
 
                 self._cached_diff_aeff = unpolarized_diff_aeff + polarized_diff_aeff
 
@@ -1045,7 +1052,8 @@ class ExpectationFromLineInSCFrame(ExpectationDensityInterface):
                         or self._direction != self._cached_direction
                         or self._polarization_angle_rad != self._cached_pol_angle_rad):
                     # Energy, direction or PA can affect the unpolarized response, but not PD
-                    self._cached_event_probability_polarized = np.fromiter(self._polarized_irf.event_probability([(self._polarized_photon, e) for e in self._data]), dtype=float)
+                    polarized_photons = self._polarized_irf.photon_list_type.from_photon(self._polarized_photon, repeat = self._data.nevents)
+                    self._cached_event_probability_polarized = np.fromiter(self._polarized_irf.event_probability(polarized_photons, self._data), dtype=float)
 
                 self._cached_event_probability = ( 1 - self._polarization_degree) * self._cached_event_probability_unpolarized + self._polarization_degree * self._cached_event_probability_polarized
 
@@ -1070,5 +1078,5 @@ class ExpectationFromLineInSCFrame(ExpectationDensityInterface):
 
         self._update_cache()
 
-        yield from self._cached_event_probability
+        return self._cached_event_probability
 

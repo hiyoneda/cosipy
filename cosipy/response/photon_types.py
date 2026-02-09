@@ -1,27 +1,46 @@
+from typing import TypeVar, Generic, Iterator
+
+import numpy as np
 from astropy.coordinates import SkyCoord
 from scoords import SpacecraftFrame
 
 from cosipy.interfaces.photon_parameters import PhotonWithDirectionAndEnergyInSCFrameInterface, \
     PolarizedPhotonStereographicConventionInSCInterface, \
-    PolarizedPhotonWithDirectionAndEnergyInSCFrameStereographicConventionInterface, PhotonWithEnergyInterface
+    PolarizedPhotonWithDirectionAndEnergyInSCFrameStereographicConventionInterface, PhotonWithEnergyInterface, \
+    PhotonListWithEnergyInterface, PhotonInterface, PhotonListWithDirectionAndEnergyInSCFrameInterface, \
+    PolarizedPhotonListWithDirectionAndEnergyInSCFrameStereographicConventionInterface
 from cosipy.polarization import PolarizationAngle
 
 from astropy import units as u
 
-class PhotonWithEnergy(PhotonWithEnergyInterface):
+T = TypeVar("T")
 
-    def __init__(self, energy_keV):
+class PhotonWithEnergyGen(Generic[T]):
+
+    def __init__(self, energy_keV: T):
         self._energy = energy_keV
 
     @property
-    def energy_keV(self) -> float:
+    def energy_keV(self) -> T:
         return self._energy
 
-class PhotonWithDirectionAndEnergyInSCFrame(PhotonWithEnergy, PhotonWithDirectionAndEnergyInSCFrameInterface):
+class PhotonWithEnergy(PhotonWithEnergyGen[float], PhotonWithEnergyInterface):...
 
-    frame = SpacecraftFrame()
+class PhotonListWithEnergy(PhotonWithEnergyGen[np.ndarray[float]], PhotonListWithEnergyInterface):
 
-    def __init__(self, direction_lon_radians, direction_lat_radians, energy_keV):
+    def __iter__(self) -> Iterator[PhotonInterface]:
+        for energy_keV in self.energy_keV:
+            yield PhotonWithEnergy(energy_keV)
+
+    def nphotons(self) -> int:
+        return self._energy.size
+
+    def __getitem__(self, item):
+        return PhotonWithEnergy(self._energy[item])
+
+class PhotonWithDirectionAndEnergyInSCFrameGen(PhotonWithEnergyGen[T], ):
+
+    def __init__(self, direction_lon_radians: T, direction_lat_radians: T, energy_keV: T):
 
         super().__init__(energy_keV)
 
@@ -29,23 +48,45 @@ class PhotonWithDirectionAndEnergyInSCFrame(PhotonWithEnergy, PhotonWithDirectio
         self._lat = direction_lat_radians
 
     @property
-    def direction_lon_radians(self) -> float:
+    def direction_lon_rad_sc(self) -> T:
         return self._lon
 
     @property
-    def direction_lat_radians(self) -> float:
+    def direction_lat_rad_sc(self) -> T:
         return self._lat
 
-class PolarizedPhotonWithDirectionAndEnergyInSCFrameStereographicConvention(PhotonWithDirectionAndEnergyInSCFrame, PolarizedPhotonWithDirectionAndEnergyInSCFrameStereographicConventionInterface):
 
-    def __init__(self, direction_lon_radians, direction_lat_radians, energy_keV, polarization_angle_radians):
+class PhotonWithDirectionAndEnergyInSCFrame(PhotonWithDirectionAndEnergyInSCFrameGen[float], PhotonWithDirectionAndEnergyInSCFrameInterface): ...
+
+class PhotonListWithDirectionAndEnergyInSCFrame(PhotonWithDirectionAndEnergyInSCFrameGen[np.ndarray[float]], PhotonListWithDirectionAndEnergyInSCFrameInterface):
+
+    def __iter__(self) -> Iterator[PhotonInterface]:
+        for energy, lon, lat in zip(self.energy_keV, self.direction_lon_rad_sc, self.direction_lat_rad_sc):
+            yield PhotonWithDirectionAndEnergyInSCFrame(lon, lat, energy)
+
+    def __getitem__(self, item):
+        return PhotonWithDirectionAndEnergyInSCFrame(self.direction_lon_rad_sc[item], self.direction_lat_rad_sc[item], self._energy[item])
+
+class PolarizedPhotonWithDirectionAndEnergyInSCFrameStereographicConventionGen(PhotonWithDirectionAndEnergyInSCFrameGen[T]):
+
+    def __init__(self, direction_lon_radians: T, direction_lat_radians: T, energy_keV: T, polarization_angle_radians: T):
 
         super().__init__(direction_lon_radians, direction_lat_radians, energy_keV)
 
         self._pa = polarization_angle_radians
 
     @property
-    def polarization_angle_rad(self) -> float:
+    def polarization_angle_rad_stereo(self) -> T:
         return self._pa
 
 
+class PolarizedPhotonWithDirectionAndEnergyInSCFrameStereographicConvention(PolarizedPhotonWithDirectionAndEnergyInSCFrameStereographicConventionGen[float], PolarizedPhotonWithDirectionAndEnergyInSCFrameStereographicConventionInterface): ...
+
+class PolarizedPhotonListWithDirectionAndEnergyInSCFrameStereographicConvention(PolarizedPhotonWithDirectionAndEnergyInSCFrameStereographicConventionGen[np.ndarray[float]], PolarizedPhotonListWithDirectionAndEnergyInSCFrameStereographicConventionInterface):
+
+    def __iter__(self) -> Iterator[PhotonInterface]:
+        for energy, lon, lat, pa in zip(self.energy_keV, self.direction_lon_rad_sc, self.direction_lat_rad_sc, self.polarization_angle_rad_stereo):
+            yield PolarizedPhotonWithDirectionAndEnergyInSCFrameStereographicConvention(lon, lat, energy, pa)
+
+    def __getitem__(self, item):
+        return PolarizedPhotonWithDirectionAndEnergyInSCFrameStereographicConvention(self.direction_lon_rad_sc[item], self.direction_lat_rad_sc[item], self._energy[item], self.polarization_angle_rad_stereo[item])
