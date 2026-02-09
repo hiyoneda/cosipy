@@ -384,7 +384,7 @@ class SourceInjector():
                 injected_all += component
 
         if fluctuate :
-            injected_all[:] = np.random. Poisson(injected_all)
+            injected_all[:] = np.random.Poisson(injected_all)
                          
         if data_save_path is not None:
             injected_all.write(data_save_path)
