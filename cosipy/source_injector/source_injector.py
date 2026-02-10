@@ -288,7 +288,7 @@ class SourceInjector():
                      data_save_path=None,
                      project_axes=None,
                      polarization=None,
-                     fluctuate=False):
+                     fluctuate=True):
         """
         Build an injected source by combining all the sources in a
         model.  Each injected source is stored by name in a dictionary
@@ -323,7 +323,8 @@ class SourceInjector():
             include a `Pol` axis, the injector will fall back to an
             unpolarized expectation for that source.
         fluctuate : bool,optional
-            Add poisson fluctuations on the injected source
+            Add poisson fluctuations on the injected source. 
+            The default value is set to True.
 
         Returns
         -------
