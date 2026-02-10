@@ -16,10 +16,15 @@ from cosipy.interfaces import BinnedDataInterface, ExpectationDensityInterface, 
 from cosipy.interfaces.data_interface import is_single_event
 from cosipy.interfaces.photon_parameters import PhotonInterface, PhotonWithDirectionInSCFrameInterface, \
     PhotonListWithDirectionInterface, PhotonListInterface, PhotonListWithDirectionInSCFrameInterface, \
-    PhotonWithDirectionInterface, is_single_photon
+    PhotonWithDirectionInterface, is_single_photon, PhotonListWithDirectionAndEnergyInSCFrameInterface, \
+    PolarizedPhotonWithDirectionAndEnergyInSCFrameStereographicConventionInterface, \
+    PolarizedPhotonListWithDirectionAndEnergyInSCFrameStereographicConventionInterface
 from cosipy.polarization import PolarizationAngle
 
 __all__ = ["BinnedInstrumentResponseInterface"]
+
+from cosipy.response.photon_types import PhotonListWithDirectionAndEnergyInSCFrame
+
 
 class BinnedInstrumentResponseInterface(BinnedExpectationInterface, Protocol):
 
@@ -147,9 +152,9 @@ class InstrumentResponseFunctionInterface(Protocol):
 @runtime_checkable
 class FarFieldInstrumentResponseFunctionInterface(InstrumentResponseFunctionInterface, Protocol):
 
-    photon_list_type = PhotonListWithDirectionInterface
+    photon_list_type = PhotonListWithDirectionInSCFrameInterface
 
-    def effective_area_cm2(self, photons: Union[PhotonInterface, PhotonListWithDirectionInterface]) -> Union[float,Iterable[float]]:
+    def effective_area_cm2(self, photons: Union[PhotonWithDirectionInSCFrameInterface, PhotonListWithDirectionInSCFrameInterface]) -> Union[float,Iterable[float]]:
         """
         If we receive a single photon, the output is a scalar. Otherwise, it's an iterable
 
@@ -165,13 +170,13 @@ class FarFieldInstrumentResponseFunctionInterface(InstrumentResponseFunctionInte
         else:
             return self._effective_area_cm2(photons)
 
-    def _effective_area_cm2(self, photons: PhotonListWithDirectionInterface) -> Iterable[float]:
+    def _effective_area_cm2(self, photons: PhotonListWithDirectionInSCFrameInterface) -> Iterable[float]:
         """
         This allows implementation to only define the behaviour for list, and let the above function handle
         the case for a single photon and/or a single event.
         """
 
-    def differential_effective_area_cm2(self, photons: Union[PhotonWithDirectionInterface, PhotonListWithDirectionInterface], events: Union[EventInterface, EventDataInterface]) -> Union[float,Iterable[float]]:
+    def differential_effective_area_cm2(self, photons: Union[PhotonWithDirectionInSCFrameInterface, PhotonListWithDirectionInSCFrameInterface], events: Union[EventInterface, EventDataInterface]) -> Union[float,Iterable[float]]:
         """
         Event probability multiplied by effective area
 
@@ -204,7 +209,7 @@ class FarFieldInstrumentResponseFunctionInterface(InstrumentResponseFunctionInte
 
             return self._differential_effective_area_cm2(photons, events)
 
-    def _differential_effective_area_cm2(self, photons:PhotonListWithDirectionInterface, events: EventDataInterface) -> Iterable[float]:
+    def _differential_effective_area_cm2(self, photons:PhotonListWithDirectionInSCFrameInterface, events: EventDataInterface) -> Iterable[float]:
         """
         Event probability multiplied by effective area
 
@@ -222,7 +227,7 @@ class FarFieldInstrumentResponseFunctionInterface(InstrumentResponseFunctionInte
 
         return map(operator.mul, self._effective_area_cm2(photons), self._event_probability(photons, events))
 
-    def _event_probability(self, photons:PhotonListWithDirectionInterface, events: EventDataInterface) -> Iterable[float]:
+    def _event_probability(self, photons:PhotonListWithDirectionInSCFrameInterface, events: EventDataInterface) -> Iterable[float]:
         """
         Return the probability density of measuring a given event given a photon.
 
@@ -241,7 +246,7 @@ class FarFieldInstrumentResponseFunctionInterface(InstrumentResponseFunctionInte
 
         return map(operator.truediv, self._differential_effective_area_cm2(photons, events), self._effective_area_cm2(photons))
 
-    def effective_area(self, photons: Union[PhotonWithDirectionInterface, PhotonListWithDirectionInterface]) -> Union[u.Quantity,Iterable[u.Quantity]]:
+    def effective_area(self, photons: Union[PhotonWithDirectionInSCFrameInterface, PhotonListWithDirectionInSCFrameInterface]) -> Union[u.Quantity,Iterable[u.Quantity]]:
         """
         Convenience function. Implementation might optimize it
         """
@@ -251,7 +256,7 @@ class FarFieldInstrumentResponseFunctionInterface(InstrumentResponseFunctionInte
         else:
             return (u.Quantity(area_cm2, cm2) for area_cm2 in self.effective_area_cm2(photons))
 
-    def differential_effective_area(self, photons: Union[PhotonWithDirectionInterface, PhotonListWithDirectionInterface], events: Union[EventInterface, EventDataInterface]) -> Union[u.Quantity,Iterable[u.Quantity]]:
+    def differential_effective_area(self, photons: Union[PhotonWithDirectionInSCFrameInterface, PhotonListWithDirectionInSCFrameInterface], events: Union[EventInterface, EventDataInterface]) -> Union[u.Quantity,Iterable[u.Quantity]]:
         """
         Convenience function. Implementation might optimize it
         """
@@ -276,8 +281,15 @@ class FarFieldInstrumentResponseFunctionInterface(InstrumentResponseFunctionInte
 
             return (u.Quantity(area_cm2, cm2) for area_cm2 in self._differential_effective_area_cm2(photons, events))
 
+@runtime_checkable
+class FarFieldSpectralInstrumentResponseFunctionInterface(FarFieldInstrumentResponseFunctionInterface, Protocol):
 
+    photon_list_type = PhotonListWithDirectionAndEnergyInSCFrameInterface
 
+@runtime_checkable
+class FarFieldSpectralPolarizedInstrumentResponseFunctionInterface(FarFieldSpectralInstrumentResponseFunctionInterface, Protocol):
+
+    photon_list_type = PolarizedPhotonListWithDirectionAndEnergyInSCFrameStereographicConventionInterface
 
 
 

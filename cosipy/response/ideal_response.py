@@ -20,7 +20,8 @@ import astropy.units as u
 import numpy as np
 
 from cosipy.interfaces.event import EmCDSEventInSCFrameInterface
-from cosipy.interfaces.instrument_response_interface import FarFieldInstrumentResponseFunctionInterface
+from cosipy.interfaces.instrument_response_interface import FarFieldInstrumentResponseFunctionInterface, \
+    FarFieldSpectralInstrumentResponseFunctionInterface, FarFieldSpectralPolarizedInstrumentResponseFunctionInterface
 from cosipy.interfaces.photon_parameters import PhotonInterface, PhotonWithDirectionAndEnergyInSCFrameInterface, \
     PhotonWithEnergyInterface, PhotonWithDirectionInSCFrameInterface, PhotonListWithDirectionAndEnergyInSCFrameInterface
 from cosipy.response.photon_types import \
@@ -589,7 +590,7 @@ class ConstantTimesExponentialCutoffFullAbsorption:
 
             yield from prob
 
-class UnpolarizedIdealComptonIRF(FarFieldInstrumentResponseFunctionInterface):
+class UnpolarizedIdealComptonIRF(FarFieldSpectralInstrumentResponseFunctionInterface):
 
     # The photon class and event class that the IRF implementation can handle
     photon_list_type = PhotonListWithDirectionAndEnergyInSCFrameInterface
@@ -798,9 +799,7 @@ class UnpolarizedIdealComptonIRF(FarFieldInstrumentResponseFunctionInterface):
         return [a.to_value(u.cm*u.cm) for a in self._effective_area(photons)]
 
 
-class IdealComptonIRF(UnpolarizedIdealComptonIRF):
-
-    photon_type = PolDirESCPhoton
+class IdealComptonIRF(UnpolarizedIdealComptonIRF, FarFieldSpectralPolarizedInstrumentResponseFunctionInterface):
 
     def _az_prob(self, photon, phi, az):
         pa = photon.polarization_angle_rad_stereo

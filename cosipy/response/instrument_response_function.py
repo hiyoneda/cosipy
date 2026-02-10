@@ -11,17 +11,18 @@ from histpy import Histogram
 from scoords import SpacecraftFrame
 
 from cosipy.interfaces import EventInterface
+from cosipy.interfaces.data_interface import EmCDSEventDataInSCFrameInterface
 from cosipy.interfaces.event import TimeTagEmCDSEventInSCFrameInterface, EmCDSEventInSCFrameInterface
-from cosipy.interfaces.instrument_response_interface import FarFieldInstrumentResponseFunctionInterface
+from cosipy.interfaces.instrument_response_interface import FarFieldInstrumentResponseFunctionInterface, \
+    FarFieldSpectralInstrumentResponseFunctionInterface
 from cosipy.interfaces.photon_parameters import PhotonInterface, PhotonWithDirectionAndEnergyInSCFrameInterface, PhotonListWithDirectionInterface
 from cosipy.response import FullDetectorResponse
 from cosipy.util.iterables import itertools_batched
 
 
-class UnpolarizedDC3InterpolatedFarFieldInstrumentResponseFunction(FarFieldInstrumentResponseFunctionInterface):
+class UnpolarizedDC3InterpolatedFarFieldInstrumentResponseFunction(FarFieldSpectralInstrumentResponseFunctionInterface):
 
-    photon_type = PhotonWithDirectionAndEnergyInSCFrameInterface
-    event_type = EmCDSEventInSCFrameInterface
+    event_data_type = EmCDSEventDataInSCFrameInterface
 
     def __init__(self, response: FullDetectorResponse,
                  batch_size = 100000):

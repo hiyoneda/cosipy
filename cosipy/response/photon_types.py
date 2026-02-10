@@ -8,7 +8,8 @@ from cosipy.interfaces.photon_parameters import PhotonWithDirectionAndEnergyInSC
     PolarizedPhotonStereographicConventionInSCInterface, \
     PolarizedPhotonWithDirectionAndEnergyInSCFrameStereographicConventionInterface, PhotonWithEnergyInterface, \
     PhotonListWithEnergyInterface, PhotonInterface, PhotonListWithDirectionAndEnergyInSCFrameInterface, \
-    PolarizedPhotonListWithDirectionAndEnergyInSCFrameStereographicConventionInterface
+    PolarizedPhotonListWithDirectionAndEnergyInSCFrameStereographicConventionInterface, \
+    PhotonWithDirectionInSCFrameInterface, PhotonListWithDirectionInSCFrameInterface
 from cosipy.polarization import PolarizationAngle
 
 from astropy import units as u
@@ -38,11 +39,9 @@ class PhotonListWithEnergy(PhotonWithEnergyGen[np.ndarray[float]], PhotonListWit
     def __getitem__(self, item):
         return PhotonWithEnergy(self._energy[item])
 
-class PhotonWithDirectionAndEnergyInSCFrameGen(PhotonWithEnergyGen[T], ):
+class PhotonWithDirectionInSCFrameGen(Generic[T]):
 
-    def __init__(self, direction_lon_radians: T, direction_lat_radians: T, energy_keV: T):
-
-        super().__init__(energy_keV)
+    def __init__(self, direction_lon_radians: T, direction_lat_radians: T):
 
         self._lon = direction_lon_radians
         self._lat = direction_lat_radians
@@ -55,12 +54,29 @@ class PhotonWithDirectionAndEnergyInSCFrameGen(PhotonWithEnergyGen[T], ):
     def direction_lat_rad_sc(self) -> T:
         return self._lat
 
+class PhotonWithDirectionInSCFrame(PhotonWithDirectionInSCFrameGen[float], PhotonWithDirectionInSCFrameInterface): ...
+
+class PhotonListWithDirectionInSCFrame(PhotonWithDirectionInSCFrameGen[np.ndarray[float]], PhotonListWithDirectionInSCFrameInterface):
+
+    def __iter__(self) -> Iterator[PhotonInterface]:
+        for energy, lon, lat in zip(self.direction_lon_rad_sc, self.direction_lat_rad_sc):
+            yield PhotonWithDirectionInSCFrame(lon, lat)
+
+    def __getitem__(self, item):
+        return PhotonWithDirectionInSCFrame(self.direction_lon_rad_sc[item], self.direction_lat_rad_sc[item])
+
+
+class PhotonWithDirectionAndEnergyInSCFrameGen(PhotonWithDirectionInSCFrameGen[T], PhotonWithEnergyGen[T]):
+
+    def __init__(self, direction_lon_radians: T, direction_lat_radians: T, energy_keV: T):
+        PhotonWithDirectionInSCFrameGen.__init__(self, direction_lon_radians, direction_lat_radians)
+        PhotonWithEnergyGen.__init__(self, energy_keV)
 
 class PhotonWithDirectionAndEnergyInSCFrame(PhotonWithDirectionAndEnergyInSCFrameGen[float], PhotonWithDirectionAndEnergyInSCFrameInterface): ...
 
 class PhotonListWithDirectionAndEnergyInSCFrame(PhotonWithDirectionAndEnergyInSCFrameGen[np.ndarray[float]], PhotonListWithDirectionAndEnergyInSCFrameInterface):
 
-    def __iter__(self) -> Iterator[PhotonInterface]:
+    def __iter__(self) -> Iterator[PhotonWithDirectionAndEnergyInSCFrame]:
         for energy, lon, lat in zip(self.energy_keV, self.direction_lon_rad_sc, self.direction_lat_rad_sc):
             yield PhotonWithDirectionAndEnergyInSCFrame(lon, lat, energy)
 
