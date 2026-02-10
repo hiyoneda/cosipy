@@ -1,3 +1,4 @@
+import numpy as np
 from cosipy.response import (
     GalacticResponse,
     FullDetectorResponse,
