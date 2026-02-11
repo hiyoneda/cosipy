@@ -124,7 +124,7 @@ class EventDataInterface(DataInterface, Protocol):
             raise RuntimeError("It is not safe to call from_event() from an interface implementation that"
                                "does not explicitly overload from_event(). Call it from an interface instead.")
 
-        if isinstance(event, cls.event_type):
+        if not isinstance(event, cls.event_type):
             raise RuntimeError(
                 f"Input event (type {type(event)}) is not an instance of {cls.event_type}")
 
