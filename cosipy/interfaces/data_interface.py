@@ -39,7 +39,7 @@ class BinnedDataInterface(DataInterface, Protocol):
     def data(self) -> Histogram:...
     @property
     def axes(self) -> Axes:...
-    def fill(self, event_data:Iterable[EventInterface]):
+    def fill(self, event_data:'EventDataInterface'):
         """
         Bin the data.
 
@@ -56,7 +56,7 @@ class BinnedDataInterface(DataInterface, Protocol):
 class EventDataInterface(DataInterface, Protocol):
 
     # Type returned by __iter__
-    event_type = ClassVar[Type[EventInterface]]
+    event_type = EventInterface
 
     def __iter__(self) -> Iterator[EventInterface]:
         """
@@ -69,6 +69,79 @@ class EventDataInterface(DataInterface, Protocol):
         the implementations override it
         """
         return next(itertools.islice(self, item, None))
+
+    @classmethod
+    def fromiter(cls, events:Iterable[EventInterface], nevents = None):
+        """
+        Turns an iterable of events into a proper EventData
+
+        For convenience. Specific implementation can do better job.
+
+        It is not safe to call this method from an interface implementation that
+        does not explicitly overload fromiter(). Call it from an interface instead.
+
+        If you know it, specifying the length of the iterable can help optimize the code.
+        """
+
+        if not getattr(cls, "_is_protocol", False):
+            raise RuntimeError("It is not safe to call fromiter() from an interface implementation that"                        
+                               "does not explicitly overload fromiter(). Call it from an interface instead.")
+
+        class EventDataIterableWrapper(cls):
+            def __init__(self):
+                self._nevents = nevents
+
+            def __iter__(self) -> Iterator[cls.event_type]:
+                return iter(events)
+
+            @property
+            def nevents(self) -> int:
+                if nevents is None:
+                    self._nevents = sum(1 for _ in iter(self))
+
+                return self._nevents
+
+        event_list = EventDataIterableWrapper()
+
+        return event_list
+
+    @classmethod
+    def from_event(cls, event: EventInterface, repeat = 1):
+        """
+        Convert a single event to a proper EventData
+
+        Parameters
+        ----------
+        event:
+        repeat: Number of time to repeat photon. Is None, it will repeat indefinitely (use with care)
+
+        Returns
+        -------
+        tuple:  is_single? (bool), event_data
+        """
+
+        if not getattr(cls, "_is_protocol", False):
+            raise RuntimeError("It is not safe to call from_event() from an interface implementation that"
+                               "does not explicitly overload from_event(). Call it from an interface instead.")
+
+        if not isinstance(event, cls.event_type):
+            raise RuntimeError(
+                f"Input event (type {type(event)}) is not an instance of {cls.event_type}")
+
+        class SingleEventDataWrapper(cls):
+            def __iter__(self) -> Iterator[cls.event_type]:
+                for _ in range(repeat):
+                    yield event
+
+            def __getitem__(self, item):
+                return event
+
+            def nevents(self) -> int:
+                return repeat
+
+        event_list = SingleEventDataWrapper.__new__(SingleEventDataWrapper)
+
+        return event_list
 
     @property
     def nevents(self) -> int:
@@ -83,6 +156,19 @@ class EventDataInterface(DataInterface, Protocol):
     @property
     def id(self) -> Iterable[int]:
         return [e.id for e in self]
+
+
+def is_single_event(photon: Union[EventInterface, 'EventDataInterface']) -> bool:
+    # Since these protocols are runtime checkable, it's not enough to check the input is
+    # EventInterface, since the EventDataInterface also returns True.
+    if isinstance(photon, EventDataInterface):
+        return False
+    else:
+        if not isinstance(photon, EventInterface):
+            raise ValueError("Input must be either a EventInterface or a EventDataInterface.")
+
+        return True
+
 
 @runtime_checkable
 class TimeTagEventDataInterface(EventDataInterface, Protocol):
@@ -167,12 +253,6 @@ class ComptonDataSpaceInSCFrameEventDataInterface(EventDataWithScatteringAngleIn
                         self.scattered_lat_rad_sc,
                         unit = u.rad,
                         frame = SpacecraftFrame())
-
-@runtime_checkable
-class EventDataInSCFrameInterface(EventDataInterface, Protocol):
-
-    @property
-    def frame(self) -> SpacecraftFrame:...
 
 @runtime_checkable
 class EmCDSEventDataInSCFrameInterface(EventDataWithEnergyInterface, ComptonDataSpaceInSCFrameEventDataInterface, Protocol):

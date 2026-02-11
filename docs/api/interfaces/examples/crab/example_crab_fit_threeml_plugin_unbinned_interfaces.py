@@ -18,8 +18,7 @@ logger = logging.getLogger(__name__)
 import cProfile
 
 from cosipy import test_data, BinnedData, UnBinnedData
-from cosipy.data_io.EmCDSUnbinnedData import TimeTagEmCDSEventDataInSCFrameFromArrays, \
-    TimeTagEmCDSEventDataInSCFrameFromDC3Fits, TimeTagEmCDSEventInSCFrame
+from cosipy.data_io.EmCDSUnbinnedData import TimeTagEmCDSEventDataInSCFrameFromDC3Fits
 from cosipy.event_selection.time_selection import TimeSelector
 from cosipy.interfaces.photon_parameters import PhotonWithDirectionAndEnergyInSCFrameInterface
 from cosipy.response.instrument_response_function import UnpolarizedDC3InterpolatedFarFieldInstrumentResponseFunction
