@@ -115,9 +115,9 @@ class PolarizationConvention:
         # Bare basis
         px,py = self.get_basis_local(source_vector)
 
-        # To SkyCoord in the source frame
-        px = SkyCoord(*px, representation_type='cartesian', frame=self.frame).transform_to(source_direction.frame)
-        py = SkyCoord(*py, representation_type='cartesian', frame=self.frame).transform_to(source_direction.frame)
+        # To SkyCoord
+        px = SkyCoord(*px, representation_type='cartesian', frame=self.frame)
+        py = SkyCoord(*py, representation_type='cartesian', frame=self.frame)
 
         return px, py
 
