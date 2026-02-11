@@ -15,7 +15,7 @@ class EventSelectorInterface(Protocol):
     def event_type(self) -> Type[EventInterface]:
         return self.event_data_type.event_type
 
-    def select(self, events:Union[EventInterface, EventDataInterface]) -> Union[bool, Iterable[bool]]:
+    def select(self, events:Union[EventInterface, EventDataInterface], early_stop:bool = True) -> Union[bool, Iterable[bool]]:
         """
         True to keep an event
 
@@ -36,11 +36,12 @@ class EventSelectorInterface(Protocol):
         single_event = is_single_event(events)
 
         if single_event:
-            return next(iter(self._select(events)))
+            events = self.event_data_type.from_event(events)
+            return next(iter(self._select(events, early_stop = False)))
         else:
-            return self._select(events)
+            return self._select(events, early_stop)
 
-    def _select(self, EventDataInterface, early_stop:bool) -> Iterable[bool]:
+    def _select(self, events:EventDataInterface, early_stop:bool = True) -> Iterable[bool]:
         """
         This allows implementation to only define the behaviour for list, and let the above function handle
         the case of single event.
