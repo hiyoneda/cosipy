@@ -1,4 +1,4 @@
-from typing import Union
+from typing import Union, Optional
 
 import numpy as np
 from astropy.coordinates import SkyCoord, Angle, BaseCoordinateFrame, frame_transform_graph, ICRS
@@ -127,8 +127,8 @@ class PolarizationConvention:
 class OrthographicConvention(PolarizationConvention):
 
     def __init__(self,
-                 ref_vector: Union[SkyCoord, np.ndarray[float]] = None,
-                 frame:Union[BaseCoordinateFrame, None] = None,
+                 ref_vector: Optional[Union[SkyCoord, np.ndarray[float]]] = None,
+                 frame:Optional[BaseCoordinateFrame] = None,
                  clockwise: bool = False):
         """
         The local polarization x-axis points towards an arbitrary reference vector, 
@@ -229,7 +229,7 @@ class ConventionInSpacecraftFrameMixin:
 
 
     #https://github.com/zoglauer/megalib/blob/1eaad14c51ec52ad1cb2399a7357fe2ca1074f79/src/cosima/src/MCSource.cc#L3452
-class MEGAlibRelative(OrthographicConvention, ConventionInSpacecraftFrameMixin):
+class MEGAlibRelative(ConventionInSpacecraftFrameMixin, OrthographicConvention):
 
     def __init__(self, axis, attitude = None):
         """
@@ -327,7 +327,7 @@ class IAUPolarizationConvention(OrthographicConvention):
     
 # Stereographic projection convention
 @PolarizationConvention.register("stereographic")
-class StereographicConvention(PolarizationConvention, ConventionInSpacecraftFrameMixin):
+class StereographicConvention(ConventionInSpacecraftFrameMixin, PolarizationConvention):
 
     def __init__(self,
                  clockwise: bool = False,
@@ -360,7 +360,7 @@ class StereographicConvention(PolarizationConvention, ConventionInSpacecraftFram
     def frame(self):
         return self._frame
 
-    def get_basis_local(self, source_vector:Union[np.ndarray[float], SkyCoord]):
+    def get_basis_local(self, source_vector:np.ndarray[float]):
         """
         source_vector already in SC coordinates as a vector
 
@@ -372,9 +372,6 @@ class StereographicConvention(PolarizationConvention, ConventionInSpacecraftFram
         -------
         px,py: Basis vector. (2,N). Also in SC coordinates
         """
-
-        if isinstance(source_vector, SkyCoord):
-            source_vector = source_vector.cartesian.xyz
 
         x,y,z = source_vector
 
