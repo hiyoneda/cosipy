@@ -378,6 +378,9 @@ class StereographicConvention(PolarizationConvention, ConventionInSpacecraftFram
 
         x,y,z = source_vector
 
+        if np.allclose(source_vector, [0,0,-1]):
+            raise RuntimeError("StereographicConvention is undefined at the -z (lat = -90 deg)")
+
         # Calculate the projection of the reference vector in stereographic coordinates
         px_x = 1 - (x ** 2 - y ** 2) / (z + 1) ** 2
         px_y = -2 * x * y / (z + 1) ** 2
