@@ -104,7 +104,7 @@ class PolarizationConvention:
         Return
         ------
         px,py : SkyCoord
-            Polarization angle increaes from px to py. pz is always
+            Polarization angle increases from px to py. pz is always
             the opposite of the source direction --i.e. in the direction of the
             particle.
         """

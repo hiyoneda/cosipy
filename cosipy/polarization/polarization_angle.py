@@ -97,7 +97,7 @@ class PolarizationAngle:
         if self.source is None:
             raise RuntimeError("Set source first")
 
-        # Standarize convention
+        # Standardize convention
         convention = PolarizationConvention.get_convention(convention, *args, **kwargs)
 
         # Get the projection vectors for the source direction in the new convention
@@ -106,7 +106,7 @@ class PolarizationAngle:
         px = px.cartesian.xyz
         py = py.cartesian.xyz
 
-        # Calculate the polarization vector in the current convention
+        # Calculate the polarization vector in the new convention
         pol_vec = self.vector.transform_to(convention.frame).cartesian.xyz
 
         # Compute the dot products for the transformation
