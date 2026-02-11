@@ -110,7 +110,7 @@ class PolarizationConvention:
         """
 
         # To the convention's frame
-        source_vector = source_direction.transform_to(self.frame).cartesian.xyz
+        source_vector = source_direction.transform_to(self.frame).cartesian.xyz.value
 
         # Bare basis
         px,py = self.get_basis_local(source_vector)
@@ -162,7 +162,7 @@ class OrthographicConvention(PolarizationConvention):
                 self._ref_vector = ref_vector
                 self._frame = frame
 
-        if not isinstance(self._frame, BaseCoordinateFrame):
+        if isinstance(self._frame, str):
             self._frame = frame_transform_graph.lookup_name(self._frame)
 
         self._sign = 1 if clockwise else -1
@@ -186,7 +186,7 @@ class OrthographicConvention(PolarizationConvention):
         
     def get_basis_local(self, source_vector: np.ndarray):
         # Extract Cartesian coordinates for the source direction.
-        pz = self._sign * source_vector[2]
+        pz = self._sign * source_vector
 
         # Broadcast reference vector
         ref = np.expand_dims(self._ref_vector, axis = tuple(np.arange(1,pz.ndim, dtype = int)))
