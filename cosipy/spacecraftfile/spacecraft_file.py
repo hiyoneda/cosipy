@@ -503,33 +503,70 @@ class SpacecraftHistory:
 
         return self.__class__(new_obstime, new_attitude, new_location, new_livetime)
 
-
-    def get_target_in_sc_frame(self, target_coord: SkyCoord) -> SkyCoord:
-
+    @staticmethod
+    def _cart_to_polar(v):
         """
-        Get the location in spacecraft coordinates for a given target
-        in inertial coordinates.
+        Convert Cartesian 3D unit direction vectors to polar coordinates.
 
         Parameters
         ----------
-        target_coord : astropy.coordinates.SkyCoord
-            The coordinates of the target object.
+        v : np.ndarray(float) [N x 3]
+          array of N 3D unit vectors
 
         Returns
         -------
-        astropy.coordinates.SkyCoord
-            The target coordinates in the spacecraft frame.
+        lon, colat : np.ndarray(float) [N]
+          longitude and co-latitude corresponding to v in radians
+
         """
 
-        logger.info("Now converting to the Spacecraft frame...")
+        lon   = np.arctan2(v[:,1], v[:,0])
+        colat = np.arccos(v[:,2])
+        return (lon, colat)
 
-        src_path = SkyCoord(np.dot(self.attitude.rot.inv().as_matrix(), target_coord.cartesian.xyz.value),
-                            representation_type = 'cartesian',
-                            frame = SpacecraftFrame())
+    def get_target_in_sc_frame(self, target_coord):
 
-        src_path.representation_type = 'spherical'
+        """
+        Convert a target coordinate in an inertial frame to the path of
+        the source in the spacecraft frame.  The target coordinate may
+        be provided either as a SkyCoord or as a Cartesian 3-vector,
+        which determines the type of the output.
 
-        return src_path
+        Parameters
+        ----------
+        target_coord : astropy.coordinates.SkyCoord or Cartesian 3-vector
+            The coordinates of the target object.
+        Returns
+        -------
+        astropy.coordinates.SkyCoord or pair of np.ndarrays
+            The target coordinates in the spacecraft frame.  If input
+            was a SkyCoord, output is a vector SkyCoord; otherwise, it
+            is a pair (longitude, co-latitude) in radians.
+
+        """
+
+        useSkyCoord = isinstance(target_coord, SkyCoord)
+
+        if useSkyCoord:
+            target_coord = target_coord.transform_to(self._attitude.frame)
+            target_coord = target_coord.cartesian.xyz.value
+
+        src_path_cartesian = np.dot(self._attitude.rot.inv().as_matrix(),
+                                    target_coord)
+
+        # convert to spherical lon, colat in radians
+        lon, colat = self._cart_to_polar(src_path_cartesian)
+
+        if useSkyCoord:
+            # SpacecraftFrame takes lon, lat arguments
+            src_path_skycoord = SkyCoord(lon=lon, lat=np.pi / 2 - colat,
+                                         unit=u.rad,
+                                         frame=SpacecraftFrame())
+
+            return src_path_skycoord
+        else:
+            # return raw longitude and co-latitude in radians
+            return lon, colat
 
     def get_dwell_map(self, target_coord:SkyCoord, nside:int = None, scheme = 'ring', base:HealpixBase = None) -> HealpixMap:
 
@@ -733,6 +770,110 @@ class SpacecraftHistory:
                                      u.Quantity(binned_weights, unit=self.livetime.unit, copy=False),
                                      source = source)
 
+    @staticmethod
+    def _sparse_sum_duplicates(indices, weights=None, dtype=None):
+        """
+        Given an array of indices, possibly with duplicates, and an
+        optional array of weights per index (defaults to all ones if
+        None), return a sorted array of the unique values in indices
+        and, for each, the sum of the weights for each unique index.
 
+        If input weights are provided, only unique indices with
+        nonzero weights are returned.
+
+        Parameters
+        ----------
+        indices : array of int
+        weights : array of int or float type
+        dtype : data type (optional)
+           Type of returned weights.  If None, type is int if weights
+           not given, or float64 if they are.
+
+        Returns
+        -------
+          - unique_indices : array of int
+             sorted unique indices in input
+          - idx_weights : array of type as described above
+             sum of weights for each unique index in input
+
+        """
+
+        if weights is None:
+            unique_indices, idx_weights = np.unique(indices,
+                                                    return_counts=True)
+        else:
+            sp_weights = np.bincount(indices, weights)
+            unique_indices = np.flatnonzero(sp_weights)
+            idx_weights = sp_weights[unique_indices]
+
+        if dtype is not None:
+            idx_weights = idx_weights.astype(dtype, copy=False)
+
+        return unique_indices, idx_weights
+
+    def get_exposure(self, base, theta, phi=None,
+                     lonlat=False, interp=True):
+        """
+        Compute the set of exposed HEALPix pixels relative to a
+        HealpixBase arising from a sequence of spacecraft-frame
+        directions with durations as specified in this SpacecraftFile.
+
+        If theta is a SkyCoord, it specifies the full direction.
+        Else, theta and phi specify the direction as angles.  If
+        lonlat = True, theta and phi are longitude and latitude in
+        degrees; else, theta and phi are co-latitude and longitude in
+        radians.
+
+        Parameters
+        ----------
+        base : HealpixBase
+           HEALPix grid used to discretize exposure
+        theta : np.ndarray or SkyCoord
+           if phi is None, a vector SkyCoord
+           if phi is not none, a vector of angles
+        colat: np.ndarray, optional
+           a vector of angles
+        interp : bool, optional
+             If True, interpolate the weights onto the HEALPix grid;
+             else, just map to nearest bin. (Default: interpolate)
+
+        Returns
+        -------
+        pixels : np.ndarray (int)
+          all HEALPix pixels in the grid with nonzero exposure time
+        exposures: np.ndarray (float)
+          exposure time for each pixel
+
+        """
+
+        duration = self.livetime.to_value(u.s)
+
+        if len(duration) + 1 != len(theta):
+            raise ValueError("Source path must have length equal to # times in SpacecraftFile")
+
+        # remove the last src location. Effectively a 0th-order
+        # interpolation
+        theta = theta[:-1]
+        if phi is not None:
+            phi = phi[:-1]
+
+        if interp:
+            pixels, weights = base.get_interp_weights(theta=theta,
+                                                      phi=phi,
+                                                      lonlat=lonlat)
+            weighted_duration = weights * duration[None]
+        else:
+            # do not interpolate
+            pixels = base.ang2pix(theta=theta,
+                                  phi=phi,
+                                  lonlat=lonlat)
+            weighted_duration = duration
+
+        unique_pixels, unique_weights = \
+            self._sparse_sum_duplicates(pixels.ravel(),
+                                        weighted_duration.ravel(),
+                                        dtype=np.float32)
+
+        return unique_pixels, unique_weights
 
 
