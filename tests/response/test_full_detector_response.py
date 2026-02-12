@@ -86,14 +86,13 @@ def test_get_interp_response():
 
 def test_get_point_source_response():
 
-    orientation = SpacecraftFile.parse_from_file(orientation_path)
+    orientation = SpacecraftHistory.open(orientation_path)
     coord = SkyCoord(l=0,b=0,unit=u.deg,frame="galactic")
 
     with FullDetectorResponse.open(response_path) as response:
 
         # test call with dwell_map
-        src_path = orientation.get_target_in_sc_frame(coord)
-        exp_map = orientation.get_dwell_map(response, src_path)
+        exp_map = orientation.get_dwell_map(coord, base = response)
 
         psr = response.get_point_source_response(exposure_map = exp_map)
 
