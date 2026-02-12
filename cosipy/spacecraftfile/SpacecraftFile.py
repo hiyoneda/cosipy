@@ -547,7 +547,7 @@ class SpacecraftFile():
     def cache_earth_occ(self, value):
         if value is False:
             # delete any cached data if present
-            if hasattr(self, _min_angle_cos):
+            if hasattr(self, "_min_angle_cos"):
                 del self._min_angle_cos
                 del self._ez_cart
 
