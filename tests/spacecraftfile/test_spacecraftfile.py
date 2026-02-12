@@ -174,6 +174,8 @@ def test_get_scatt_map():
     ax_map = scatt_map.get_axes_map(nside=16)
 
     ori.cache_earth_occ = True
+    assert ori.cache_earth_occ
+
     scatt_map2 = ori.get_scatt_map(target_coord=target_coord,
                                    nside=16, earth_occ=True)
     assert np.all(scatt_map2.attitudes.as_quat() == \
@@ -181,6 +183,8 @@ def test_get_scatt_map():
             np.all(scatt_map2.weights == scatt_map.weights)
 
     ori.cache_earth_occ = False
+    assert not ori.cache_earth_occ
+
     scatt_map3 = ori.get_scatt_map(target_coord=target_coord,
                                    nside=16, earth_occ=True)
     assert np.all(scatt_map3.attitudes.as_quat() == \
