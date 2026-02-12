@@ -69,12 +69,13 @@ def test_point_source_spectral_fit(background=None):
     # Workaround to avoid inf values. Out bkg should be smooth, but currently it's not.
     # Reproduces results before refactoring. It's not _exactly_ the same, since this fudge value was 1e-12, and
     # it was added to the expectation, not the normalized bkg
-    global bkg_dist # Was giving the error "UnboundLocalError: cannot access local variable 'bkg_dist' where it is not associated with a value"
-    bkg_dist = bkg_dist.binned_data.project('Em', 'Phi', 'PsiChi')
-    bkg_dist += sys.float_info.min
+    bkg_dist_proj = bkg_dist.binned_data.project('Em', 'Phi', 'PsiChi')
+    bkg_dist_proj += sys.float_info.min
 
-    data = EmCDSBinnedData(crab.binned_data.project('Em', 'Phi', 'PsiChi') + bkg_dist)
-    bkg = FreeNormBinnedBackground(bkg_dist,
+
+
+    data = EmCDSBinnedData(crab.binned_data.project('Em', 'Phi', 'PsiChi') + bkg_dist_proj)
+    bkg = FreeNormBinnedBackground(bkg_dist_proj,
                                    sc_history=sc_orientation,
                                    copy=False)
 
