@@ -81,19 +81,9 @@ class PointSourceResponse(Histogram):
 
         polarization = to_linear_polarization(polarization)
 
-        if polarization is None:
+        if 'Pol' in self.axes.labels:
 
-            if 'Pol' in self.axes.labels:
-
-                raise RuntimeError("Must include polarization in point source response if using polarization response")
-
-            contents = self.contents
-
-        else:
-
-            if not 'Pol' in self.axes.labels:
-
-                raise RuntimeError("Response must have polarization angle axis to include polarization in point source response")
+            pol_axis = self.axes['Pol']
 
             polarization_angle = polarization.angle.value
             polarization_level = polarization.degree.value / 100.
@@ -101,16 +91,23 @@ class PointSourceResponse(Histogram):
             if polarization_angle == 180.:
                 polarization_angle = 0.
 
-            pol_axis = self.axes['Pol']
-
             # unpolarized weights
             weights = np.full(pol_axis.nbins, (1. - polarization_level) / pol_axis.nbins)
 
             # add polarized weights
-            polarization_bin_index = pol_axis.find_bin(polarization_angle * u.deg)
-            weights[polarization_bin_index] += polarization_level
+            if polarization_level != 0:
+                polarization_bin_index = pol_axis.find_bin(polarization_angle * u.deg)
+                weights[polarization_bin_index] += polarization_level
 
             contents = np.tensordot(weights, self.contents, axes=(0, self.axes.label_to_index('Pol')))
+
+        else:
+
+            if polarization.degree.value != 0:
+                raise RuntimeError(
+                    "Response must have polarization angle axis to include polarization in point source response")
+
+            contents = self.contents
 
 
         if flux is None:
