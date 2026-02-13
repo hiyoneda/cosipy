@@ -22,7 +22,7 @@ bkg_par = Parameter("background_cosi",                                         #
 
 # second copy for testing with ICRS source
 bkg_par_icrs = Parameter("background_cosi_icrs",                                    # background parameter
-                         1,                                                         # initial value of parameter
+                         bkg_par_value,                                                         # initial value of parameter
                          min_value=0,                                               # minimum value of parameter
                          max_value=50,                                              # maximum value of parameter
                          delta=0.05,                                                # initial step used by fitting engine
@@ -94,8 +94,10 @@ def test_point_source_spectral_fit():
     assert np.allclose([sp.K.value, sp.index.value, bkg_par.value],
                        [K.value, index, bkg_par_value])
 
+    TS_ref = 6377269.127606418
+
     assert np.allclose([cosi.get_log_like()],
-                       [6377269.127606418])
+                       [TS_ref])
 
     # verify that the result is the same regardless of how we specify the source position
 
@@ -122,4 +124,4 @@ def test_point_source_spectral_fit():
                        [K.value, index, bkg_par_value])
 
     assert np.allclose([cosi.get_log_like()],
-                       [6377269.127606418])
+                       [TS_ref])
