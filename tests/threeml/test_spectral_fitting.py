@@ -117,7 +117,7 @@ def test_point_source_spectral_fit():
     # avoid output- and sampling-related threeML crashes
     like.fit(quiet=True, compute_covariance = False)
 
-    sp_icrs = source.spectrum.main.shape
+    sp_icrs = source_icrs.spectrum.main.shape
 
     # make sure result does not change (much -- bkg_par changes more than the rest)
     assert np.allclose([sp.K.value, sp.index.value, bkg_par.value],
