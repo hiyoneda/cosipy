@@ -9,7 +9,7 @@ from cosipy.response import BinnedThreeMLModelFolding, FullDetectorResponse, Bin
 from cosipy.spacecraftfile import SpacecraftHistory
 import astropy.units as u
 import numpy as np
-from threeML import Band, PointSource, Model, JointLikelihood, DataList
+from threeML import Powerlaw, PointSource, Model, JointLikelihood, DataList
 from astromodels import Parameter
 from astropy.coordinates import SkyCoord
 
@@ -20,48 +20,57 @@ data_path = test_data.path
 sc_orientation = SpacecraftHistory.open(data_path / "20280301_2s.ori")
 dr_path = str(data_path / "test_full_detector_response.h5") # path to detector response
 
-crab = BinnedData(data_path / "test_spectral_fit.yaml")
-bkg_dist = BinnedData(data_path / "test_spectral_fit.yaml")
-
-crab.load_binned_data_from_hdf5(binned_data=data_path / "test_spectral_fit_data.h5")
-bkg_dist.load_binned_data_from_hdf5(binned_data=data_path / "test_spectral_fit_background.h5")
-
+bkg_par_value = 1
 bkg_par = Parameter("background_cosi",                                         # background parameter
-                    1,                                                         # initial value of parameter
+                    bkg_par_value,                                             # initial value of parameter
                     min_value=0,                                               # minimum value of parameter
                     max_value=50,                                              # maximum value of parameter
                     delta=0.05,                                                # initial step used by fitting engine
                     desc="Background parameter for cosi")
 
+# second copy for testing with ICRS source
+bkg_par_icrs = Parameter("background_cosi_icrs",                                    # background parameter
+                         bkg_par_value,                                                         # initial value of parameter
+                         min_value=0,                                               # minimum value of parameter
+                         max_value=50,                                              # maximum value of parameter
+                         delta=0.05,                                                # initial step used by fitting engine
+                         desc="Background parameter for cosi")
+
 l = 50
 b = -45
 
-alpha = -1
-beta = -2
-xp = 500. * u.keV
-piv = 500. * u.keV
+index = -2
+piv = 1. * u.MeV
 K = 1 / u.cm / u.cm / u.s / u.keV
 
-spectrum = Band()
+spectrum = Powerlaw()
 
-spectrum.alpha.value = alpha
-spectrum.beta.value = beta
-spectrum.xp.value = xp.value
+spectrum.index.value = index
 spectrum.K.value = K.value
 spectrum.piv.value = piv.value
 
-spectrum.xp.unit = xp.unit
 spectrum.K.unit = K.unit
 spectrum.piv.unit = piv.unit
 
+# source in galactic frame
 source = PointSource("source",                     # Name of source (arbitrary, but needs to be unique)
                      l = l,                        # Longitude (deg)
                      b = b,                        # Latitude (deg)
                      spectral_shape = spectrum)    # Spectral model
 
-model = Model(source)
-
 def test_point_source_spectral_fit(background=None):
+
+    # Create fake data and background using the same
+    # response as the fit (for a circular test)
+    fdr = FullDetectorResponse.open(dr_path)
+    psr = fdr.get_point_source_response(coord=source.position.sky_coord,
+                                        scatt_map=sc_orientation.get_scatt_map(fdr.nside * 2, # Use same nside as hardcoded in COSILke
+                                                                               source.position.sky_coord))
+
+    data = psr.get_expectation(source.spectrum.main.shape)
+    bkg = data.copy()
+    bkg[:] = np.mean(bkg)  # Flat background
+    data += bkg_par.value * bkg
 
     dr = FullDetectorResponse.open(dr_path)
     instrument_response = BinnedInstrumentResponse(dr)
@@ -69,12 +78,9 @@ def test_point_source_spectral_fit(background=None):
     # Workaround to avoid inf values. Out bkg should be smooth, but currently it's not.
     # Reproduces results before refactoring. It's not _exactly_ the same, since this fudge value was 1e-12, and
     # it was added to the expectation, not the normalized bkg
-    bkg_dist_proj = bkg_dist.binned_data.project('Em', 'Phi', 'PsiChi')
-    bkg_dist_proj += sys.float_info.min
+    bkg_dist_proj = bkg + sys.float_info.min
 
-
-
-    data = EmCDSBinnedData(crab.binned_data.project('Em', 'Phi', 'PsiChi') + bkg_dist_proj)
+    data = EmCDSBinnedData(data + bkg)
     bkg = FreeNormBinnedBackground(bkg_dist_proj,
                                    sc_history=sc_orientation,
                                    copy=False)
@@ -97,16 +103,52 @@ def test_point_source_spectral_fit(background=None):
 
     plugins = DataList(cosi)
 
+    model = Model(source)
+
     like = JointLikelihood(model, plugins, verbose = False)
 
     like.fit(compute_covariance = False) # avoid sampling-related threeML crashes
 
-    sp = source.spectrum.main.Band
+    sp = source.spectrum.main.shape
 
-    assert np.allclose([sp.K.value, sp.alpha.value, sp.beta.value, sp.xp.value, bkg_par.value],
-                       [1.0522695866399103, 2.6276132958523926, -2.909795888815157, 18.19702619330248, 2.3908438191547012],
-                       atol=[0.1, 0.1, 0.1, 1.0, 0.1])
+    assert np.allclose([sp.K.value, sp.index.value, bkg_par.value],
+                       [K.value, index, bkg_par_value])
+
+    TS_ref = 6377269.127606418
 
     assert np.allclose([cosi.get_log_like()],
-                       [213.14242014103897],
-                       atol=[1.0])
+                       [TS_ref])
+
+    # verify that the result is the same regardless of how we specify the source position
+    # same source, but specified in ICRS
+    c = SkyCoord(l=l, b=b, unit=u.deg, frame="galactic")
+    c_icrs = c.transform_to("icrs")
+    source_icrs = PointSource("source_icrs",
+                              ra=c_icrs.ra.deg,
+                              dec=c_icrs.dec.deg,
+                              spectral_shape=spectrum)  # Spectral model
+
+    model = Model(source_icrs)
+
+    cosi = ThreeMLPluginInterface('cosi',
+                                  like_fun,
+                                  response,
+                                  bkg)
+
+    plugins = DataList(cosi)
+
+    like = JointLikelihood(model, plugins, verbose=False)
+
+    # avoid output- and sampling-related threeML crashes
+    like.fit(quiet=True, compute_covariance=False)
+
+    sp_icrs = source_icrs.spectrum.main.shape
+
+    # make sure result does not change (much -- bkg_par changes more than the rest)
+    assert np.allclose([sp_icrs.K.value, sp_icrs.index.value, bkg_par_icrs.value],
+                       [K.value, index, bkg_par_value])
+
+    assert np.allclose([cosi.get_log_like()],
+                       [TS_ref])
+
+
