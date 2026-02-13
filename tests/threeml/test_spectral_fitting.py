@@ -50,14 +50,6 @@ source = PointSource("source",                     # Name of source (arbitrary, 
                      b = b,                        # Latitude (deg)
                      spectral_shape = spectrum)    # Spectral model
 
-# same source, but specified in ICRS
-c = SkyCoord(l = l, b = b, unit=u.deg, frame = "galactic")
-c_icrs = c.transform_to("icrs")
-source_icrs = PointSource("source_icrs",
-                          ra  = c_icrs.ra.deg,
-                          dec = c_icrs.dec.deg,
-                          spectral_shape = spectrum)    # Spectral model
-
 def test_point_source_spectral_fit():
 
     # Create fake data and background using the same
@@ -71,6 +63,10 @@ def test_point_source_spectral_fit():
     bkg = data.copy()
     bkg[:] = np.mean(bkg) # Flat background
     data += bkg_par.value * bkg
+
+    # Move initial guess slightly away from true values
+    spectrum.index.value = index*1.1
+    spectrum.K.value = K.value*1.1
 
     # Set plugin
     cosi = COSILike("cosi",                                                        # COSI 3ML plugin
@@ -100,6 +96,13 @@ def test_point_source_spectral_fit():
                        [TS_ref])
 
     # verify that the result is the same regardless of how we specify the source position
+    # same source, but specified in ICRS
+    c = SkyCoord(l=l, b=b, unit=u.deg, frame="galactic")
+    c_icrs = c.transform_to("icrs")
+    source_icrs = PointSource("source_icrs",
+                              ra=c_icrs.ra.deg,
+                              dec=c_icrs.dec.deg,
+                              spectral_shape=spectrum)  # Spectral model
 
     cosi_icrs = COSILike("cosi",                                                       # COSI 3ML plugin
                          dr = dr,                                                       # detector response
