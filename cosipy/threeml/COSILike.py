@@ -60,6 +60,7 @@ class COSILike(PluginPrototype):
                  coordsys = None,
                  precomputed_psr_file = None,
                  earth_occ=True,
+                 response_pa_convention=None,
                  **kwargs):
 
         def prepare_binned(data, cds_order):
