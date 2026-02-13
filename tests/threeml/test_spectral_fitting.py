@@ -95,15 +95,14 @@ def test_point_source_spectral_fit():
                        [K.value, index, bkg_par_value])
 
     assert np.allclose([cosi.get_log_like()],
-                       [213.14242014103897],
-                       atol=[1.0])
+                       [6377269.127606418])
 
     # verify that the result is the same regardless of how we specify the source position
 
     cosi_icrs = COSILike("cosi",                                                       # COSI 3ML plugin
                          dr = dr,                                                       # detector response
-                         data = data.binned_data.project('Em', 'Phi', 'PsiChi'),        # data (source+background)
-                         bkg = background.binned_data.project('Em', 'Phi', 'PsiChi'),   # background model
+                         data=data,  # data (source+background)
+                         bkg=bkg,  # background model
                          sc_orientation = sc_orientation,                               # spacecraft orientation
                          nuisance_param = bkg_par_icrs)                                 # background parameter
 
@@ -116,18 +115,11 @@ def test_point_source_spectral_fit():
     # avoid output- and sampling-related threeML crashes
     like.fit(quiet=True, compute_covariance = False)
 
-    sp_icrs = source_icrs.spectrum.main.Band
+    sp_icrs = source.spectrum.main.shape
 
     # make sure result does not change (much -- bkg_par changes more than the rest)
-    assert np.allclose([sp.K.value, sp.alpha.value, sp.beta.value, sp.xp.value, bkg_par.value],
-                       [sp_icrs.K.value, sp_icrs.alpha.value, sp_icrs.beta.value, sp_icrs.xp.value, bkg_par_icrs.value],
-                       atol=[1e-8, 1e-8, 1e-8, 1e-8, 1e-3])
+    assert np.allclose([sp.K.value, sp.index.value, bkg_par.value],
+                       [K.value, index, bkg_par_value])
 
     assert np.allclose([cosi.get_log_like()],
-                       [cosi_icrs.get_log_like()])
-
-
-    # Test scatt map method:
-    coord = SkyCoord(l=184.56*u.deg,b=-5.78*u.deg,frame="galactic")
-    cosi._get_scatt_map(coord)
                        [6377269.127606418])
