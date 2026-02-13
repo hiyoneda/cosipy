@@ -80,6 +80,10 @@ def test_point_source_spectral_fit(background=None):
     # it was added to the expectation, not the normalized bkg
     bkg_dist_proj = bkg + sys.float_info.min
 
+    # Move initial guess slightly away from true values
+    spectrum.index.value = index * 1.1
+    spectrum.K.value = K.value * 1.1
+
     data = EmCDSBinnedData(data + bkg)
     bkg = FreeNormBinnedBackground(bkg_dist_proj,
                                    sc_history=sc_orientation,
@@ -120,6 +124,11 @@ def test_point_source_spectral_fit(background=None):
                        [TS_ref])
 
     # verify that the result is the same regardless of how we specify the source position
+
+    # Move initial guess slightly away from true values
+    spectrum.index.value = index * 1.1
+    spectrum.K.value = K.value * 1.1
+
     # same source, but specified in ICRS
     c = SkyCoord(l=l, b=b, unit=u.deg, frame="galactic")
     c_icrs = c.transform_to("icrs")
