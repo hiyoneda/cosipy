@@ -6,11 +6,11 @@ Using pip
 
 Optional but recommended step: install a conda environment::
 
-  conda create -n <cosipy_env_name> python=3.10 pip
+  conda create -n <cosipy_env_name> python=3.10 pip 'setuptools<81'
   conda activate <cosipy_env_name>
 
-Note: currently cosipy is not compatible with Python 3.12 due to
-installation issues with dependencies (`threeML <https://github.com/threeML/threeML/pull/631>`_ and `astromodels <https://github.com/threeML/astromodels/issues/204>`_)
+Note: currently cosipy is not compatible with Python 3.12 and setuptools>=81 due to
+installation issues with dependencies (`threeML <https://github.com/threeML/threeML/pull/631>`_ and `astromodels <https://github.com/threeML/astromodels/issues/204>`_). This has been fixed in the develop versions and will not be a limitation in the next release.
 
 Install with pip::
   
@@ -25,7 +25,7 @@ From source (for developers)
 
 Optional but recommended step: install a conda environment::
 
-  conda create -n <cosipy_env_name> python=3.10 pip
+  conda create -n <cosipy_env_name> python=3.10 pip 'setuptools<81'
   conda activate <cosipy_env_name>
 
 Also optional but recommended: before installing cosipy, install the main
@@ -42,6 +42,8 @@ Do the following (preferably inside a conda environment)::
 
 The flag ``-e`` (``--editable``) allows you to make changes and try them without
 having to run ``pip`` again.
+
+Alternatively, if you do not wish to limit the ``python`` and ``setuptools`` versions, you can install the ``dev`` branches of ``threeml`` and ``astromodels`` from source, and well as the ``develop`` branch of ``cosipy``.
 
 Troubleshooting
 ---------------
