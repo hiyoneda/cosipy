@@ -42,7 +42,7 @@ class FullDetectorResponse(HealpixBase):
         pass
 
     @classmethod
-    def open(cls, filename, dtype=None, pa_convention=None):
+    def open(cls, filename, dtype=None, pa_convention=None, cache_size=None):
 
         """
         Open a detector response file.
@@ -50,26 +50,27 @@ class FullDetectorResponse(HealpixBase):
         Parameters
         ----------
         filename : str, :py:class:`~pathlib.Path`
-             Path to the response file (.h5 or .rsp.gz)
-
+             Path to the response file
         dtype : numpy dtype or None
              Dtype of values to be returned when accessing response
              contents. If None, use the type stored in the file
-
         pa_convention : str, optional
             Polarization convention of response ('RelativeX', 'RelativeY', or 'RelativeZ')
+        cache_size : int, optional
+            Number of NuLambda slices' worth of memory to allocate to cache response chunks;
+            if None, use default (which is too small for a useful cache)
         """
 
         filename = Path(filename)
 
         if filename.suffix == ".h5":
-            return cls._open_h5(filename, dtype, pa_convention)
+            return cls._open_h5(filename, dtype, pa_convention, cache_size)
         else:
             raise ValueError(
-                "Unsupported file format. Only .h5 and .rsp.gz extensions are supported.")
+                "Unsupported file format. Only .h5 extension is supported.")
 
     @classmethod
-    def _open_h5(cls, filename, dtype=None, pa_convention=None):
+    def _open_h5(cls, filename, dtype=None, pa_convention=None, cache_size=None):
         """
          Open a detector response h5 file.
 
@@ -77,19 +78,20 @@ class FullDetectorResponse(HealpixBase):
          ----------
          filename : str, :py:class:`~pathlib.Path`
              Path to HDF5 file
-
-        dtype : numpy dtype or None
+         dtype : numpy dtype or None
              Dtype of values to be returned when accessing response
              contents. If None, use the type stored in the file
              (specifically, the type of EFF_AREA)
-
          pa_convention : str, optional
              Polarization convention of response ('RelativeX', 'RelativeY', or 'RelativeZ')
+         cache_size : int, optional
+            Number of NuLambda slices' worth of memory to allocate to cache response chunks;
+            if None, use default (which is too small for a useful cache)
+
          """
         new = cls(filename)
 
         new._file = h5.File(filename, mode='r')
-
         new._drm = new._file['DRM']
 
         # verify response format version
@@ -107,7 +109,7 @@ class FullDetectorResponse(HealpixBase):
 
         new._unit = u.Unit(new._drm.attrs['UNIT'])
 
-        # effective area for counts
+        # effective area correction for counts
         ea = np.array(new._drm["EFF_AREA"])
 
         # eff_area type determines return type of __getitem__
@@ -117,13 +119,27 @@ class FullDetectorResponse(HealpixBase):
 
         # Init HealpixMap (local coordinates, main axis)
         HealpixBase.__init__(new,
-                             base=new.axes['NuLambda'],
+                             base=new._axes['NuLambda'],
                              coordsys=SpacecraftFrame())
 
         new.pa_convention = pa_convention
         if 'Pol' in new._axes.labels and pa_convention not in ('RelativeX', 'RelativeY', 'RelativeZ'):
             raise RuntimeError("Polarization angle convention of response "
                                "('RelativeX', 'RelativeY', or 'RelativeZ') must be provided")
+
+        if (cache_size is not None):
+
+            # Create a cache big enough to hold cache_size NuLambda
+            # slices. We must reopen the HDF5 file to enable caching
+            # behavior.
+            ds = new._drm['COUNTS']
+            cache_bytes = np.prod(new._rest_axes.nbins) * ds.dtype.itemsize
+
+            new._file.close()
+            new._file = h5.File(filename, mode='r', rdcc_nbytes=cache_size*cache_bytes, rdcc_w0=0)
+            new._drm = new._file['DRM']
+
+        new._counts = new._drm['COUNTS']
 
         return new
 
@@ -187,9 +203,9 @@ class FullDetectorResponse(HealpixBase):
         return self._unit
 
     @property
-    def eff_area(self):
+    def eff_area_correction(self):
         """
-        Effective area of bins with each Ei.
+        Effective area correction for bins with each Ei.
 
         Returns
         -------
@@ -197,18 +213,6 @@ class FullDetectorResponse(HealpixBase):
         """
 
         return self._eff_area
-
-    @property
-    def counts(self):
-        """
-        Raw counts array on disk.
-
-        Returns
-        -------
-        :py:class:`h5py.dataset`
-        """
-
-        return self._drm['COUNTS']
 
     @property
     def headers(self):
@@ -228,10 +232,37 @@ class FullDetectorResponse(HealpixBase):
 
         return hdrs
 
-    def get_pixel(self, pix, weight=None):
+    def __getitem__(self, pix):
         """
         Extract the portion of the response corresponding to a
-        single source sky pixel on the NuLambda axis, optionally
+        single source sky pixel on the NuLambda axis.
+
+        Parameters
+        ----------
+        pix : integer
+           pixel index to extract
+
+        Returns
+        -------
+        A DetectorResponse containing the specified part of the full
+        response.
+
+        """
+
+        if not isinstance(pix, (int, np.integer)):
+            raise IndexError("Pixel index must be an integer")
+
+        data = self._get_pixel(pix)
+
+        return DetectorResponse(self._rest_axes,
+                                contents = data,
+                                unit = self.unit,
+                                copy_contents = False)
+
+    def _get_pixel(self, pix, weight=None):
+        """
+        Extract the portion of the response corresponding to a
+        single source pixel on the NuLambda axis, optionally
         weighting the result by a given weight.
 
         Specifying the weight as an argument lets us apply it to the
@@ -242,63 +273,54 @@ class FullDetectorResponse(HealpixBase):
         ----------
         pix : integer
            pixel index to extract
-        weight : optional float or Quantity
+        weight : float or Quantity, optional
            weight to apply to the response slice
 
         Returns
         -------
-        A DetectorResponse containing the specified part of the full
-        response.
-
-        """
-
-        data = self._get_pixel_raw(pix, weight)
-
-        unit = self.unit
-        if isinstance(weight, Quantity):
-            unit *= weight.unit
-
-        return DetectorResponse(self._rest_axes,
-                                contents = data,
-                                unit = unit,
-                                copy_contents = False)
-
-    def _get_pixel_raw(self, pix, weight=None):
-        """
-        The guts of get_pixel() -- actually loads the data from the HDF
-        dataset and performs the multiply.
-
-        Parameters
-        ----------
-        as for get_pixel()
-
-        Returns
-        -------
         data : ndarray of float
-           the PSR data
+           the weighted response for pixel pix
 
         """
 
-        counts = self._drm['COUNTS'][pix]
+        counts = self._counts[pix]
 
         w = self._eff_area
 
         if weight is not None:
             if isinstance(weight, Quantity):
-                w = w * weight.value # don't modify eff_area in place
-            else:
-                w = w * weight
+                weight = weight.value
 
-        data = counts * self._rest_axes.expand_dims(w, self._rest_axes.label_to_index("Ei"))
+            w = w * weight  # don't modify eff_area in place
+
+        data = counts * \
+            self._rest_axes.expand_dims(w,
+                                        self._rest_axes.label_to_index("Ei"))
 
         return data
 
-    def __getitem__(self, pix):
+    def get_counts(self, pix, em_slice=None):
+        """
+        Get raw count data for a given NuLambda pixel from the underlying
+        HDF5 file.  Optionally return only a given slice along the Em
+        axis.
 
-        if not isinstance(pix, (int, np.integer)):
-            raise IndexError("Pixel index must be an integer")
+        Parameters
+        ----------
+        pix : int
+          NuLambda pixel to read
+        em_slice: Slice, optional
+          slice of the Em axis to return; None means return all
 
-        return self.get_pixel(pix)
+        """
+
+        if em_slice is not None:
+            em_dim = self._rest_axes.label_to_index("Em")
+            idx = (pix,) + (slice(None),) * em_dim + (em_slice,)
+        else:
+            idx = pix
+
+        return self._counts[idx]
 
     def to_dr(self):
         """
@@ -310,7 +332,7 @@ class FullDetectorResponse(HealpixBase):
 
         """
 
-        counts = np.array(self._drm['COUNTS'])
+        counts = np.array(self._counts)
 
         data = counts * self._axes.expand_dims(self._eff_area,
                                                self._axes.label_to_index("Ei"))
@@ -372,7 +394,7 @@ class FullDetectorResponse(HealpixBase):
         dr = np.zeros(self._rest_axes.shape)
 
         for p, w in zip(pixels, weights):
-            dr_p = self._get_pixel_raw(p, weight=w)
+            dr_p = self._get_pixel(p, weight=w)
             dr += dr_p
 
         return DetectorResponse(self._rest_axes,
@@ -411,7 +433,7 @@ class FullDetectorResponse(HealpixBase):
         -------
         :py:class:`PointSourceResponse` or tuple of same
             Inertial-frame point-source response for each source
-            coordinate; tuple if more than one coordinate provided
+            coordinate
 
         """
 
@@ -427,12 +449,12 @@ class FullDetectorResponse(HealpixBase):
             psr = np.zeros(self._rest_axes.shape)
 
             for p in np.nonzero(exposure_map)[0]:
-                psr_p = self._get_pixel_raw(p, weight=exposure_map[p])
+                psr_p = self._get_pixel(p, weight=exposure_map[p])
                 psr += psr_p
 
             return PointSourceResponse(self._rest_axes,
                                        contents = psr,
-                                       unit = u.cm*u.cm*u.s,
+                                       unit = u.cm**2 * u.s,
                                        copy_contents = False)
 
         else:
@@ -511,33 +533,27 @@ class FullDetectorResponse(HealpixBase):
             # output PSR accumulator
             sf_psr = np.zeros(psr_axes.shape, dtype=self.dtype)
 
-            if len(scatt_map.attitudes) > 0:
-                attitudes = scatt_map.attitudes
-                frame = attitudes.frame
+            attitudes = scatt_map.attitudes
+            frame = attitudes.frame
 
-                # rotation from source frame to local spacecraft frame
-                rots = attitudes.rot.inv().as_matrix()
+            # rotation from source frame to local spacecraft frame
+            rots = attitudes.rot.inv().as_matrix()
 
-                # compute cartesian forms of source and PsiChi pixel dirs,
-                # using coord system matching Attitudes that will be
-                # used to rotate them
-                src_cart = source.transform_to(frame).cartesian.xyz.value
-                sf_psichi_dirs_cart = sf_psichi_dirs.transform_to(frame).cartesian.xyz.value
+            # compute cartesian forms of source and PsiChi pixel dirs,
+            # using coord system matching Attitudes that will be
+            # used to rotate them
+            src_cart = source.transform_to(frame).cartesian.xyz.value
+            sf_psichi_dirs_cart = sf_psichi_dirs.transform_to(frame).cartesian.xyz.value
 
-                # rotate source dir from source frame to local spacecraft
-                # frame
-                loc_src_colat, loc_src_lon = rotate_coords(src_cart, rots)
+            # rotate source dir from source frame to local spacecraft
+            # frame
+            loc_src_colat, loc_src_lon = rotate_coords(src_cart, rots)
 
-                # map source dir in local spacecraft frame to its nearest
-                # HEALPix pixel. TODO: this could be interpolated to map
-                # dir to multiple pixels + weights
-                loc_src_pixels = self._axes['NuLambda'].find_bin(theta = loc_src_colat,
-                                                                 phi   = loc_src_lon)
-            else:
-                # scatt_map is empty
-                attitudes = []
-                rots = []
-                loc_src_pixels = []
+            # map source dir in local spacecraft frame to its nearest
+            # HEALPix pixel. TODO: this could be interpolated to map
+            # dir to multiple pixels + weights
+            loc_src_pixels = self._axes['NuLambda'].find_bin(theta = loc_src_colat,
+                                                             phi   = loc_src_lon)
 
             for att, rot, loc_src_pixel, exposure in \
                 zip(attitudes, rots, loc_src_pixels, scatt_map.weights):
@@ -549,8 +565,8 @@ class FullDetectorResponse(HealpixBase):
                 # map each local-frame PsiChi pixel dir to its nearest HEALPix
                 # pixel. TODO: this could be interpolated to map each dir to
                 # multiple pixels + weights
-                loc_psichi_pixels = sf_psichi_axis.find_bin(theta = loc_psichi_colat,
-                                                            phi   = loc_psichi_lon)
+                loc_psichi_pixels = psr_axes['PsiChi'].find_bin(theta = loc_psichi_colat,
+                                                                phi   = loc_psichi_lon)
 
                 if has_pol:
 
@@ -612,7 +628,7 @@ class FullDetectorResponse(HealpixBase):
 
         # retrieve local-frame PSR for source pixel,
         # weighted by exposure of local frame
-        loc_psr = self._get_pixel_raw(loc_src_pixel, weight=exposure)
+        loc_psr = self._get_pixel(loc_src_pixel, weight=exposure)
 
         # rotate local PSR into source frame
         return loc_psr.take(loc_psichi_pixels, axis=aid_psichi)
@@ -649,7 +665,7 @@ class FullDetectorResponse(HealpixBase):
 
         # retrieve local-frame PSR for this pixel,
         # weighted by exposure time
-        psr_loc = self._get_pixel_raw(loc_src_pixel, weight=exposure)
+        psr_loc = self._get_pixel(loc_src_pixel, weight=exposure)
 
         return psr_loc.take(loc_psichi_pixels,
                             axis=aid_psichi).take(loc_pol_bins,
