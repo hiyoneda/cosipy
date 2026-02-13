@@ -120,7 +120,7 @@ def test_point_source_spectral_fit():
     sp_icrs = source_icrs.spectrum.main.shape
 
     # make sure result does not change (much -- bkg_par changes more than the rest)
-    assert np.allclose([sp.K.value, sp.index.value, bkg_par.value],
+    assert np.allclose([sp_icrs.K.value, sp_icrs.index.value, bkg_par_icrs.value],
                        [K.value, index, bkg_par_value])
 
     assert np.allclose([cosi.get_log_like()],
