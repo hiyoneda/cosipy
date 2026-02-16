@@ -22,12 +22,16 @@ def test_deconvolution_algorithm_base(dataset, model, mask):
         algorithm.pre_processing()
     assert e_info.type is NotImplementedError
 
-    with pytest.raises(RuntimeError) as e_info:
-        algorithm.Estep()
-    assert e_info.type is NotImplementedError
+#    with pytest.raises(RuntimeError) as e_info:
+#        algorithm.Estep()
+#    assert e_info.type is NotImplementedError
+#
+#    with pytest.raises(RuntimeError) as e_info:
+#        algorithm.Mstep()
+#    assert e_info.type is NotImplementedError
 
     with pytest.raises(RuntimeError) as e_info:
-        algorithm.Mstep()
+        algorithm.processing_core()
     assert e_info.type is NotImplementedError
 
     with pytest.raises(RuntimeError) as e_info:
