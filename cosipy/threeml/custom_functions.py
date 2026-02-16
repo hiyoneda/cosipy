@@ -1,6 +1,7 @@
 from astromodels.functions.function import Function1D, FunctionMeta, ModelAssertionViolation, Function2D, Function3D
 import astromodels.functions.numba_functions as nb_func
 from astromodels.utils.angular_distance import angular_distance
+from threeML import Band, DiracDelta, Constant, Line, Quadratic, Cubic, Quartic, StepFunction, StepFunctionUpper, Cosine_Prior, Uniform_prior, PhAbs, Gaussian
 import astropy.units as astropy_units
 from astropy.units import Quantity
 from past.utils import old_div
@@ -90,9 +91,7 @@ class Band_Eflux(Function1D, metaclass=FunctionMeta):
         else:
             unit_ = 1.0
             alpha_, beta_, K_, E0_, a_, b_, x_ = alpha, beta, K, E0, a, b, x
-
-        from astromodels import Band
-
+            
         spectrum_ = Band(alpha=alpha_,
                          beta=beta_,
                          K=1.0,
