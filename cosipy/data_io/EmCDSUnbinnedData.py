@@ -10,7 +10,7 @@ from scoords import SpacecraftFrame
 
 from cosipy import UnBinnedData
 from cosipy.interfaces import EventWithEnergyInterface, EventDataInterface, EventDataWithEnergyInterface
-from cosipy.interfaces.data_interface import  TimeTagEmCDSEventDataInSCFrameInterface
+from cosipy.interfaces.data_interface import TimeTagEmCDSEventDataInSCFrameInterface, EmCDSEventDataInSCFrameInterface
 from cosipy.interfaces.event import  TimeTagEmCDSEventInSCFrameInterface, \
     EmCDSEventInSCFrameInterface
 
@@ -91,15 +91,131 @@ class TimeTagEmCDSEventInSCFrame(EmCDSEventInSCFrame, TimeTagEmCDSEventInSCFrame
     def jd2(self):
         return self._jd2
 
-
-
-class TimeTagEmCDSEventDataInSCFrameFromArrays(TimeTagEmCDSEventDataInSCFrameInterface):
-    """
-
-    """
+class EmCDSEventDataInSCFrameFromArrays(EmCDSEventDataInSCFrameInterface):
 
     _frame = SpacecraftFrame()
-    event_type = TimeTagEmCDSEventInSCFrame
+    event_type = EmCDSEventInSCFrameInterface
+
+    def __init__(self,
+                   energy_keV: np.ndarray[float],
+                   scattered_lon_rad_sc:  np.ndarray[float],
+                   scattered_lat_rad_sc: np.ndarray[float],
+                   scatt_angle_rad: np.ndarray[float],
+                   event_id: Optional[np.ndarray[int]] = None,
+                   selection: Optional[EventSelectorInterface] = None):
+        """
+        Initialize from bare numpy arrays. The user is responsible from getting the right units, coordinates and formats
+
+        Parameters
+        ----------
+        energy_keV: energy [keV]
+        scattered_lon_rad_sc: Longitude of the direction of the scattered photon in spacecraft coordinates [radian]
+        scattered_lat_rad_sc:  Latitude of the direction of the scattered photon in spacecraft coordinates [radian]
+        scatt_angle_rad: Compton scattering angle [radians]
+        event_id: Event ID. Optional. Sequential is not provided
+        selection: Optional. Apply an event selection.
+        """
+
+        # Check size
+        self._energy, self._scatt_angle, self._scatt_lon, self._scatt_lat = np.broadcast_arrays(energy_keV, scatt_angle_rad, scattered_lon_rad_sc, scattered_lat_rad_sc)
+
+        if event_id is None:
+            self._id = np.arange(self._jd1.size)
+        else:
+            self._id = np.asarray(event_id)
+
+        self._nevents = self._id.size
+
+        if selection is not None:
+            mask = asarray(selection.select(self), dtype=bool)
+
+            if mask.size < self._nevents:
+                # The rest of the events are False implicitly
+                mask = np.append(mask, np.full(self._nevents - mask.size, False))
+
+            self._id = self._id[mask]
+            self._energy = self._energy[mask]
+            self._scatt_angle = self._scatt_angle[mask]
+            self._scatt_lat = self._scatt_lat[mask]
+            self._scatt_lon = self._scatt_lon[mask]
+
+            self._nevents = self._id.size
+
+    @classmethod
+    def from_astropy(cls,
+                 energy:Quantity,
+                 scattering_angle:Angle,
+                 scattered_direction:SkyCoord,
+                 event_id:Optional[Iterable[int]] = None,
+                 selection:Optional[EventSelectorInterface] = None):
+        """
+        Initialize from astropy objects, taking into account the units and formats
+
+        Parameters
+        ----------
+        energy
+        scattering_angle
+        scattered_direction
+        event_id
+        selection
+        """
+
+        energy = energy.to_value(u.keV)
+        scatt_angle = scattering_angle.to_value(u.rad)
+
+        if not isinstance(scattered_direction.frame, SpacecraftFrame):
+            raise ValueError("Coordinates need to be in SC frame")
+
+        scattered_direction = scattered_direction.represent_as(UnitSphericalRepresentation)
+
+        scatt_lat = scattered_direction.lat.rad
+        scatt_lon = scattered_direction.lon.rad
+
+        if event_id is not None:
+            event_id = np.asarray(event_id)
+
+        return cls(energy, scatt_lon, scatt_lat, scatt_angle, event_id, selection)
+
+
+    def __getitem__(self, i: int) -> EmCDSEventInSCFrameInterface:
+        return EmCDSEventInSCFrame(self._energy[i], self._scatt_angle[i], self._scatt_lon[i], self._scatt_lat[i],
+                                          self._id[i])
+
+    @property
+    def nevents(self) -> int:
+        return self._nevents
+
+    def __iter__(self) -> Iterator[EmCDSEventInSCFrameInterface]:
+        for id, energy, scatt_angle, scatt_lat, scatt_lon in zip(self._id, self._energy, self._scatt_angle, self._scatt_lat, self._scatt_lon):
+            yield EmCDSEventInSCFrame(energy, scatt_angle, scatt_lon, scatt_lat, id)
+
+    @property
+    def frame(self) -> SpacecraftFrame:
+        return self._frame
+
+    @property
+    def ids(self) -> Iterable[int]:
+        return self._id
+
+    @property
+    def energy_keV(self) -> Iterable[float]:
+        return self._energy
+
+    @property
+    def scattering_angle_rad(self) -> Iterable[float]:
+        return self._scatt_angle
+
+    @property
+    def scattered_lon_rad_sc(self) -> Iterable[float]:
+        return self._scatt_lon
+
+    @property
+    def scattered_lat_rad_sc(self) -> Iterable[float]:
+        return self._scatt_lat
+
+class TimeTagEmCDSEventDataInSCFrameFromArrays(EmCDSEventDataInSCFrameFromArrays, TimeTagEmCDSEventDataInSCFrameInterface):
+
+    event_type = TimeTagEmCDSEventInSCFrameInterface
 
     def __init__(self,
                    jd1: np.ndarray[float],
@@ -126,16 +242,10 @@ class TimeTagEmCDSEventDataInSCFrameFromArrays(TimeTagEmCDSEventDataInSCFrameInt
         """
 
         # Check size
-        self._jd1, self._jd2, self._energy, self._scatt_angle, self._scatt_lon, self._scatt_lat = np.broadcast_arrays(
+        self._jd1, self._jd2, energy, scatt_angle, scatt_lon, scatt_lat = np.broadcast_arrays(
             jd1, jd2, energy_keV, scatt_angle_rad, scattered_lon_rad_sc, scattered_lat_rad_sc)
 
-        if event_id is None:
-            self._id = np.arange(self._jd1.size)
-        else:
-            self._id = np.asarray(event_id)
-
-        self._nevents = self._id.size
-
+        super().__init__(energy, scatt_lon, scatt_lat, scatt_angle, event_id)
 
         if selection is not None:
             mask = asarray(selection.select(self), dtype=bool)
@@ -191,28 +301,16 @@ class TimeTagEmCDSEventDataInSCFrameFromArrays(TimeTagEmCDSEventDataInSCFrameInt
         if event_id is not None:
             event_id = np.asarray(event_id)
 
-        cls(jd1, jd2, energy, scatt_lon, scatt_lat, scatt_angle, event_id, selection)
+        return cls(jd1, jd2, energy, scatt_lon, scatt_lat, scatt_angle, event_id, selection)
 
 
     def __getitem__(self, i: int) -> TimeTagEmCDSEventInSCFrameInterface:
         return TimeTagEmCDSEventInSCFrame(self._jd1[i], self._jd2[i], self._energy[i], self._scatt_angle[i], self._scatt_lon[i], self._scatt_lat[i],
                                           self._id[i])
 
-    @property
-    def nevents(self) -> int:
-        return self._nevents
-
     def __iter__(self) -> Iterator[TimeTagEmCDSEventInSCFrameInterface]:
         for id, jd1, jd2, energy, scatt_angle, scatt_lat, scatt_lon in zip(self._id, self._jd1, self._jd2, self._energy, self._scatt_angle, self._scatt_lat, self._scatt_lon):
             yield TimeTagEmCDSEventInSCFrame(jd1, jd2, energy, scatt_angle, scatt_lon, scatt_lat, id)
-
-    @property
-    def frame(self) -> SpacecraftFrame:
-        return self._frame
-
-    @property
-    def ids(self) -> Iterable[int]:
-        return self._id
 
     @property
     def jd1(self) -> Iterable[float]:
@@ -221,22 +319,6 @@ class TimeTagEmCDSEventDataInSCFrameFromArrays(TimeTagEmCDSEventDataInSCFrameInt
     @property
     def jd2(self) -> Iterable[float]:
         return self._jd2
-
-    @property
-    def energy_keV(self) -> Iterable[float]:
-        return self._energy
-
-    @property
-    def scattering_angle_rad(self) -> Iterable[float]:
-        return self._scatt_angle
-
-    @property
-    def scattered_lon_rad_sc(self) -> Iterable[float]:
-        return self._scatt_lon
-
-    @property
-    def scattered_lat_rad_sc(self) -> Iterable[float]:
-        return self._scatt_lat
 
 class TimeTagEmCDSEventDataInSCFrameFromDC3Fits(TimeTagEmCDSEventDataInSCFrameFromArrays):
 
