@@ -1,12 +1,11 @@
 import numpy as np
-import astropy.units as u
 import astropy.io.fits as fits
 import functools
 from abc import ABC, abstractmethod
 import logging
 logger = logging.getLogger(__name__)
 
-from .constants import NUMERICAL_ZERO, DEFAULT_MINIMUM_FLUX, DEFAULT_ITERATION_MAX, CHUNK_SIZE_FITS
+from .constants import NUMERICAL_ZERO, CHUNK_SIZE_FITS, DEFAULT_ITERATION_MAX
 
 class DeconvolutionAlgorithmBase(ABC):
     """
@@ -15,8 +14,7 @@ class DeconvolutionAlgorithmBase(ABC):
 
     - initialization 
     - pre_processing
-    - Estep
-    - Mstep
+    - processing_core
     - post_processing
     - register_result
     - check_stopping_criteria
@@ -60,13 +58,6 @@ class DeconvolutionAlgorithmBase(ABC):
         logger.debug(f'dict_bkg_norm: {self.dict_bkg_norm}')
         logger.debug(f'dict_dataset_indexlist_for_bkg_models: {self.dict_dataset_indexlist_for_bkg_models}')
 
-        # minimum flux
-        self.minimum_flux = parameter.get('minimum_flux:value', DEFAULT_MINIMUM_FLUX)
-
-        minimum_flux_unit = parameter.get('minimum_flux:unit', initial_model.unit)
-        if minimum_flux_unit is not None:
-            self.minimum_flux = self.minimum_flux*u.Unit(minimum_flux_unit)
-
         # parameters of the iteration
         self.iteration_count = 0
         self.iteration_max = parameter.get('iteration_max', DEFAULT_ITERATION_MAX)
@@ -86,22 +77,16 @@ class DeconvolutionAlgorithmBase(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def Estep(self):
+    def processing_core(self):
         """
-        E-step. 
-        In this step, only self.expectation_list should be updated.
-        If it will be performed in other step, typically post_processing() or check_stopping_criteria(),
-        this step can be skipped.
-        """
-        raise NotImplementedError
-
-    @abstractmethod
-    def Mstep(self):
-        """
-        M-step. 
-        In this step, only self.delta_model should be updated.
-        If you want to apply some operations to self.delta_model,
-        these should be performed in post_processing().
+        Core processing for each iteration.
+        
+        This method should implement the main algorithm logic.
+        For EM-based algorithms, this typically includes:
+        - E-step: Expectation calculation
+        - M-step: Maximization/update
+        
+        Subclasses must implement this method.
         """
         raise NotImplementedError
 
@@ -152,11 +137,8 @@ class DeconvolutionAlgorithmBase(ABC):
         logger.info("<< Pre-processing >>")
         self.pre_processing()
 
-        logger.info("<< E-step >>")
-        self.Estep()
-
-        logger.info("<< M-step >>")
-        self.Mstep()
+        logger.info("<< Processing Core>>")
+        self.processing_core()
             
         logger.info("<< Post-processing >>")
         self.post_processing()

@@ -8,8 +8,9 @@ from .model_base import ModelBase
 from .allskyimage import AllSkyImageModel
 
 from .deconvolution_algorithm_base import DeconvolutionAlgorithmBase
+from .RichardsonLucyBasic import RichardsonLucyBasic
 from .RichardsonLucy import RichardsonLucy
-from .RichardsonLucySimple import RichardsonLucySimple
+from .RichardsonLucyAdvanced import RichardsonLucyAdvanced
 from .MAP_RichardsonLucy import MAP_RichardsonLucy 
 
 from .scatt_exposure_table import SpacecraftAttitudeExposureTable

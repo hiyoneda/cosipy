@@ -1,20 +1,28 @@
-import os
 import numpy as np
-import astropy.units as u
-import astropy.io.fits as fits
 import logging
 logger = logging.getLogger(__name__)
 
 from histpy import Histogram
 
-from .RichardsonLucySimple import RichardsonLucySimple
+from .RichardsonLucyBasic import RichardsonLucyBasic
 
-from .constants import DEFAULT_STOPPING_THRESHOLD
+from .constants import DEFAULT_BKG_NORM_RANGE
 
-class RichardsonLucy(RichardsonLucySimple):
+class RichardsonLucy(RichardsonLucyBasic):
     """
-    A class for the RichardsonLucy algorithm. 
-    The algorithm here is based on Knoedlseder+99, Knoedlseder+05, Siegert+20.
+    Standard Richardson-Lucy algorithm with background optimization.
+    
+    This class extends RichardsonLucyBasic with background normalization
+    optimization, making it suitable for practical image reconstruction
+    with real data.
+    
+    Features:
+    - E-step + M-step (from RichardsonLucyBasic)
+    - Background normalization optimization
+    
+    For advanced features (response weighting, acceleration, smoothing),
+    use RichardsonLucyAdvanced.
+    For MAP estimation with priors, use MAP_RichardsonLucy.
     
     An example of parameter is as follows.
 
@@ -22,26 +30,12 @@ class RichardsonLucy(RichardsonLucySimple):
     minimum_flux:
         value: 0.0
         unit: "cm-2 s-1 sr-1"
-    acceleration:
-        activate: True
-        alpha_max: 10.0
-    response_weighting:
-        activate: True
-        index: 0.5
-    smoothing:
-        activate: True
-        FWHM:
-            value: 2.0
-            unit: "deg"
-    stopping_criteria:
-        statistics: "log-likelihood"
-        threshold: 1e-2
     background_normalization_optimization:
         activate: True
         range: {"albedo": [0.9, 1.1]}
-    save_results:
+    save_results: 
         activate: True
-        directory: "/results"
+        directory: "./results"
         only_final_result: True
     """
 
@@ -49,146 +43,97 @@ class RichardsonLucy(RichardsonLucySimple):
 
         super().__init__(initial_model, dataset, mask, parameter)
 
-        # acceleration
-        self.do_acceleration = parameter.get('acceleration:activate', False)
-        if self.do_acceleration == True:
-            self.alpha_max = parameter.get('acceleration:alpha_max', 1.0)
-
-        # smoothing
-        self.do_smoothing = parameter.get('smoothing:activate', False)
-        if self.do_smoothing:
-            self.smoothing_fwhm = parameter.get('smoothing:FWHM:value') * u.Unit(parameter.get('smoothing:FWHM:unit'))
-            logger.info(f"Gaussian filter with FWHM of {self.smoothing_fwhm} will be applied to delta images ...")
-
-        # stopping criteria
-        self.stopping_criteria_statistics = parameter.get('stopping_criteria:statistics', "log-likelihood")
-        self.stopping_criteria_threshold  = parameter.get('stopping_criteria:threshold', DEFAULT_STOPPING_THRESHOLD)
-
-        if not self.stopping_criteria_statistics in ["log-likelihood"]:
-            raise ValueError
+        # background normalization optimization
+        self.do_bkg_norm_optimization = parameter.get('background_normalization_optimization:activate', False)
+        if self.do_bkg_norm_optimization:
+            self.dict_delta_bkg_norm = {}
+            self.dict_bkg_norm_range = parameter.get('background_normalization_optimization:range', {key: DEFAULT_BKG_NORM_RANGE for key in self.dict_bkg_norm.keys()})
 
     def initialization(self):
         """
         initialization before running the image deconvolution
         """
-
         super().initialization()
 
-        # expected count histograms
-        self.expectation_list = self.calc_expectation_list(model = self.initial_model, dict_bkg_norm = self.dict_bkg_norm)
-        logger.info("The expected count histograms were calculated with the initial model map.")
-
-    def pre_processing(self):
-        """
-        pre-processing for each iteration
-        """
-        pass
-
-    def Estep(self):
-        """
-        E-step (but it will be skipped).
-        Note that self.expectation_list is updated in self.post_processing().
-        """
-        pass
+        # calculate summed background models for M-step
+        if self.do_bkg_norm_optimization:
+            self.dict_summed_bkg_model = {}
+            for key in self.dict_bkg_norm.keys():
+                self.dict_summed_bkg_model[key] = self.calc_summed_bkg_model(key)
 
     def Mstep(self):
         """
         M-step in RL algorithm.
+        In this step, self.delta_model and self.delta_bkg_norm will be updated.
         """
-        super().Mstep()
+        ratio_list = [ data.event / expectation for data, expectation in zip(self.dataset, self.expectation_list) ]
+        
+        # delta model
+        sum_T_product = self.calc_summed_T_product(ratio_list)
+        self.delta_model = self.model * (sum_T_product/self.summed_exposure_map - 1)
+        
+        # masking
+        if self.mask is not None:
+            self.delta_model = self.delta_model.mask_pixels(self.mask)
+
+        logger.debug("The delta model was updated.")
+        
+        # background normalization optimization
+        if self.do_bkg_norm_optimization:
+            for key in self.dict_bkg_norm.keys():
+
+                sum_bkg_T_product = self.calc_summed_bkg_model_product(key, ratio_list)
+                sum_bkg_model = self.dict_summed_bkg_model[key]
+
+                self.dict_delta_bkg_norm[key] = self.dict_bkg_norm[key] * (sum_bkg_T_product / sum_bkg_model - 1)
+
+    def _ensure_bkg_norm_range(self):
+        """
+        Ensure background normalization is within allowed range.
+        
+        This method clips background normalization values to their
+        allowed ranges. If a value is outside the range, it is
+        set to the nearest boundary value.
+        """
+        for key in self.dict_bkg_norm.keys():
+            bkg_norm = self.dict_bkg_norm[key]
+            bkg_range = self.dict_bkg_norm_range[key]
+
+            if bkg_norm < bkg_range[0]:
+                bkg_norm = bkg_range[0]
+            elif bkg_norm > bkg_range[1]:
+                bkg_norm = bkg_range[1]
+
+            self.dict_bkg_norm[key] = bkg_norm
 
     def post_processing(self):
         """
-        Here three processes will be performed.
-        - response weighting filter: the delta map is renormalized as pixels with large exposure times will have more feedback.
-        - gaussian smoothing filter: the delta map is blurred with a Gaussian function.
-        - acceleration of RL algirithm: the normalization of delta map is increased as long as the updated image has no non-negative components.
+        Post-processing. 
         """
+        # updating model
+        self.model[:] += self.delta_model.contents
+        self._ensure_model_constraints()
 
-        self.processed_delta_model = self.delta_model.copy()
-
-        if self.do_response_weighting:
-            self.processed_delta_model *= self.response_weighting_filter
-
-        if self.do_smoothing:
-            self.processed_delta_model = self.processed_delta_model.smoothing(fwhm = self.smoothing_fwhm)
-        
-        if self.do_acceleration:
-            self.alpha = self.calc_alpha(self.processed_delta_model, self.model)
-        else:
-            self.alpha = 1.0
-
-        self.model += self.processed_delta_model * self.alpha
-        self.model[:] = np.where(self.model.contents < self.minimum_flux, self.minimum_flux, self.model.contents)
-
-        if self.mask is not None:
-            self.model = self.model.mask_pixels(self.mask)
-        
-        # update expectation_list
-        self.expectation_list = self.calc_expectation_list(self.model, dict_bkg_norm = self.dict_bkg_norm)
-        logger.debug("The expected count histograms were updated with the new model map.")
-
-        # update log_likelihood_list
-        self.log_likelihood_list = self.calc_log_likelihood_list(self.expectation_list)
-        logger.debug("The log-likelihood list was updated with the new expected count histograms.")
+        # update background normalization
+        if self.do_bkg_norm_optimization:
+            for key in self.dict_bkg_norm.keys():
+                self.dict_bkg_norm[key] += self.dict_delta_bkg_norm[key]
+            self._ensure_bkg_norm_range()
 
     def register_result(self):
         """
-        The values below are stored at the end of each iteration.
-        - iteration: iteration number
-        - model: updated image
-        - delta_model: delta map after M-step 
-        - processed_delta_model: delta map after post-processing
-        - alpha: acceleration parameter in RL algirithm
-        - background_normalization: optimized background normalization
-        - log-likelihood: log-likelihood
+        Register results at the end of each iteration. 
         """
         
         this_result = {"iteration": self.iteration_count, 
-                       "model": self.model.copy(),
-                       "delta_model": self.delta_model,
-                       "processed_delta_model": self.processed_delta_model,
-                       "background_normalization": self.dict_bkg_norm.copy(),
-                       "alpha": self.alpha, 
-                       "log-likelihood": self.log_likelihood_list}
+                       "model": self.model.copy(), 
+                       "bkg_norm": self.dict_bkg_norm.copy()}
 
         # show intermediate results
-        logger.info(f'  alpha: {this_result["alpha"]}')
-        logger.info(f'  background_normalization: {this_result["background_normalization"]}')
-        logger.info(f'  log-likelihood: {this_result["log-likelihood"]}')
+        logger.info(f'  background_normalization: {this_result["bkg_norm"]}')
         
         # register this_result in self.results
         self.results.append(this_result)
-
-    def check_stopping_criteria(self):
-        """
-        If iteration_count is smaller than iteration_max, the iterative process will continue.
-
-        Returns
-        -------
-        bool
-        """
-        if self.iteration_count == 1:
-            return False
-        elif self.iteration_count == self.iteration_max:
-            return True
-
-        if self.stopping_criteria_statistics == "log-likelihood":
-
-            log_likelihood = np.sum(self.results[-1]["log-likelihood"])
-            log_likelihood_before = np.sum(self.results[-2]["log-likelihood"])
-
-            logger.debug(f'Delta log-likelihood: {log_likelihood - log_likelihood_before}')
-
-            if log_likelihood - log_likelihood_before < 0:
-
-                logger.warning("The likelihood is not increased in this iteration. The image reconstruction may be unstable.")
-                return False
-
-            elif log_likelihood - log_likelihood_before < self.stopping_criteria_threshold:
-                return True
-
-        return False
 
     def finalization(self):
         """
@@ -200,16 +145,14 @@ class RichardsonLucy(RichardsonLucySimple):
             counter_name = "iteration"
 
             # model
-            histogram_keys = [("model", f"{self.save_results_directory}/model.hdf5", self.save_only_final_result),
-                              ("delta_model", f"{self.save_results_directory}/delta_model.hdf5", self.save_only_final_result),
-                              ("processed_delta_model", f"{self.save_results_directory}/processed_delta_model.hdf5", self.save_only_final_result)]
+            histogram_keys = [("model", f"{self.save_results_directory}/model.hdf5", self.save_only_final_result)]
 
             #fits
             fits_filename = f'{self.save_results_directory}/results.fits'
 
-            values_key_name_format = [("alpha", "ALPHA", "D")]
-            dicts_key_name_format = [("background_normalization", "BKG_NORM", "D")]
-            lists_key_name_format = [("log-likelihood", "LOG-LIKELIHOOD", "D")]
+            values_key_name_format = []
+            dicts_key_name_format = [("bkg_norm", "BKG_NORM", "D")]
+            lists_key_name_format = []
 
             self._save_standard_results(counter_name, 
                                         histogram_keys, 
@@ -217,26 +160,3 @@ class RichardsonLucy(RichardsonLucySimple):
                                         values_key_name_format,
                                         dicts_key_name_format,
                                         lists_key_name_format)
-
-    def calc_alpha(self, delta_model, model):
-        """
-        Calculate the acceleration parameter in RL algorithm.
-
-        Returns
-        -------
-        float
-            Acceleration parameter
-        """
-        diff = -1 * (model / delta_model).contents
-
-        diff[(diff <= 0) | (delta_model.contents == 0)] = np.inf
-
-        if self.mask is not None:
-            diff[np.invert(self.mask.contents)] = np.inf
-
-        alpha = min(np.min(diff), self.alpha_max)
-
-        if alpha < 1.0:
-            alpha = 1.0
-
-        return alpha

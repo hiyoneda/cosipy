@@ -1,20 +1,17 @@
-import os
-import copy
 import numpy as np
 import astropy.units as u
-import astropy.io.fits as fits
 import logging
 logger = logging.getLogger(__name__)
 
 from histpy import Histogram
 
-from .RichardsonLucySimple import RichardsonLucySimple
+from .RichardsonLucy import RichardsonLucy
 from .prior_tsv import PriorTSV
 from .prior_entropy import PriorEntropy
 
-from .constants import DEFAULT_STOPPING_THRESHOLD
+from .constants import DEFAULT_STOPPING_THRESHOLD, DEFAULT_RESPONSE_WEIGHTING_INDEX
 
-class MAP_RichardsonLucy(RichardsonLucySimple):
+class MAP_RichardsonLucy(RichardsonLucy):
     """
     A class for the RichardsonLucy algorithm using prior distributions. 
     
@@ -79,6 +76,11 @@ class MAP_RichardsonLucy(RichardsonLucySimple):
             this_prior_parameter = parameter['prior'][prior_name]
             self.priors[prior_name] = self.prior_classes[prior_name](this_prior_parameter, initial_model)
 
+        # response_weighting
+        self.do_response_weighting = parameter.get('response_weighting:activate', False)
+        if self.do_response_weighting:
+            self.response_weighting_index = parameter.get('response_weighting:index', DEFAULT_RESPONSE_WEIGHTING_INDEX)
+
         # stopping criteria
         self.stopping_criteria_statistics = parameter.get('stopping_criteria:statistics', "log-posterior")
         self.stopping_criteria_threshold  = parameter.get('stopping_criteria:threshold', DEFAULT_STOPPING_THRESHOLD)
@@ -124,27 +126,32 @@ class MAP_RichardsonLucy(RichardsonLucySimple):
 
     def initialization(self):
         """
-        initialization before running the image deconvolution
+        Initialize before running image deconvolution.
+        
+        This method sets up response weighting filter based on the exposure map.
         """
-
         super().initialization()
 
-        # expected count histograms
-        self.expectation_list = self.calc_expectation_list(model = self.initial_model, dict_bkg_norm = self.dict_bkg_norm)
-        logger.info("The expected count histograms were calculated with the initial model map.")
+        # response-weighting filter
+        # Note: Duplicated in RichardsonLucyAdvanced.initialization()
+        if self.do_response_weighting:
+            self.response_weighting_filter = (self.summed_exposure_map.contents / np.max(self.summed_exposure_map.contents))**self.response_weighting_index
+            logger.info("The response weighting filter was calculated.")
 
     def pre_processing(self):
         """
         pre-processing for each iteration
         """
-        pass
+        if self.iteration_count == 1:
+            super().Estep()
+            logger.info("The expected count histograms were calculated with the initial model map.")
 
-    def Estep(self):
+    def processing_core(self):
         """
-        E-step (but it will be skipped).
-        Note that self.expectation_list is updated in self.post_processing().
+        Core processing for each iteration.
         """
-        pass
+        # Note that Estep() is performed in self.post_processing().
+        self.Mstep()
 
     def Mstep(self):
         """
@@ -178,12 +185,8 @@ class MAP_RichardsonLucy(RichardsonLucySimple):
 
             self.model[:] = (self.model.contents - delta_model.contents) + self.response_weighting_filter * delta_model.contents
 
-        # masking
-        if self.mask is not None:
-            self.model = self.model.mask_pixels(self.mask)
+        self._ensure_model_constraints()
 
-        self.model[:] = np.where( self.model.contents < self.minimum_flux, self.minimum_flux, self.model.contents) 
-        
         # background normalization optimization
         if self.do_bkg_norm_optimization:
             for key in self.dict_bkg_norm.keys():
@@ -193,13 +196,9 @@ class MAP_RichardsonLucy(RichardsonLucySimple):
                 bkg_norm = (self.dict_bkg_norm[key] * sum_bkg_T_product + self.prior_gamma_bkg_k - 1.0) \
                             / (sum_bkg_model + 1.0 / self.prior_gamma_bkg_theta)
 
-                bkg_range = self.dict_bkg_norm_range[key]
-                if bkg_norm < bkg_range[0]:
-                    bkg_norm = bkg_range[0]
-                elif bkg_norm > bkg_range[1]:
-                    bkg_norm = bkg_range[1]
-
                 self.dict_bkg_norm[key] = bkg_norm
+
+            self._ensure_bkg_norm_range()
 
     def post_processing(self):
         """
@@ -210,7 +209,7 @@ class MAP_RichardsonLucy(RichardsonLucySimple):
         #TODO: add acceleration SQUAREM
 
         # update expectation_list
-        self.expectation_list = self.calc_expectation_list(self.model, dict_bkg_norm = self.dict_bkg_norm)
+        self.Estep()
         logger.debug("The expected count histograms were updated with the new model map.")
 
         # update log_likelihood_list
@@ -241,16 +240,16 @@ class MAP_RichardsonLucy(RichardsonLucySimple):
         """
         
         this_result = {"iteration": self.iteration_count, 
-                       "model": copy.deepcopy(self.model), 
-                       "prior_filter": copy.deepcopy(self.prior_filter),
-                       "background_normalization": copy.deepcopy(self.dict_bkg_norm),
-                       "log-likelihood": copy.deepcopy(self.log_likelihood_list),
-                       "log-prior": copy.deepcopy(self.log_priors),
-                       "log-posterior": copy.deepcopy(self.log_posterior),
+                       "model": self.model.copy(), 
+                       "prior_filter": self.prior_filter.copy(),
+                       "bkg_norm": self.dict_bkg_norm.copy(),
+                       "log-likelihood": self.log_likelihood_list.copy(),
+                       "log-prior": self.log_priors.copy(),
+                       "log-posterior": self.log_posterior,
                        }
 
         # show intermediate results
-        logger.info(f'  background_normalization: {this_result["background_normalization"]}')
+        logger.info(f'  background_normalization: {this_result["bkg_norm"]}')
         logger.info(f'  log-likelihood: {this_result["log-likelihood"]}')
         logger.info(f'  log-prior: {this_result["log-prior"]}')
         logger.info(f'  log-posterior: {this_result["log-posterior"]}')
@@ -321,7 +320,7 @@ class MAP_RichardsonLucy(RichardsonLucySimple):
             fits_filename = f'{self.save_results_directory}/results.fits'
 
             values_key_name_format = [("log-posterior", "LOG-POSTERIOR", "D")]
-            dicts_key_name_format  = [("background_normalization", "BKG_NORM", "D"), ("log-prior", "LOG-PRIOR", "D")]
+            dicts_key_name_format  = [("bkg_norm", "BKG_NORM", "D"), ("log-prior", "LOG-PRIOR", "D")]
             lists_key_name_format  = [("log-likelihood", "LOG-LIKELIHOOD", "D")]
 
             self._save_standard_results(counter_name, 

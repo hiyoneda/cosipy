@@ -1,5 +1,6 @@
 import os
 import numpy as np
+import astropy.units as u
 import logging
 logger = logging.getLogger(__name__)
 
@@ -7,12 +8,19 @@ from histpy import Histogram
 
 from .deconvolution_algorithm_base import DeconvolutionAlgorithmBase
 
-from .constants import DEFAULT_BKG_NORM_RANGE, DEFAULT_RESPONSE_WEIGHTING_INDEX
+from .constants import DEFAULT_MINIMUM_FLUX
 
-class RichardsonLucySimple(DeconvolutionAlgorithmBase):
+class RichardsonLucyBasic(DeconvolutionAlgorithmBase):
     """
-    A class for the original RichardsonLucy algorithm. 
-    Basically, this class can be used for testing codes.
+    Basic Richardson-Lucy algorithm.
+    
+    This class implements the core RL algorithm with minimal parameters.
+    It is designed as an entry point to understand the fundamental EM structure of the Richardson-Lucy algorithm.
+    
+    Features:
+    - E-step + M-step
+    - Minimum flux constraint
+    - Masking
     
     An example of parameter is as follows.
 
@@ -20,15 +28,9 @@ class RichardsonLucySimple(DeconvolutionAlgorithmBase):
     minimum_flux:
         value: 0.0
         unit: "cm-2 s-1 sr-1"
-    background_normalization_optimization:
-        activate: True
-        range: {"albedo": [0.9, 1.1]}
-    response_weighting:
-        activate: True 
-        index: 0.5
     save_results: 
         activate: True
-        directory: "/results"
+        directory: "./results"
         only_final_result: True
     """
 
@@ -36,15 +38,12 @@ class RichardsonLucySimple(DeconvolutionAlgorithmBase):
 
         super().__init__(initial_model, dataset, mask, parameter)
 
-        # background normalization optimization
-        self.do_bkg_norm_optimization = parameter.get('background_normalization_optimization:activate', False)
-        if self.do_bkg_norm_optimization:
-            self.dict_bkg_norm_range = parameter.get('background_normalization_optimization:range', {key: DEFAULT_BKG_NORM_RANGE for key in self.dict_bkg_norm.keys()})
+        # minimum flux
+        self.minimum_flux = parameter.get('minimum_flux:value', DEFAULT_MINIMUM_FLUX)
 
-        # response_weighting
-        self.do_response_weighting = parameter.get('response_weighting:activate', False)
-        if self.do_response_weighting:
-            self.response_weighting_index = parameter.get('response_weighting:index', DEFAULT_RESPONSE_WEIGHTING_INDEX)
+        minimum_flux_unit = parameter.get('minimum_flux:unit', initial_model.unit)
+        if minimum_flux_unit is not None:
+            self.minimum_flux = self.minimum_flux*u.Unit(minimum_flux_unit)
 
         # saving results
         self.save_results = parameter.get('save_results:activate', False)
@@ -81,34 +80,32 @@ class RichardsonLucySimple(DeconvolutionAlgorithmBase):
             self.model = self.model.mask_pixels(self.mask)
             logger.info("There are zero-exposure pixels. A mask to ignore them was set.")
 
-        # response-weighting filter
-        if self.do_response_weighting:
-            self.response_weighting_filter = (self.summed_exposure_map.contents / np.max(self.summed_exposure_map.contents))**self.response_weighting_index
-            logger.info("The response weighting filter was calculated.")
-
-        # calculate summed background models for M-step
-        if self.do_bkg_norm_optimization:
-            self.dict_summed_bkg_model = {}
-            for key in self.dict_bkg_norm.keys():
-                self.dict_summed_bkg_model[key] = self.calc_summed_bkg_model(key)
-
     def pre_processing(self):
         """
         pre-processing for each iteration
         """
         pass
 
+    def processing_core(self):
+        """
+        Core processing for each iteration.
+        """
+        self.Estep()
+        self.Mstep()
+
     def Estep(self):
         """
-        E-step in RL algoritm
+        E-step. 
+        In this step, self.expectation_list will be updated.
         """
-
         self.expectation_list = self.calc_expectation_list(self.model, dict_bkg_norm = self.dict_bkg_norm)
-        logger.debug("The expected count histograms were updated with the new model map.")
+
+        logger.debug("The expected count histograms were updated.")
 
     def Mstep(self):
         """
-        M-step in RL algorithm.
+        M-step. 
+        In this step, self.delta_model will be updated.
         """
 
         ratio_list = [ data.event / expectation for data, expectation in zip(self.dataset, self.expectation_list) ]
@@ -120,39 +117,32 @@ class RichardsonLucySimple(DeconvolutionAlgorithmBase):
         # masking
         if self.mask is not None:
             self.delta_model = self.delta_model.mask_pixels(self.mask)
-        
-        # background normalization optimization
-        if self.do_bkg_norm_optimization:
-            for key in self.dict_bkg_norm.keys():
 
-                sum_bkg_T_product = self.calc_summed_bkg_model_product(key, ratio_list)
-                sum_bkg_model = self.dict_summed_bkg_model[key]
-                bkg_norm = self.dict_bkg_norm[key] * (sum_bkg_T_product / sum_bkg_model)
+        logger.debug("The delta model was updated.")
 
-                bkg_range = self.dict_bkg_norm_range[key]
-                if bkg_norm < bkg_range[0]:
-                    bkg_norm = bkg_range[0]
-                elif bkg_norm > bkg_range[1]:
-                    bkg_norm = bkg_range[1]
-
-                self.dict_bkg_norm[key] = bkg_norm
-
-    def post_processing(self):
+    def _ensure_model_constraints(self):
         """
-        Post-processing. 
-        """
+        Ensure model satisfies physical constraints.
         
-        # response_weighting
-        if self.do_response_weighting:
-            self.model[:] += self.delta_model.contents * self.response_weighting_filter
-        else:
-            self.model[:] += self.delta_model.contents
-
+        This method enforces:
+        1. Minimum flux constraint (non-negative flux)
+        2. Masking (zero-exposure pixels)
+        """
+        # checking minimum flux
         self.model[:] = np.where(self.model.contents < self.minimum_flux, self.minimum_flux, self.model.contents)
         
         # masking again
         if self.mask is not None:
             self.model = self.model.mask_pixels(self.mask)
+
+    def post_processing(self):
+        """
+        Post-processing. 
+        """
+        # updating model
+        self.model[:] += self.delta_model.contents
+
+        self._ensure_model_constraints()
 
     def register_result(self):
         """
@@ -160,13 +150,8 @@ class RichardsonLucySimple(DeconvolutionAlgorithmBase):
         """
         
         this_result = {"iteration": self.iteration_count, 
-                       "model": self.model.copy(), 
-                       "delta_model": self.delta_model,
-                       "background_normalization": self.dict_bkg_norm.copy()}
+                       "model": self.model.copy()}
 
-        # show intermediate results
-        logger.info(f'  background_normalization: {this_result["background_normalization"]}')
-        
         # register this_result in self.results
         self.results.append(this_result)
 
@@ -192,14 +177,13 @@ class RichardsonLucySimple(DeconvolutionAlgorithmBase):
             counter_name = "iteration"
 
             # model
-            histogram_keys = [("model", f"{self.save_results_directory}/model.hdf5", self.save_only_final_result), 
-                              ("delta_model", f"{self.save_results_directory}/delta_model.hdf5", self.save_only_final_result)]
+            histogram_keys = [("model", f"{self.save_results_directory}/model.hdf5", self.save_only_final_result)]
 
             #fits
             fits_filename = f'{self.save_results_directory}/results.fits'
 
             values_key_name_format = []
-            dicts_key_name_format = [("background_normalization", "BKG_NORM", "D")]
+            dicts_key_name_format = []
             lists_key_name_format = []
 
             self._save_standard_results(counter_name, 

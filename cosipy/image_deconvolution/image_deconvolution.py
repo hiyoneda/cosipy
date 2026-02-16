@@ -8,8 +8,9 @@ from pathlib import Path
 
 from .allskyimage import AllSkyImageModel
 
+from .RichardsonLucyBasic import RichardsonLucyBasic
 from .RichardsonLucy import RichardsonLucy
-from .RichardsonLucySimple import RichardsonLucySimple
+from .RichardsonLucyAdvanced import RichardsonLucyAdvanced 
 from .MAP_RichardsonLucy import MAP_RichardsonLucy
 
 class ImageDeconvolution:
@@ -17,7 +18,8 @@ class ImageDeconvolution:
     A class to reconstruct all-sky images from COSI data based on image deconvolution methods.
     """
     model_classes = {"AllSkyImage": AllSkyImageModel}
-    deconvolution_algorithm_classes = {"RL": RichardsonLucy, "RLsimple": RichardsonLucySimple, "MAP_RL": MAP_RichardsonLucy}
+    deconvolution_algorithm_classes = {"RLbasic": RichardsonLucyBasic, "RL": RichardsonLucy,
+                                       "RLadvanced": RichardsonLucyAdvanced, "MAP_RL": MAP_RichardsonLucy}
 
     def __init__(self):
         self._dataset = None
