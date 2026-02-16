@@ -191,7 +191,7 @@ class PointSourceResponse(Histogram):
         axes += list(data.axes)
         axes = Axes(axes)
 
-        psr = Quantity(np.empty(shape=axes.shape), unit = u.cm * u.cm * u.s)
+        psr = Quantity(np.zeros(shape=axes.shape), unit = u.cm * u.cm * u.s)
 
         for att, exposure in zip(scatt_map.attitudes, scatt_map.weights):
 
