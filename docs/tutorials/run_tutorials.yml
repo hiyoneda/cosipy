@@ -231,8 +231,10 @@ tutorials:
         COSI-SMEX/DC3/Data/Backgrounds/Ge/PrimaryProtons_3months_unbinned_data_filtered_with_SAAcut.fits.gz:
           checksum: 3264e6bf520f4c20e06aaaed5d57abf0
 
-    polarization_asad:
-      notebook: polarization/ASAD_method.ipynb
+    polarization:
+      notebook:
+        - polarization/ASAD_method.ipynb
+        - polarization/maximum_likelihood_method.ipynb
       ancillary_files:
         - polarization/background_after.yaml
         - polarization/background_before.yaml
