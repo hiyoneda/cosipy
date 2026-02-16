@@ -8,6 +8,7 @@ from histpy import Histogram, HealpixAxis
 from mhealpy import HealpixMap
 
 from cosipy.background_estimation.free_norm_threeml_binned_bkg import FreeNormBackgroundInterpolatedDensityTimeTagEmCDS
+from cosipy.event_selection import GoodTimeInterval
 from cosipy.interfaces.expectation_interface import SumExpectationDensity
 from cosipy.threeml.unbinned_model_folding import UnbinnedThreeMLModelFolding
 
@@ -87,8 +88,9 @@ def main():
     # About 1 full orbit ~1.7 hr
     tstart = Time("2028-03-01 02:00:00.117")
     tstop = Time("2028-03-01 03:42:00.117")
+    gti = GoodTimeInterval(tstart, tstop)
     sc_orientation = SpacecraftHistory.open(sc_orientation_path)
-    sc_orientation = sc_orientation.select_interval(tstart, tstop)
+    sc_orientation = sc_orientation.apply_gti(gti)
 
     # Prepare instrument response function
     logger.info("Loading response....")
