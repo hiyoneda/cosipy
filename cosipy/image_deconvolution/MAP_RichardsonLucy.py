@@ -10,7 +10,8 @@ from .RichardsonLucy import RichardsonLucy
 
 from .prior_tsv import PriorTSV
 from .prior_entropy import PriorEntropy
-from .ResponseWeightingFilter import ResponseWeightingFilter 
+
+from .response_weighting_filter import ResponseWeightingFilter 
 
 from .constants import DEFAULT_STOPPING_THRESHOLD, DEFAULT_RESPONSE_WEIGHTING_INDEX
 

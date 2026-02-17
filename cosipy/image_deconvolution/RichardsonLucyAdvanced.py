@@ -6,7 +6,8 @@ logger = logging.getLogger(__name__)
 from histpy import Histogram
 
 from .RichardsonLucy import RichardsonLucy
-from .ResponseWeightingFilter import ResponseWeightingFilter 
+
+from .response_weighting_filter import ResponseWeightingFilter 
 
 from .constants import DEFAULT_STOPPING_THRESHOLD, DEFAULT_RESPONSE_WEIGHTING_INDEX
 
