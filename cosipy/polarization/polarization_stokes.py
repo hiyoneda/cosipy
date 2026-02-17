@@ -736,47 +736,6 @@ class PolarizationStokes():
             plt.show()
 
         return mu_100
-
-    def compute_pseudo_stokes(self, azimuthal_angles, show_plots=False):
-        """
-        Calculates photon-by-photon pseudo stokes parameters from the photon azimutal angle.
-        
-        Parameters
-        ----------
-        azimuthal_angles : list
-            Azimuthal scattering angles (radians)
-    
-        Returns
-        -------
-        qs : list
-            list of pseudo-q parameters for each photon (ordered as input array)
-        us : list
-            list of pseudo-u parameters for each photon (ordered as input array)
-        """
-
-        qs, us = [], []
-
-        #this is stupid... need to fix!
-        try:
-            for a in azimuthal_angles.value:
-                qs.append(stokes_q(a - np.pi/2))
-                us.append(stokes_u(a - np.pi/2))
-        except:
-
-            for a in azimuthal_angles:
-                qs.append(stokes_q(a.value - np.pi/2))
-                us.append(stokes_u(a.value - np.pi/2))
-
-        if show_plots:
-            plt.figure()
-            plt.title('Source Stokes parameters')
-            plt.hist(qs, bins=50, alpha=0.5, label='q$_s$')
-            plt.hist(us, bins=50, alpha=0.5, label='u$_s$')
-            plt.xlabel('Pseudo Stokes parameter')
-            plt.legend()
-            plt.show()
-        
-        return qs, us
     
     def compute_data_pseudo_stokes(self, show_plots=False):
         """
@@ -899,81 +858,6 @@ class PolarizationStokes():
         logger.info('Minimum detectable polarization (MDP) of source: ' + str(round(mdp, 3)))
 
         return mdp 
-
-    def simulate_unpolarized_stokes(self, n_samples=100, show_plots=False):
-        """
-        Simulate unpolarized Stokes parameters from the source data.
-        The simulated data have the same statistics as the source data, but are unpolarized.
-        We use the response files given in input.
-        This is useful to estimate the background contribution to the polarization measurement.
-            1. Create unpolarized ADAS
-            2. Calculate pseudo Stokes parameters from the azimuthal scattering angles
-            3. repeat for a number of samples
-            4. compute the average and standard deviation of the pseudo Stokes parameters
-
-        Parameters
-        ----------
-        n_samples : int, optional
-            Number of samples to simulate, by default 100.
-        show_plots : bool, optional
-            If True, display a diagnostic plot in the Q-U plane with 
-            uncertainty circles, by default False.
-
-        Returns
-        -------
-        qs_unpol : list
-            List of pseudo-q parameters for each simulated unpolarized photon (ordered as input array)
-        us_unpol : list
-            List of pseudo-u parameters for each simulated unpolarized photon (ordered as input array)
-        """
-
-        unpolarized_asad = create_unpolarized_asad(self._spectrum, self._source_vector, self._ori,
-                                               self._response, self._convention, 
-                                               self._response_file, self._response_convention, bins=self._nbins)
-        azimuthal_bin_center = unpolarized_asad.axis.centers.value  # Get the bin edges of the azimuthal angle distribution
-        # Create the spline from the unpol azimutal angle distrib
-        spline_unpol = interpolate.interp1d(azimuthal_bin_center, unpolarized_asad.full_contents)
-        #plot the unpolarized azimuthal angle distribution
-        if show_plots: 
-            plt.figure()
-            plt.title('Unpolarized azimuthal angle distribution')
-            plt.step(azimuthal_bin_center, unpolarized_asad.full_contents, where='mid', label='Unpolarized ASAD')
-            plt.xlabel('Azimuthal angle [rad]')
-            plt.ylabel('Counts')
-
-        # Create fine bins and normalize to the area to get a probability density function (PDF)
-        # also, avoiding edges that wouls break the spline
-        fine_bins = np.linspace(azimuthal_bin_center[0]-0.01*azimuthal_bin_center[0], 
-                                azimuthal_bin_center[-2]-0.01*azimuthal_bin_center[-2], 1000)
-        fine_probabilities = spline_unpol(fine_bins)
-        # total_area = np.trapz(fine_probabilities, fine_bins)  # Numerical integration using trapezoidal rule
-        fine_probabilities /= np.sum(fine_probabilities)#total_area
-
-        #Generate random samples from a uniform distribution and map them to azimuthal angles
-        _qs_unpol_, _us_unpol_ = [], []
-        print('Simulating unpolarized Stokes parameters from the source data...')
-        for _ in range(n_samples):
-            unpol_azimuthal_angles = np.random.choice(fine_bins, size=self._data_counts, p=fine_probabilities) * u.rad  
-            qs_unpol_, us_unpol_ = self.compute_pseudo_stokes(unpol_azimuthal_angles, show_plots=False)
-            _qs_unpol_.append(qs_unpol_)
-            _us_unpol_.append(us_unpol_)
-
-        # Convert lists to numpy arrays for easier manipulation
-        _qs_unpol_ = np.array(_qs_unpol_)
-        _us_unpol_ = np.array(_us_unpol_)
-        #Average over the samples
-
-        if show_plots:
-            plt.figure()
-            plt.title('Unpolarized Stokes parameters (averaged over %i samples)' % n_samples)
-            for i in range(n_samples):
-                plt.hist(_qs_unpol_[i], bins=50, alpha=0.1, color='tab:blue')
-                plt.hist(_us_unpol_[i], bins=50, alpha=0.1, color='tab:orange')
-            plt.xlabel('Pseudo Stokes parameter')
-            plt.legend()
-            plt.show()
-        
-        return _qs_unpol_, _us_unpol_
 
     def calculate_polarization(self, qs, us, mu, bkg_qs=None, bkg_us=None, show_plots=False, ref_qu=(None, None),
                                ref_pdpa=(None, None), ref_label=None, mdp=None):
