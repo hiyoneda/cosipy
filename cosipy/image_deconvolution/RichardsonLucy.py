@@ -4,6 +4,7 @@ logger = logging.getLogger(__name__)
 
 from histpy import Histogram
 
+from .deconvolution_algorithm_base import _to_float
 from .RichardsonLucyBasic import RichardsonLucyBasic
 
 from .constants import DEFAULT_BKG_NORM_RANGE
@@ -107,7 +108,7 @@ class RichardsonLucy(RichardsonLucyBasic):
             elif bkg_norm > bkg_range[1]:
                 bkg_norm = bkg_range[1]
 
-            self.dict_bkg_norm[key] = bkg_norm
+            self.dict_bkg_norm[key] = _to_float(bkg_norm)
 
     def post_processing(self):
         """
@@ -131,10 +132,10 @@ class RichardsonLucy(RichardsonLucyBasic):
         
         this_result = {"iteration": self.iteration_count, 
                        "model": self.model.copy(), 
-                       "bkg_norm": self.dict_bkg_norm.copy()}
+                       "background_normalization": self.dict_bkg_norm.copy()}
 
         # show intermediate results
-        logger.info(f'  background_normalization: {this_result["bkg_norm"]}')
+        logger.info(f'  background_normalization: {this_result["background_normalization"]}')
         
         # register this_result in self.results
         self.results.append(this_result)
@@ -156,7 +157,7 @@ class RichardsonLucy(RichardsonLucyBasic):
             fits_filename = f'{self.save_results_directory}/results.fits'
 
             values_key_name_format = []
-            dicts_key_name_format = [("bkg_norm", "BKG_NORM", "D")]
+            dicts_key_name_format = [("background_normalization", "BKG_NORM", "D")]
             lists_key_name_format = []
 
             self._save_standard_results(counter_name, 

@@ -5,7 +5,9 @@ logger = logging.getLogger(__name__)
 
 from histpy import Histogram
 
+from .deconvolution_algorithm_base import _to_float
 from .RichardsonLucy import RichardsonLucy
+
 from .prior_tsv import PriorTSV
 from .prior_entropy import PriorEntropy
 from .ResponseWeightingFilter import ResponseWeightingFilter 
@@ -123,7 +125,7 @@ class MAP_RichardsonLucy(RichardsonLucy):
 
                 log_part_bkg += -1.0 * np.sum( bkg_norm / self.prior_gamma_bkg_theta )
 
-        return pl_part_model + log_part_model, pl_part_bkg + log_part_bkg
+        return _to_float(pl_part_model + log_part_model), _to_float(pl_part_bkg + log_part_bkg)
 
     def initialization(self):
         """
@@ -228,7 +230,7 @@ class MAP_RichardsonLucy(RichardsonLucy):
         self.log_priors['gamma_model'], self.log_priors['gamma_bkg'] = self.log_gamma_prior(self.model, self.dict_bkg_norm)
 
         for key in self.priors.keys():
-            self.log_priors[key] = self.priors[key].log_prior(self.model)
+            self.log_priors[key] = _to_float(self.priors[key].log_prior(self.model))
 
         # log-posterior
         self.log_posterior = np.sum(self.log_likelihood_list) + np.sum([self.log_priors[key] for key in self.log_priors.keys()])
@@ -248,14 +250,14 @@ class MAP_RichardsonLucy(RichardsonLucy):
         this_result = {"iteration": self.iteration_count, 
                        "model": self.model.copy(), 
                        "prior_filter": self.prior_filter.copy(),
-                       "bkg_norm": self.dict_bkg_norm.copy(),
+                       "background_normalization": self.dict_bkg_norm.copy(),
                        "log-likelihood": self.log_likelihood_list.copy(),
                        "log-prior": self.log_priors.copy(),
                        "log-posterior": self.log_posterior,
                        }
 
         # show intermediate results
-        logger.info(f'  background_normalization: {this_result["bkg_norm"]}')
+        logger.info(f'  background_normalization: {this_result["background_normalization"]}')
         logger.info(f'  log-likelihood: {this_result["log-likelihood"]}')
         logger.info(f'  log-prior: {this_result["log-prior"]}')
         logger.info(f'  log-posterior: {this_result["log-posterior"]}')
@@ -327,7 +329,7 @@ class MAP_RichardsonLucy(RichardsonLucy):
             fits_filename = f'{self.save_results_directory}/results.fits'
 
             values_key_name_format = [("log-posterior", "LOG-POSTERIOR", "D")]
-            dicts_key_name_format  = [("bkg_norm", "BKG_NORM", "D"), ("log-prior", "LOG-PRIOR", "D")]
+            dicts_key_name_format  = [("background_normalization", "BKG_NORM", "D"), ("log-prior", "LOG-PRIOR", "D")]
             lists_key_name_format  = [("log-likelihood", "LOG-LIKELIHOOD", "D")]
 
             self._save_standard_results(counter_name, 

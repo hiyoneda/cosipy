@@ -155,13 +155,13 @@ class RichardsonLucyAdvanced(RichardsonLucy):
         
         this_result = {"iteration": self.iteration_count, 
                        "model": self.model.copy(),
-                       "bkg_norm": self.dict_bkg_norm.copy(),
+                       "background_normalization": self.dict_bkg_norm.copy(),
                        "alpha": self.alpha, 
                        "log-likelihood": self.log_likelihood_list.copy()}
 
         # show intermediate results
         logger.info(f'  alpha: {this_result["alpha"]}')
-        logger.info(f'  background_normalization: {this_result["bkg_norm"]}')
+        logger.info(f'  background_normalization: {this_result["background_normalization"]}')
         logger.info(f'  log-likelihood: {this_result["log-likelihood"]}')
         
         # register this_result in self.results
@@ -215,7 +215,7 @@ class RichardsonLucyAdvanced(RichardsonLucy):
             fits_filename = f'{self.save_results_directory}/results.fits'
 
             values_key_name_format = [("alpha", "ALPHA", "D")]
-            dicts_key_name_format = [("bkg_norm", "BKG_NORM", "D")]
+            dicts_key_name_format = [("background_normalization", "BKG_NORM", "D")]
             lists_key_name_format = [("log-likelihood", "LOG-LIKELIHOOD", "D")]
 
             self._save_standard_results(counter_name, 

@@ -7,6 +7,15 @@ logger = logging.getLogger(__name__)
 
 from .constants import NUMERICAL_ZERO, CHUNK_SIZE_FITS, DEFAULT_ITERATION_MAX
 
+def _to_float(x) -> float:
+    """
+    Convert to float, handling astropy Quantity.
+    """
+
+    if hasattr(x, 'unit'):
+        return float(x.to(''))
+    return float(x)
+
 class DeconvolutionAlgorithmBase(ABC):
     """
     A base class for image deconvolution algorithms.
@@ -189,7 +198,7 @@ class DeconvolutionAlgorithmBase(ABC):
             List of Log-likelihood
         """
 
-        return [data.calc_log_likelihood(expectation) for data, expectation in zip(self.dataset, expectation_list)]
+        return [_to_float(data.calc_log_likelihood(expectation)) for data, expectation in zip(self.dataset, expectation_list)]
 
     def calc_summed_exposure_map(self):
         """
