@@ -185,6 +185,7 @@ class CoordsysConversionMatrix(Histogram):
             exposure time in seconds for pointing i and pixel j that is within the
             Earth occultation region.
         """
+
         npix_model = hp.nside2npix(nside_model)
 
         exposure_time_map = np.zeros((num_pointings, npix_model))
@@ -241,6 +242,7 @@ class CoordsysConversionMatrix(Histogram):
             Exposure map with axes ["ScAtt", "lb", "Ei"] representing the effective area x time
             for each attitude bin, sky pixel, and energy bin.
         """
+
         effective_area = full_detector_response.to_dr().project(['NuLambda', 'Ei'])
 
         exposure_map_contents = tensordot_sparse(self.contents, self.unit,

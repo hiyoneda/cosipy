@@ -60,6 +60,7 @@ class RichardsonLucyBasic(DeconvolutionAlgorithmBase):
         """
         initialization before running the image deconvolution
         """
+
         # clear counter 
         self.iteration_count = 0
 
@@ -84,12 +85,14 @@ class RichardsonLucyBasic(DeconvolutionAlgorithmBase):
         """
         pre-processing for each iteration
         """
+
         pass
 
     def processing_core(self):
         """
         Core processing for each iteration.
         """
+
         self.Estep()
         self.Mstep()
 
@@ -98,6 +101,7 @@ class RichardsonLucyBasic(DeconvolutionAlgorithmBase):
         E-step. 
         In this step, self.expectation_list will be updated.
         """
+
         self.expectation_list = self.calc_expectation_list(self.model, dict_bkg_norm = self.dict_bkg_norm)
 
         logger.debug("The expected count histograms were updated.")
@@ -128,6 +132,7 @@ class RichardsonLucyBasic(DeconvolutionAlgorithmBase):
         1. Minimum flux constraint (non-negative flux)
         2. Masking (zero-exposure pixels)
         """
+
         # checking minimum flux
         self.model[:] = np.where(self.model.contents < self.minimum_flux, self.minimum_flux, self.model.contents)
         
@@ -139,6 +144,7 @@ class RichardsonLucyBasic(DeconvolutionAlgorithmBase):
         """
         Post-processing. 
         """
+
         # updating model
         self.model[:] += self.delta_model.contents
 
@@ -163,6 +169,7 @@ class RichardsonLucyBasic(DeconvolutionAlgorithmBase):
         -------
         bool
         """
+
         if self.iteration_count < self.iteration_max:
             return False
         return True
@@ -171,6 +178,7 @@ class RichardsonLucyBasic(DeconvolutionAlgorithmBase):
         """
         finalization after running the image deconvolution
         """
+
         if self.save_results == True:
             logger.info(f'Saving results in {self.save_results_directory}')
 

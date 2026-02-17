@@ -62,6 +62,7 @@ class SpacecraftAttitudeExposureTable(ExposureTableBase):
         scheme : str, default 'ring'
             Healpix scheme ('ring' or 'nested')
         """
+
         super().__init__(df, nside=nside, scheme=scheme)
 
     @classmethod
@@ -90,6 +91,7 @@ class SpacecraftAttitudeExposureTable(ExposureTableBase):
         -------
         :py:class:`cosipy.spacecraftfile.SpacecraftAttitudeExposureTable`
         """
+
         df = cls.analyze_orientation(orientation, nside, scheme, start, stop, min_livetime, min_num_pointings)
         
         # nside and scheme are no longer stored in df
@@ -286,6 +288,7 @@ class SpacecraftAttitudeExposureTable(ExposureTableBase):
         :py:class:`histpy.Histogram`
             Binned data with axes ["ScAtt", "Em", "Phi", "PsiChi"].
         """
+
         exposure_dict = {(row['healpix_index_z_pointing'], row['healpix_index_x_pointing']): row['scatt_binning_index'] for _, row in self.iterrows()}
             
         # from BinnedData.py

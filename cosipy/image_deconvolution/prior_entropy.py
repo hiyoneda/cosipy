@@ -40,6 +40,7 @@ class PriorEntropy(PriorBase):
         float
             The logarithm of the entropy prior probability.
         """
+
         if self.model_class == AllSkyImageModel:
 
             image_ratio = (model/self.prior_map).contents.to('').value
@@ -60,6 +61,7 @@ class PriorEntropy(PriorBase):
         numpy.ndarray
             Gradient of the log prior, in units inverse to the model.
         """
+
         if self.model_class == AllSkyImageModel:
 
             image_ratio = (model/self.prior_map).contents.to('').value

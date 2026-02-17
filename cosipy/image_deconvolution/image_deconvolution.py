@@ -64,6 +64,7 @@ class ImageDeconvolution:
         parameter_filepath : str or pathlib.Path
             Path of parameter file.
         """
+
         self._parameter = Configurator.open(parameter_filepath)
 
         logger.debug(f"parameter file for image deconvolution was set -> {parameter_filepath}")
@@ -73,6 +74,7 @@ class ImageDeconvolution:
         """
         Return the dataset.
         """
+
         return self._dataset
 
     @property
@@ -80,6 +82,7 @@ class ImageDeconvolution:
         """
         Return the registered parameter.
         """
+
         return self._parameter
 
     def override_parameter(self, *args):
@@ -95,6 +98,7 @@ class ImageDeconvolution:
         --------
         >>> image_deconvolution.override_parameter("deconvolution:parameter_RL:iteration = 30")
         """
+
         self._parameter.override(args)
 
     @property
@@ -102,6 +106,7 @@ class ImageDeconvolution:
         """
         Return the initial model.
         """
+
         if self._initial_model is None:
             logger.warning("Need to initialize model in the image_deconvolution instance!")
 
@@ -112,6 +117,7 @@ class ImageDeconvolution:
         """
         Return the mask.
         """
+
         return self._mask
 
     @property
@@ -119,6 +125,7 @@ class ImageDeconvolution:
         """
         Return the results.
         """
+
         return self._deconvolution.results
 
     def initialize(self):
@@ -144,6 +151,7 @@ class ImageDeconvolution:
         bool 
             whether the instantiation and initialization are successfully done.
         """
+
         # set self._model_class
         model_name = self.parameter['model_definition']['class']            # Options include "AllSkyImage", etc.
 
@@ -192,6 +200,7 @@ class ImageDeconvolution:
         bool 
             whether the deconvolution algorithm is successfully registered.
         """
+
         logger.info("<< Registering the deconvolution algorithm >>")
         parameter_deconvolution = Configurator(self.parameter['deconvolution'])
 
@@ -225,6 +234,7 @@ class ImageDeconvolution:
         list
             List containing results (reconstructed image, likelihood etc) at each iteration. 
         """
+
         logger.info("#### Image Deconvolution Starts ####")
        
         logger.info(f"<< Initialization >>")

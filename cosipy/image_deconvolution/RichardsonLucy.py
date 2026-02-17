@@ -53,6 +53,7 @@ class RichardsonLucy(RichardsonLucyBasic):
         """
         initialization before running the image deconvolution
         """
+
         super().initialization()
 
         # calculate summed background models for M-step
@@ -66,6 +67,7 @@ class RichardsonLucy(RichardsonLucyBasic):
         M-step in RL algorithm.
         In this step, self.delta_model and self.delta_bkg_norm will be updated.
         """
+
         ratio_list = [ data.event / expectation for data, expectation in zip(self.dataset, self.expectation_list) ]
         
         # delta model
@@ -95,6 +97,7 @@ class RichardsonLucy(RichardsonLucyBasic):
         allowed ranges. If a value is outside the range, it is
         set to the nearest boundary value.
         """
+
         for key in self.dict_bkg_norm.keys():
             bkg_norm = self.dict_bkg_norm[key]
             bkg_range = self.dict_bkg_norm_range[key]
@@ -110,6 +113,7 @@ class RichardsonLucy(RichardsonLucyBasic):
         """
         Post-processing. 
         """
+
         # updating model
         self.model[:] += self.delta_model.contents
         self._ensure_model_constraints()
@@ -139,6 +143,7 @@ class RichardsonLucy(RichardsonLucyBasic):
         """
         finalization after running the image deconvolution
         """
+
         if self.save_results == True:
             logger.info(f'Saving results in {self.save_results_directory}')
 

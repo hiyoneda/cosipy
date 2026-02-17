@@ -67,6 +67,7 @@ class PriorTSV(PriorBase):
         float
             The logarithm of the TSV prior probability.
         """
+
         if self.model_class == AllSkyImageModel:
 
             diff = (model[:] - model[self.neighbour_pixel_index]).value
@@ -88,6 +89,7 @@ class PriorTSV(PriorBase):
         numpy.ndarray
             Gradient of the log prior, in units inverse to the model.
         """
+
         if self.model_class == AllSkyImageModel:
 
             diff = (model[:] - model[self.neighbour_pixel_index]).value
