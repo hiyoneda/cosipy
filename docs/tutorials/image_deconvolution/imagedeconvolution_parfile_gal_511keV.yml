@@ -16,7 +16,7 @@ model_definition:
       value: [1e-4] #the number of these values should be the same as "the number of energy_edges - 1".
       unit: "cm-2 s-1 sr-1"  # do not change it as for now
 deconvolution:
-  algorithm: "RL"
+  algorithm: "RLadvanced"
   parameter:
     iteration_max: 10
     acceleration:
