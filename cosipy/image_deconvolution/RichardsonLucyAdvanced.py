@@ -6,6 +6,7 @@ logger = logging.getLogger(__name__)
 from histpy import Histogram
 
 from .RichardsonLucy import RichardsonLucy
+from .ResponseWeightingFilter import ResponseWeightingFilter 
 
 from .constants import DEFAULT_STOPPING_THRESHOLD, DEFAULT_RESPONSE_WEIGHTING_INDEX
 
@@ -76,18 +77,18 @@ class RichardsonLucyAdvanced(RichardsonLucy):
         
         This method sets up response weighting filter based on the exposure map.
         """
+
         super().initialization()
 
         # response-weighting filter
-        # Note: Duplicated in MAP_RichardsonLucy.initialization()
         if self.do_response_weighting:
-            self.response_weighting_filter = (self.summed_exposure_map.contents / np.max(self.summed_exposure_map.contents))**self.response_weighting_index
-            logger.info("The response weighting filter was calculated.")
+            self.response_weighting_filter = ResponseWeightingFilter(self.summed_exposure_map, self.response_weighting_index)
 
     def pre_processing(self):
         """
         pre-processing for each iteration
         """
+
         if self.iteration_count == 1:
             super().Estep()
             logger.info("The expected count histograms were calculated with the initial model map.")
@@ -96,8 +97,9 @@ class RichardsonLucyAdvanced(RichardsonLucy):
         """
         Core processing for each iteration.
         """
-        # Note that Estep() is performed in self.post_processing().
+
         self.Mstep()
+        # Note that Estep() is performed in self.post_processing().
 
     def post_processing(self):
         """
@@ -106,11 +108,12 @@ class RichardsonLucyAdvanced(RichardsonLucy):
         - gaussian smoothing filter: the delta map is blurred with a Gaussian function.
         - acceleration of RL algirithm: the normalization of delta map is increased as long as the updated image has no non-negative components.
         """
+
         # update model
         self.processed_delta_model = self.delta_model.copy()
 
         if self.do_response_weighting:
-            self.processed_delta_model *= self.response_weighting_filter
+            self.processed_delta_model = self.response_weighting_filter.apply(self.processed_delta_model)
 
         if self.do_smoothing:
             self.processed_delta_model = self.processed_delta_model.smoothing(fwhm = self.smoothing_fwhm)
@@ -172,6 +175,7 @@ class RichardsonLucyAdvanced(RichardsonLucy):
         -------
         bool
         """
+
         if self.iteration_count == 1:
             return False
         elif self.iteration_count == self.iteration_max:
@@ -198,6 +202,7 @@ class RichardsonLucyAdvanced(RichardsonLucy):
         """
         finalization after running the image deconvolution
         """
+
         if self.save_results == True:
             logger.info(f'Saving results in {self.save_results_directory}')
 
@@ -229,6 +234,7 @@ class RichardsonLucyAdvanced(RichardsonLucy):
         float
             Acceleration parameter
         """
+
         diff = -1 * (model / delta_model).contents
 
         diff[(diff <= 0) | (delta_model.contents == 0)] = np.inf

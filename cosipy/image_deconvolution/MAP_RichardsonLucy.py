@@ -8,6 +8,7 @@ from histpy import Histogram
 from .RichardsonLucy import RichardsonLucy
 from .prior_tsv import PriorTSV
 from .prior_entropy import PriorEntropy
+from .ResponseWeightingFilter import ResponseWeightingFilter 
 
 from .constants import DEFAULT_STOPPING_THRESHOLD, DEFAULT_RESPONSE_WEIGHTING_INDEX
 
@@ -100,7 +101,7 @@ class MAP_RichardsonLucy(RichardsonLucy):
             self.prior_gamma_bkg_theta = parameter['background']['theta']['value']
             self.prior_gamma_bkg_k     = parameter['background']['k']['value']
 
-    def log_gamma_prior(self, model):
+    def log_gamma_prior(self, model, dict_bkg_norm):
 
         eps = np.finfo(model.contents.dtype).eps
         
@@ -114,9 +115,9 @@ class MAP_RichardsonLucy(RichardsonLucy):
         pl_part_bkg, log_part_bkg = 0, 0
 
         if self.do_bkg_norm_optimization:
-            for key in self.dict_bkg_norm.keys():
+            for key in dict_bkg_norm.keys():
                 
-                bkg_norm = self.dict_bkg_norm[key]
+                bkg_norm = dict_bkg_norm[key]
 
                 pl_part_bkg += (self.prior_gamma_bkg_k - 1.0) * np.log(bkg_norm)
 
@@ -130,18 +131,18 @@ class MAP_RichardsonLucy(RichardsonLucy):
         
         This method sets up response weighting filter based on the exposure map.
         """
+
         super().initialization()
 
         # response-weighting filter
-        # Note: Duplicated in RichardsonLucyAdvanced.initialization()
         if self.do_response_weighting:
-            self.response_weighting_filter = (self.summed_exposure_map.contents / np.max(self.summed_exposure_map.contents))**self.response_weighting_index
-            logger.info("The response weighting filter was calculated.")
+            self.response_weighting_filter = ResponseWeightingFilter(self.summed_exposure_map, self.response_weighting_index)
 
     def pre_processing(self):
         """
         pre-processing for each iteration
         """
+
         if self.iteration_count == 1:
             super().Estep()
             logger.info("The expected count histograms were calculated with the initial model map.")
@@ -150,6 +151,7 @@ class MAP_RichardsonLucy(RichardsonLucy):
         """
         Core processing for each iteration.
         """
+
         # Note that Estep() is performed in self.post_processing().
         self.Mstep()
 
@@ -174,18 +176,7 @@ class MAP_RichardsonLucy(RichardsonLucy):
 
         self.prior_filter = Histogram(self.model.axes, contents = np.exp( sum_grad_log_prior / (self.summed_exposure_map.contents + 1.0 / self.prior_gamma_model_theta)))
 
-        self.model[:] = self.prior_filter.contents * model_EM.contents
-
-        # applying response_weighting_filter
-        if self.do_response_weighting:
-            if self.iteration_count == 1:
-                delta_model = self.model - self.initial_model
-            else:
-                delta_model = self.model - self.results[-1]['model']
-
-            self.model[:] = (self.model.contents - delta_model.contents) + self.response_weighting_filter * delta_model.contents
-
-        self._ensure_model_constraints()
+        self.delta_model = self.prior_filter * model_EM.contents - self.model
 
         # background normalization optimization
         if self.do_bkg_norm_optimization:
@@ -196,15 +187,30 @@ class MAP_RichardsonLucy(RichardsonLucy):
                 bkg_norm = (self.dict_bkg_norm[key] * sum_bkg_T_product + self.prior_gamma_bkg_k - 1.0) \
                             / (sum_bkg_model + 1.0 / self.prior_gamma_bkg_theta)
 
-                self.dict_bkg_norm[key] = bkg_norm
-
-            self._ensure_bkg_norm_range()
+                self.dict_delta_bkg_norm[key] = bkg_norm - self.dict_bkg_norm[key]
 
     def post_processing(self):
         """
         Here three processes will be performed.
         - response weighting filter: the delta map is renormalized as pixels with large exposure times will have more feedback.
         """
+
+        # update model
+        self.processed_delta_model = self.delta_model.copy()
+
+        # applying response_weighting_filter
+        if self.do_response_weighting:
+            self.processed_delta_model = self.response_weighting_filter.apply(self.processed_delta_model)
+
+        self.model += self.processed_delta_model
+
+        self._ensure_model_constraints()
+
+        # update background normalization
+        if self.do_bkg_norm_optimization:
+            for key in self.dict_bkg_norm.keys():
+                self.dict_bkg_norm[key] += self.dict_delta_bkg_norm[key]
+            self._ensure_bkg_norm_range()
 
         #TODO: add acceleration SQUAREM
 
@@ -219,7 +225,7 @@ class MAP_RichardsonLucy(RichardsonLucy):
         # update log priors
         self.log_priors = {}
 
-        self.log_priors['gamma_model'], self.log_priors['gamma_bkg'] = self.log_gamma_prior(self.model)
+        self.log_priors['gamma_model'], self.log_priors['gamma_bkg'] = self.log_gamma_prior(self.model, self.dict_bkg_norm)
 
         for key in self.priors.keys():
             self.log_priors[key] = self.priors[key].log_prior(self.model)
@@ -307,6 +313,7 @@ class MAP_RichardsonLucy(RichardsonLucy):
         """
         finalization after running the image deconvolution
         """
+
         if self.save_results == True:
             logger.info(f'Saving results in {self.save_results_directory}')
 
