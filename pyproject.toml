@@ -28,6 +28,10 @@ dependencies = [
                   "pytest (>=9.0.2,<10.0.0)",
                ]
 
+[project.optional-dependencies]
+# Machine learning stuff
+ML = ["torch", "torch_geometric"]
+
 [project.urls]
 Homepage = "https://github.com/cositools/cosipy"
 
