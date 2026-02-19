@@ -10,7 +10,7 @@ that were previously scattered as methods of DeconvolutionAlgorithmBase.
 from collections.abc import Sequence
 import numpy as np
 import logging
-from typing import Union, Optional
+from typing import Union
 
 from .constants import NUMERICAL_ZERO
 

@@ -6,6 +6,7 @@ logger = logging.getLogger(__name__)
 from histpy import Histogram
 
 from .RichardsonLucy import RichardsonLucy
+from .build_accelerator import build_accelerator
 
 from .response_weighting_filter import ResponseWeightingFilter 
 
@@ -24,7 +25,7 @@ class RichardsonLucyAdvanced(RichardsonLucy):
         unit: "cm-2 s-1 sr-1"
     acceleration:
         activate: True
-        alpha_max: 10.0
+        accel_factor_max: 10.0
     response_weighting:
         activate: True
         index: 0.5
@@ -52,7 +53,7 @@ class RichardsonLucyAdvanced(RichardsonLucy):
         # acceleration
         self.do_acceleration = parameter.get('acceleration:activate', False)
         if self.do_acceleration == True:
-            self.alpha_max = parameter.get('acceleration:alpha_max', 1.0)
+            self.accelerator_parameter = parameter['acceleration']
 
         # response_weighting
         self.do_response_weighting = parameter.get('response_weighting:activate', False)
@@ -84,6 +85,10 @@ class RichardsonLucyAdvanced(RichardsonLucy):
         # response-weighting filter
         if self.do_response_weighting:
             self.response_weighting_filter = ResponseWeightingFilter(self.summed_exposure_map, self.response_weighting_index)
+
+        # build accelerator
+        if self.do_acceleration:
+            self.accelerator = build_accelerator(self.accelerator_parameter)
 
     def pre_processing(self):
         """
@@ -121,29 +126,68 @@ class RichardsonLucyAdvanced(RichardsonLucy):
         perform the acceleration of RL algirithm
         """
 
-        # update model
         if self.do_acceleration:
-            self.alpha = self.calc_alpha(self.delta_model, self.model)
-        else:
-            self.alpha = 1.0
 
-        self.model += self.delta_model * self.alpha
+            # save state before extra EM steps
+            model_before    = self.model.copy()
+            bkg_norm_before = self.dict_bkg_norm.copy()
+
+            # run extra EM steps required by the accelerator
+            em_results = []
+            for _ in range(self.accelerator.n_em_steps_required):
+                self.Estep()
+                self.Mstep()
+                self.model += self.delta_model
+                self._ensure_model_constraints()
+                if self.do_bkg_norm_optimization:
+                    for key in self.dict_bkg_norm:
+                        self.dict_bkg_norm[key] += self.dict_delta_bkg_norm[key]
+                    self._ensure_bkg_norm_range()
+                em_results.append((
+                    self.model.copy(),
+                    self.dict_bkg_norm.copy(),
+                    self.expectation_list.copy(),
+                ))
+
+            result = self.accelerator.compute(
+                delta_model          = self.delta_model,
+                dict_delta_bkg_norm  = self.dict_delta_bkg_norm,
+                model_before         = model_before,
+                bkg_norm_before      = bkg_norm_before,
+                dataset              = self.dataset,
+                mask                 = self.mask,
+                em_results           = em_results,
+            )
+
+            self.model         = result.model
+            self.dict_bkg_norm = result.dict_bkg_norm
+            self._accel_result = result
+
+        else:
+            self.model += self.delta_model
+            if self.do_bkg_norm_optimization:
+                for key in self.dict_bkg_norm:
+                    self.dict_bkg_norm[key] += self.dict_delta_bkg_norm[key]
+            self._accel_result = None
 
         self._ensure_model_constraints()
 
-        # update background normalization
         if self.do_bkg_norm_optimization:
-            for key in self.dict_bkg_norm.keys():
-                self.dict_bkg_norm[key] += self.dict_delta_bkg_norm[key]
             self._ensure_bkg_norm_range()
-        
-        # update expectation_list
-        self.Estep()
-        logger.debug("The expected count histograms were updated with the new model map.")
 
-        # update log_likelihood_list
-        self.log_likelihood_list = self.dataset.calc_log_likelihood_list(self.expectation_list)
-        logger.debug("The log-likelihood list was updated with the new expected count histograms.")
+        # reuse expectation/likelihood if accelerator already computed them
+        if self._accel_result is not None and self._accel_result.expectation_list is not None:
+            self.expectation_list = self._accel_result.expectation_list
+        else:
+            self.Estep()
+        logger.debug("Expected count histograms updated.")
+
+        if self._accel_result is not None and self._accel_result.log_likelihood_list is not None:
+            self.log_likelihood_list = self._accel_result.log_likelihood_list
+        else:
+            self.log_likelihood_list = self.dataset.calc_log_likelihood_list(self.expectation_list)
+        logger.debug("Log-likelihood list updated.")
+
 
     def register_result(self):
         """
@@ -152,7 +196,7 @@ class RichardsonLucyAdvanced(RichardsonLucy):
         - model: updated image
         - delta_model: delta map after M-step 
         - processed_delta_model: delta map after post-processing
-        - alpha: acceleration parameter in RL algirithm
+        - accel_factor: acceleration parameter in RL algirithm
         - background_normalization: optimized background normalization
         - log-likelihood: log-likelihood
         """
@@ -160,14 +204,15 @@ class RichardsonLucyAdvanced(RichardsonLucy):
         this_result = {"iteration": self.iteration_count, 
                        "model": self.model.copy(),
                        "background_normalization": self.dict_bkg_norm.copy(),
-                       "alpha": self.alpha, 
                        "log-likelihood": self.log_likelihood_list.copy()}
 
-        # show intermediate results
-        logger.info(f'  alpha: {this_result["alpha"]}')
-        logger.info(f'  background_normalization: {this_result["background_normalization"]}')
-        logger.info(f'  log-likelihood: {this_result["log-likelihood"]}')
-        
+        if self._accel_result is not None and self._accel_result.extras is not None:
+            this_result.update(self._accel_result.extras)
+
+        for key in ["accel_factor"]:
+            if key in this_result:
+                logger.info(f"  {key}: {this_result[key]}")
+
         # register this_result in self.results
         self.results.append(this_result)
 
@@ -189,12 +234,12 @@ class RichardsonLucyAdvanced(RichardsonLucy):
 
             log_likelihood = np.sum(self.results[-1]["log-likelihood"])
             log_likelihood_before = np.sum(self.results[-2]["log-likelihood"])
+            delta_log_likelihood = log_likelihood - log_likelihood_before
 
-            logger.debug(f'Delta log-likelihood: {log_likelihood - log_likelihood_before}')
+            logger.debug(f'Delta log-likelihood: {delta_log_likelihood}')
 
-            if log_likelihood - log_likelihood_before < 0:
-
-                logger.warning("The likelihood is not increased in this iteration. The image reconstruction may be unstable.")
+            if delta_log_likelihood < 0:
+                logger.warning(f"Log-likelihood decreased {delta_log_likelihood}. Reconstruction may be unstable.")
                 return False
 
             elif log_likelihood - log_likelihood_before < self.stopping_criteria_threshold:
@@ -207,48 +252,20 @@ class RichardsonLucyAdvanced(RichardsonLucy):
         finalization after running the image deconvolution
         """
 
-        if self.save_results == True:
-            logger.info(f'Saving results in {self.save_results_directory}')
+        if not self.save_results:
+            return
 
-            counter_name = "iteration"
+        logger.info(f"Saving results in {self.save_results_directory}")
 
-            # model
-            histogram_keys = [("model", f"{self.save_results_directory}/model.hdf5", self.save_only_final_result)]
+        values_key_name_format = []
+        if "accel_factor" in self.results[0]:
+            values_key_name_format.append(("accel_factor", "ACCEL_FACTOR", "D"))
 
-            #fits
-            fits_filename = f'{self.save_results_directory}/results.fits'
-
-            values_key_name_format = [("alpha", "ALPHA", "D")]
-            dicts_key_name_format = [("background_normalization", "BKG_NORM", "D")]
-            lists_key_name_format = [("log-likelihood", "LOG-LIKELIHOOD", "D")]
-
-            self._save_standard_results(counter_name, 
-                                        histogram_keys, 
-                                        fits_filename, 
-                                        values_key_name_format,
-                                        dicts_key_name_format,
-                                        lists_key_name_format)
-
-    def calc_alpha(self, delta_model, model):
-        """
-        Calculate the acceleration parameter in RL algorithm.
-
-        Returns
-        -------
-        float
-            Acceleration parameter
-        """
-
-        diff = -1 * (model / delta_model).contents
-
-        diff[(diff <= 0) | (delta_model.contents == 0)] = np.inf
-
-        if self.mask is not None:
-            diff[np.invert(self.mask.contents)] = np.inf
-
-        alpha = min(np.min(diff), self.alpha_max)
-
-        if alpha < 1.0:
-            alpha = 1.0
-
-        return alpha
+        self._save_standard_results(
+            counter_name           = "iteration",
+            histogram_keys         = [("model", f"{self.save_results_directory}/model.hdf5", self.save_only_final_result)],
+            fits_filename          = f"{self.save_results_directory}/results.fits",
+            values_key_name_format = values_key_name_format,
+            dicts_key_name_format  = [("background_normalization", "BKG_NORM", "D")],
+            lists_key_name_format  = [("log-likelihood", "LOG-LIKELIHOOD", "D")],
+        )
