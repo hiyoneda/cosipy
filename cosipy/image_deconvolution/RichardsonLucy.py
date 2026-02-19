@@ -145,24 +145,16 @@ class RichardsonLucy(RichardsonLucyBasic):
         finalization after running the image deconvolution
         """
 
-        if self.save_results == True:
-            logger.info(f'Saving results in {self.save_results_directory}')
+        if not self.save_results:
+            return
 
-            counter_name = "iteration"
+        logger.info(f"Saving results in {self.save_results_directory}")
 
-            # model
-            histogram_keys = [("model", f"{self.save_results_directory}/model.hdf5", self.save_only_final_result)]
-
-            #fits
-            fits_filename = f'{self.save_results_directory}/results.fits'
-
-            values_key_name_format = []
-            dicts_key_name_format = [("background_normalization", "BKG_NORM", "D")]
-            lists_key_name_format = []
-
-            self._save_standard_results(counter_name, 
-                                        histogram_keys, 
-                                        fits_filename, 
-                                        values_key_name_format,
-                                        dicts_key_name_format,
-                                        lists_key_name_format)
+        self._save_standard_results(
+            counter_name           = "iteration",
+            histogram_keys         = [("model", f"{self.save_results_directory}/model.hdf5", self.save_only_final_result)],
+            fits_filename          = f"{self.save_results_directory}/results.fits",
+            values_key_name_format = values_key_name_format,
+            dicts_key_name_format  = [("background_normalization", "BKG_NORM", "D")],
+            lists_key_name_format  = [],
+        )

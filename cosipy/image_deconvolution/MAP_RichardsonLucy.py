@@ -314,25 +314,17 @@ class MAP_RichardsonLucy(RichardsonLucy):
         finalization after running the image deconvolution
         """
 
-        if self.save_results == True:
-            logger.info(f'Saving results in {self.save_results_directory}')
+        if not self.save_results:
+            return
 
-            counter_name = "iteration"
+        logger.info(f"Saving results in {self.save_results_directory}")
 
-            # model
-            histogram_keys = [("model", f"{self.save_results_directory}/model.hdf5", self.save_only_final_result), 
-                              ("prior_filter", f"{self.save_results_directory}/prior_filter.hdf5", self.save_only_final_result)]
-
-            #fits
-            fits_filename = f'{self.save_results_directory}/results.fits'
-
-            values_key_name_format = [("log-posterior", "LOG-POSTERIOR", "D")]
-            dicts_key_name_format  = [("background_normalization", "BKG_NORM", "D"), ("log-prior", "LOG-PRIOR", "D")]
-            lists_key_name_format  = [("log-likelihood", "LOG-LIKELIHOOD", "D")]
-
-            self._save_standard_results(counter_name, 
-                                        histogram_keys, 
-                                        fits_filename, 
-                                        values_key_name_format,
-                                        dicts_key_name_format,
-                                        lists_key_name_format)
+        self._save_standard_results(
+            counter_name           = "iteration",
+            histogram_keys         = [("model", f"{self.save_results_directory}/model.hdf5", self.save_only_final_result),
+                                      ("prior_filter", f"{self.save_results_directory}/prior_filter.hdf5", self.save_only_final_result)],
+            fits_filename          = f"{self.save_results_directory}/results.fits",
+            values_key_name_format = [("log-posterior", "LOG-POSTERIOR", "D")],
+            dicts_key_name_format  = [("background_normalization", "BKG_NORM", "D"), ("log-prior", "LOG-PRIOR", "D")],
+            lists_key_name_format  = [("log-likelihood", "LOG-LIKELIHOOD", "D")],
+        )
