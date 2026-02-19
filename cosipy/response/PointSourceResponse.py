@@ -152,7 +152,7 @@ class PointSourceResponse(Histogram):
             coord = exposure_map.pix2skycoord(p)
 
             if exposure_map[p] != 0:
-                psr += response.differential_effective_area(data, coord, energy_axis.centers, polarization_centers) * exposure_map[p]
+                psr += response.differential_effective_area(coord, energy_axis.centers, polarization_centers) * exposure_map[p]
 
         return psr
 
@@ -195,8 +195,7 @@ class PointSourceResponse(Histogram):
 
         for att, exposure in zip(scatt_map.attitudes, scatt_map.weights):
 
-            response.differential_effective_area(data,
-                                                 coord,
+            response.differential_effective_area(coord,
                                                  energy_axis.centers,
                                                  None if polarization_axis is None else polarization_axis.centers,
                                                  attitude = att,

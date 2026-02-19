@@ -2,6 +2,7 @@ import logging
 from pathlib import Path
 from typing import Union
 
+import histpy
 from mhealpy import HealpixBase
 
 from cosipy.data_io import EmCDSBinnedData
@@ -79,6 +80,8 @@ class BinnedThreeMLExtendedSourceResponse(BinnedThreeMLSourceResponseInterface):
         #self._last_convolved_source_skycoord = None
         self._esr = None
         
+    def axes(self) -> histpy.Axes:
+        return self._data.axes
 
     def clear_cache(self):
 

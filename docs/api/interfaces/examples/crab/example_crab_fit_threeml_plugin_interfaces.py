@@ -157,9 +157,6 @@ def main():
 
     # ============ Interfaces ==============
 
-    dr = FullDetectorResponse.open(dr_path)
-    instrument_response = BinnedInstrumentResponse(dr)
-
     # Set background parameter, which is used to fit the amplitude of the background, and instantiate the COSI 3ML plugin
 
     # In[8]:
@@ -186,6 +183,9 @@ def main():
     bkg = FreeNormBinnedBackground(bkg_dist,
                                    sc_history=sc_orientation,
                                    copy = False)
+
+    dr = FullDetectorResponse.open(dr_path)
+    instrument_response = BinnedInstrumentResponse(dr, data)
 
     # Currently using the same NnuLambda, Ei and Pol axes as the underlying FullDetectorResponse,
     # matching the behavior of v0.3. This is all the current BinnedInstrumentResponse can do.
@@ -375,7 +375,7 @@ def main():
         binned_energy = np.append(binned_energy, (binned_energy_edges[i+1] + binned_energy_edges[i]) / 2)
         bin_sizes = np.append(bin_sizes, binned_energy_edges[i+1] - binned_energy_edges[i])
 
-    expectation = response.expectation(data, copy = True)
+    expectation = response.expectation(copy = True)
 
 
     # Plot the fitted and injected spectra
@@ -429,7 +429,7 @@ def main():
 
     # In[16]:
 
-    expectation_bkg = bkg.expectation(data.axes, copy = True)
+    expectation_bkg = bkg.expectation(copy = True)
 
     fig,ax = plt.subplots()
 

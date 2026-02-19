@@ -20,13 +20,18 @@ class ExpectationInterface(Protocol):
 
 @runtime_checkable
 class BinnedExpectationInterface(ExpectationInterface, Protocol):
-    def expectation(self, axes:Axes, copy: Optional[bool])->histpy.Histogram:
+
+    @property
+    def axes(self) -> histpy.Axes:
+        """
+        Axes of expectation
+        """
+
+    def expectation(self, copy: Optional[bool])->histpy.Histogram:
         """
 
         Parameters
         ----------
-        axes:
-            Axes to bin the expectation into
         copy:
             If True (default), it will return an array that the user if free to modify.
             Otherwise, it will result a reference, possible to the cache, that

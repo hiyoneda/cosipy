@@ -1,11 +1,14 @@
-from typing import Union
+from typing import Union, Optional
 
+import histpy
 import numpy as np
 from astropy.coordinates import SkyCoord
 import astropy.units as u
+from astropy.time import Time
 from astropy.units import Quantity
 from scoords import Attitude, SpacecraftFrame
 
+from cosipy.spacecraftfile import SpacecraftHistory
 from cosipy.data_io import EmCDSBinnedData
 from cosipy.interfaces import BinnedDataInterface
 from cosipy.interfaces.instrument_response_interface import BinnedInstrumentResponseInterface
@@ -20,20 +23,41 @@ __all__ = ["BinnedInstrumentResponse"]
 
 class BinnedInstrumentResponse(BinnedInstrumentResponseInterface):
 
-    def __init__(self, response:FullDetectorResponse):
+    def __init__(self, response:FullDetectorResponse, data:EmCDSBinnedData):
 
         self._dr = response
+
+        self._axes = data.axes
+
+        if set(self._axes.labels) != {'Em','PsiChi','Phi'}:
+            raise ValueError(f"Unexpected axes labels. Expecting \"{{'Em','PsiChi','Phi'}}\", got {axes.labels}")
+
+        if self._dr.measurement_axes["Em"] != self._axes["Em"]:
+            # Matches the v0.3 behaviour
+            raise ValueError("This implementation can only handle a fixed measured energy (Em) binning equal to the underlying response file.")
+
+        if self._dr.measurement_axes["Phi"] != self._axes["Phi"]:
+            # Matches the v0.3 behaviour
+            raise ValueError("This implementation can only handle a fixed scattering angle (Phi) binning equal to the underlying response file.")
+
+        if self._axes["PsiChi"].coordsys is None:
+            raise ValueError("PsiChi axes doesn't have a coordinate system")
+
+
+    @property
+    def axes(self) -> histpy.Axes:
+        return self._axes
 
     @property
     def is_polarization_response(self):
         return 'Pol' in self._dr.axes.labels
 
     def differential_effective_area(self,
-                                    data: BinnedDataInterface,
                                     direction: SkyCoord,
                                     energy:u.Quantity,
                                     polarization:PolarizationAngle = None,
                                     attitude:Attitude = None,
+                                    time = None,
                                     weight:Union[Quantity, float] = None,
                                     out:Quantity = None,
                                     add_inplace:bool = False) -> Quantity:
@@ -56,6 +80,8 @@ class BinnedInstrumentResponse(BinnedInstrumentResponseInterface):
             Photon polarization angle
         attitude
             Attitude defining the orientation of the SC in an inertial coordinate system.
+        time:
+            Ignored. Not time dependent.
         weight
             Optional. Weighting the result by a given weight. Providing the weight at this point as opposed to
             apply it to the output can result in greater efficiency.
@@ -72,51 +98,33 @@ class BinnedInstrumentResponse(BinnedInstrumentResponseInterface):
         of the provided axes
         """
 
-        # Check if we're getting the expected axes and other limitations
-        if not isinstance(data, EmCDSBinnedData):
-            raise TypeError(f"Wrong data type '{type(data)}', expected {EmCDSBinnedData}.")
-
-        axes = data.axes
-
-        if set(axes.labels) != {'Em','PsiChi','Phi'}:
-            raise ValueError(f"Unexpected axes labels. Expecting \"{{'Em','PsiChi','Phi'}}\", got {axes.labels}")
-
-        if self._dr.measurement_axes["Em"] != axes["Em"]:
-            # Matches the v0.3 behaviour
-            raise ValueError("This implementation can only handle a fixed measured energy (Em) binning equal to the underlying response file.")
-
-        if self._dr.measurement_axes["Phi"] != axes["Phi"]:
-            # Matches the v0.3 behaviour
-            raise ValueError("This implementation can only handle a fixed scattering angle (Phi) binning equal to the underlying response file.")
+        # Checks/limitations
 
         if not np.array_equal(energy, self._dr.axes['Ei'].centers):
             # Matches the v0.3 behaviour
             raise RuntimeError("Currently, the probed energy values need to match the underlying response matrix Ei centers.")
 
-        results_axes_labels = ['Ei']
-
         if polarization is not None:
             if not self.is_polarization_response:
                 raise RuntimeError("The FullDetectorResponse does not contain polarization information")
 
-        if axes["PsiChi"].coordsys is None:
-            raise ValueError("PsiChi axes doesn't have a coordinate system")
-
         if direction.shape != ():
             raise ValueError("Currently this implementation can only deal with one direction at a time")
 
+
         # Fork for local and galactic PsiChi coordinates
-        if not isinstance(axes["PsiChi"].coordsys, SpacecraftFrame):
+        if not isinstance(self.axes["PsiChi"].coordsys, SpacecraftFrame):
             # Is inertial
+
             if attitude is None:
                 raise RuntimeError("User need to provide the attitude information in order to transform to spacecraft coordinates")
 
-            return self._differential_effective_area_inertial(attitude, axes, direction, polarization, weight, out, add_inplace)
+            return self._differential_effective_area_inertial(attitude, self.axes, direction, polarization, weight, out, add_inplace)
 
         # Is local
 
         # Check again remaining axes
-        if self._dr.measurement_axes["PsiChi"] != axes["PsiChi"]:
+        if self._dr.measurement_axes["PsiChi"] != self.axes["PsiChi"]:
             # Matches the v0.3 behaviour
             raise ValueError("This implementation can only handle a fixed scattering direction (PsiChi) binning equal to the underlying response file.")
 
@@ -143,7 +151,7 @@ class BinnedInstrumentResponse(BinnedInstrumentResponseInterface):
         if polarization is not None:
             results_axes_labels += ['Pol']
 
-        results_axes_labels += list(axes.labels)
+        results_axes_labels += list(self.axes.labels)
 
         result = result.project(results_axes_labels)
 

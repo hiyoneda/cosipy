@@ -111,7 +111,7 @@ def main():
                                    sc_history=ori,
                                    copy = False)
 
-    instrument_response = BinnedInstrumentResponse(dr)
+    instrument_response = BinnedInstrumentResponse(dr, data)
 
     # Currently using the same NnuLambda, Ei and Pol axes as the underlying FullDetectorResponse,
     # matching the behavior of v0.3. This is all the current BinnedInstrumentResponse can do.
