@@ -46,7 +46,7 @@
 # In[1]:
 
 
-from cosipy import test_data, BinnedData
+from cosipy import BinnedData
 from cosipy.spacecraftfile import SpacecraftHistory
 from cosipy.response.FullDetectorResponse import FullDetectorResponse
 from cosipy.util import fetch_wasabi_file
@@ -59,11 +59,7 @@ from cosipy.data_io import EmCDSBinnedData
 
 import sys
 
-from scoords import SpacecraftFrame
-
-from astropy.time import Time
 import astropy.units as u
-from astropy.coordinates import SkyCoord, Galactic
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -73,7 +69,6 @@ from astromodels import Parameter, Powerlaw
 
 from pathlib import Path
 
-import os
 
 
 def main():
