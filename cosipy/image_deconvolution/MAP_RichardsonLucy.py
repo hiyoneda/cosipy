@@ -166,7 +166,7 @@ class MAP_RichardsonLucy(RichardsonLucy):
         ratio_list = [ data.event / expectation for data, expectation in zip(self.dataset, self.expectation_list) ]
         
         # model update (EM part)
-        sum_T_product = self.calc_summed_T_product(ratio_list)
+        sum_T_product = self.dataset.calc_summed_T_product(ratio_list)
         model_EM = (self.model * sum_T_product + self.prior_gamma_model_k - 1.0) \
                     / (self.summed_exposure_map + 1.0 / self.prior_gamma_model_theta)
         model_EM[:] = np.where( model_EM.contents < self.minimum_flux, self.minimum_flux, model_EM.contents) 
@@ -185,7 +185,7 @@ class MAP_RichardsonLucy(RichardsonLucy):
         if self.do_bkg_norm_optimization:
             for key in self.dict_bkg_norm.keys():
 
-                sum_bkg_T_product = self.calc_summed_bkg_model_product(key, ratio_list)
+                sum_bkg_T_product = self.dataset.calc_summed_bkg_model_product(key, ratio_list)
                 sum_bkg_model = self.dict_summed_bkg_model[key]
                 bkg_norm = (self.dict_bkg_norm[key] * sum_bkg_T_product + self.prior_gamma_bkg_k - 1.0) \
                             / (sum_bkg_model + 1.0 / self.prior_gamma_bkg_theta)
@@ -222,7 +222,7 @@ class MAP_RichardsonLucy(RichardsonLucy):
         logger.debug("The expected count histograms were updated with the new model map.")
 
         # update log_likelihood_list
-        self.log_likelihood_list = self.calc_log_likelihood_list(self.expectation_list)
+        self.log_likelihood_list = self.dataset.calc_log_likelihood_list(self.expectation_list)
         logger.debug("The log-likelihood list was updated with the new expected count histograms.")
 
         # update log priors

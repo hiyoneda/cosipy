@@ -35,11 +35,10 @@ class DeconvolutionAlgorithmBase(ABC):
     Attributes
     ----------
     initial_model: :py:class:`cosipy.image_deconvolution.ModelBase` or its subclass
-    dataset: list of :py:class:`cosipy.image_deconvolution.ImageDeconvolutionDataInterfaceBase` or its subclass
+    dataset: :py:class:`cosipy.image_deconvolution.DataInterfaceCollection`
     parameter : py:class:`yayc.Configurator`
     results: list of results
     dict_bkg_norm: the dictionary of background normalizations
-    dict_dataset_indexlist_for_bkg_models: the indices of data corresponding to each background model in the dataset
     """
 
     def __init__(self, initial_model, dataset, mask, parameter):
@@ -51,21 +50,9 @@ class DeconvolutionAlgorithmBase(ABC):
         self.results = []
 
         # background normalization
-        self.dict_bkg_norm = {}
-        self.dict_dataset_indexlist_for_bkg_models = {}
-        for data in self.dataset:
-            for key in data.keys_bkg_models():
-                if not key in self.dict_bkg_norm.keys():
-                    self.dict_bkg_norm[key] = 1.0
-                    self.dict_dataset_indexlist_for_bkg_models[key] = []
-        
-        for key in self.dict_dataset_indexlist_for_bkg_models.keys():
-            for index, data in enumerate(self.dataset):
-                if key in data.keys_bkg_models():
-                    self.dict_dataset_indexlist_for_bkg_models[key].append(index)
+        self.dict_bkg_norm = {key: 1.0 for key in dataset.keys_bkg_models()}
 
         logger.debug(f'dict_bkg_norm: {self.dict_bkg_norm}')
-        logger.debug(f'dict_dataset_indexlist_for_bkg_models: {self.dict_dataset_indexlist_for_bkg_models}')
 
         # parameters of the iteration
         self.iteration_count = 0
@@ -132,8 +119,6 @@ class DeconvolutionAlgorithmBase(ABC):
         """
         raise NotImplementedError
 
-### A subclass should not override the methods below. ###
-
     def iteration(self):
         """
         Perform one iteration of image deconvolution.
@@ -160,127 +145,6 @@ class DeconvolutionAlgorithmBase(ABC):
         logger.info("--> {}".format("Stop" if stop_iteration else "Continue"))
 
         return stop_iteration
-
-    def calc_expectation_list(self, model, dict_bkg_norm = None, almost_zero = NUMERICAL_ZERO):
-        """
-        Calculate a list of expected count histograms corresponding to each data in the registered dataset.
-
-        Parameters
-        ----------
-        model: :py:class:`cosipy.image_deconvolution.ModelBase` or its subclass
-            Model
-        dict_bkg_norm : dict, default None
-            background normalization for each background model, e.g, {'albedo': 0.95, 'activation': 1.05}
-        almost_zero : float, default NUMERICAL_ZERO 
-            In order to avoid zero components in extended count histogram, a tiny offset is introduced.
-            It should be small enough not to effect statistics.
-
-        Returns
-        -------
-        list of :py:class:`histpy.Histogram`
-            List of expected count histograms
-        """
-        
-        return [data.calc_expectation(model, dict_bkg_norm = dict_bkg_norm, almost_zero = almost_zero) for data in self.dataset]
-
-    def calc_log_likelihood_list(self, expectation_list):
-        """
-        Calculate a list of log-likelihood from each data in the registered dataset and the corresponding given expected count histogram.
-
-        Parameters
-        ----------
-        expectation_list : list of :py:class:`histpy.Histogram`
-            List of expected count histograms
-
-        Returns
-        -------
-        list of float
-            List of Log-likelihood
-        """
-
-        return [_to_float(data.calc_log_likelihood(expectation)) for data, expectation in zip(self.dataset, expectation_list)]
-
-    def calc_summed_exposure_map(self):
-        """
-        Calculate a list of exposure maps from the registered dataset.
-
-        Returns
-        -------
-        :py:class:`histpy.Histogram`
-        """
-
-        return self._histogram_sum([ data.exposure_map for data in self.dataset ])
-
-    def calc_summed_bkg_model(self, key):
-        """
-        Calculate the sum of histograms for a given background model in the registered dataset.
-
-        Parameters
-        ----------
-        key: str
-            Background model name
-
-        Returns
-        -------
-        float
-        """
-        
-        indexlist = self.dict_dataset_indexlist_for_bkg_models[key]
-
-        return sum([self.dataset[i].summed_bkg_model(key) for i in indexlist])
-
-    def calc_summed_T_product(self, dataspace_histogram_list):      # dataspace_histogram_list = ratio_list = d_i/E_i
-        """
-        For each data in the registered dataset, the product of the corresponding input histogram with the transpose of the response function is computed.
-        Then, this method returns the sum of all of the products.
-
-        Parameters
-        ----------
-        dataspace_histogram_list: list of :py:class:`histpy.Histogram`
-
-        Returns
-        -------
-        :py:class:`histpy.Histogram`
-        """
-
-        return self._histogram_sum([data.calc_T_product(hist)
-                                    for data, hist in zip(self.dataset, dataspace_histogram_list)])
-
-    def calc_summed_bkg_model_product(self, key, dataspace_histogram_list):
-        """
-        For each data in the registered dataset, the product of the corresponding input histogram with the specified background model is computed.
-        Then, this method returns the sum of all of the products.
-
-        Parameters
-        ----------
-        key: str
-            Background model name
-        dataspace_histogram_list: list of :py:class:`histpy.Histogram`
-
-        Returns
-        -------
-        flaot
-        """
-
-        indexlist = self.dict_dataset_indexlist_for_bkg_models[key]
-
-        return sum(
-            self.dataset[i].calc_bkg_model_product(key = key, dataspace_histogram = dataspace_histogram_list[i])
-            for i in indexlist
-        )
-
-    @staticmethod
-    def _histogram_sum(hlist):
-        """
-        Sum a list of Histograms.  If only one input, just return it.
-        """
-        if len(hlist) == 1:
-            return hlist[0]
-        else:
-            result = hlist[0].copy()
-            for h in hlist[1:]:
-                result += h
-            return result
 
     def save_histogram(self, filename, counter_name, histogram_key, only_final_result = False):
 

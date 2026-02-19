@@ -61,7 +61,7 @@ class RichardsonLucy(RichardsonLucyBasic):
         if self.do_bkg_norm_optimization:
             self.dict_summed_bkg_model = {}
             for key in self.dict_bkg_norm.keys():
-                self.dict_summed_bkg_model[key] = self.calc_summed_bkg_model(key)
+                self.dict_summed_bkg_model[key] = self.dataset.calc_summed_bkg_model(key)
 
     def Mstep(self):
         """
@@ -72,7 +72,7 @@ class RichardsonLucy(RichardsonLucyBasic):
         ratio_list = [ data.event / expectation for data, expectation in zip(self.dataset, self.expectation_list) ]
         
         # delta model
-        sum_T_product = self.calc_summed_T_product(ratio_list)
+        sum_T_product = self.dataset.calc_summed_T_product(ratio_list)
         self.delta_model = self.model * (sum_T_product/self.summed_exposure_map - 1)
         
         # masking
@@ -85,7 +85,7 @@ class RichardsonLucy(RichardsonLucyBasic):
         if self.do_bkg_norm_optimization:
             for key in self.dict_bkg_norm.keys():
 
-                sum_bkg_T_product = self.calc_summed_bkg_model_product(key, ratio_list)
+                sum_bkg_T_product = self.dataset.calc_summed_bkg_model_product(key, ratio_list)
                 sum_bkg_model = self.dict_summed_bkg_model[key]
 
                 self.dict_delta_bkg_norm[key] = self.dict_bkg_norm[key] * (sum_bkg_T_product / sum_bkg_model - 1)

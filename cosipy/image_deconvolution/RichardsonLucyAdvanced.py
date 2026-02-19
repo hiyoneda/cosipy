@@ -139,7 +139,7 @@ class RichardsonLucyAdvanced(RichardsonLucy):
         logger.debug("The expected count histograms were updated with the new model map.")
 
         # update log_likelihood_list
-        self.log_likelihood_list = self.calc_log_likelihood_list(self.expectation_list)
+        self.log_likelihood_list = self.dataset.calc_log_likelihood_list(self.expectation_list)
         logger.debug("The log-likelihood list was updated with the new expected count histograms.")
 
     def register_result(self):

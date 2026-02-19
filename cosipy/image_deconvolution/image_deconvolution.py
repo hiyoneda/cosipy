@@ -5,6 +5,9 @@ logger = logging.getLogger(__name__)
 
 from yayc import Configurator
 from pathlib import Path
+from typing import Union, Optional
+
+from .data_interface_collection import DataInterfaceCollection
 
 from .allskyimage import AllSkyImageModel
 
@@ -29,17 +32,19 @@ class ImageDeconvolution:
         self._model_class = None
         self._deconvolution_class = None
 
-    def set_dataset(self, dataset: list):
+    def set_dataset(self, dataset: Union[list,DataInterfaceCollection]):
         """
         Set dataset as a list. 
 
         Parameters
         ----------
-        dataset : list of :py:class:`cosipy.image_deconvolution.ImageDeconvolutionDataInterfaceBase` or its subclass
+        dataset : DataInterfaceCollection or list of :py:class:`cosipy.image_deconvolution.ImageDeconvolutionDataInterfaceBase`
             Each component contaning an event histogram, a background model, a response matrix, and a coordsys_conversion_matrix.
         """
-
-        self._dataset = dataset
+        if isinstance(dataset, list):
+            self._dataset = DataInterfaceCollection(dataset)
+        else:
+            self._dataset = dataset
         
         logger.debug(f"dataset for image deconvolution was set -> {self._dataset}")
 

@@ -71,7 +71,7 @@ class RichardsonLucyBasic(DeconvolutionAlgorithmBase):
         self.model = self.initial_model.copy()
 
         # calculate exposure map
-        self.summed_exposure_map = self.calc_summed_exposure_map()
+        self.summed_exposure_map = self.dataset.calc_summed_exposure_map()
 
         # mask setting
         if self.mask is None and np.any(self.summed_exposure_map.contents == 0):
@@ -102,7 +102,7 @@ class RichardsonLucyBasic(DeconvolutionAlgorithmBase):
         In this step, self.expectation_list will be updated.
         """
 
-        self.expectation_list = self.calc_expectation_list(self.model, dict_bkg_norm = self.dict_bkg_norm)
+        self.expectation_list = self.dataset.calc_expectation_list(self.model, dict_bkg_norm = self.dict_bkg_norm)
 
         logger.debug("The expected count histograms were updated.")
 
@@ -115,7 +115,7 @@ class RichardsonLucyBasic(DeconvolutionAlgorithmBase):
         ratio_list = [ data.event / expectation for data, expectation in zip(self.dataset, self.expectation_list) ]
         
         # delta model
-        sum_T_product = self.calc_summed_T_product(ratio_list)
+        sum_T_product = self.dataset.calc_summed_T_product(ratio_list)
         self.delta_model = self.model * (sum_T_product/self.summed_exposure_map - 1)
         
         # masking
