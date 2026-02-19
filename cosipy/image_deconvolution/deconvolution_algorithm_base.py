@@ -87,6 +87,20 @@ class DeconvolutionAlgorithmBase(ABC):
         raise NotImplementedError
 
     @abstractmethod
+    def Estep(self):
+        """
+        E-step: Expectation calculation
+        """
+        raise NotImplementedError
+
+    @abstractmethod
+    def Mstep(self):
+        """
+        M-step: Maximization/update
+        """
+        raise NotImplementedError
+
+    @abstractmethod
     def post_processing(self):
         """
         Post-processing for each iteration. 

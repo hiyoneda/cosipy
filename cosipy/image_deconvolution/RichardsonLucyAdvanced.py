@@ -91,7 +91,7 @@ class RichardsonLucyAdvanced(RichardsonLucy):
         """
 
         if self.iteration_count == 1:
-            super().Estep()
+            self.Estep()
             logger.info("The expected count histograms were calculated with the initial model map.")
 
     def processing_core(self):
@@ -102,29 +102,32 @@ class RichardsonLucyAdvanced(RichardsonLucy):
         self.Mstep()
         # Note that Estep() is performed in self.post_processing().
 
+    def Mstep(self):
+        """
+        Mstep
+        """
+        super().Mstep()
+
+        # apply response_weighting_filter
+        if self.do_response_weighting:
+            self.delta_model = self.response_weighting_filter.apply(self.delta_model)
+
+        # apply smoothing 
+        if self.do_smoothing:
+            self.delta_model = self.delta_model.smoothing(fwhm = self.smoothing_fwhm)
+
     def post_processing(self):
         """
-        Here three processes will be performed.
-        - response weighting filter: the delta map is renormalized as pixels with large exposure times will have more feedback.
-        - gaussian smoothing filter: the delta map is blurred with a Gaussian function.
-        - acceleration of RL algirithm: the normalization of delta map is increased as long as the updated image has no non-negative components.
+        perform the acceleration of RL algirithm
         """
 
         # update model
-        self.processed_delta_model = self.delta_model.copy()
-
-        if self.do_response_weighting:
-            self.processed_delta_model = self.response_weighting_filter.apply(self.processed_delta_model)
-
-        if self.do_smoothing:
-            self.processed_delta_model = self.processed_delta_model.smoothing(fwhm = self.smoothing_fwhm)
-        
         if self.do_acceleration:
-            self.alpha = self.calc_alpha(self.processed_delta_model, self.model)
+            self.alpha = self.calc_alpha(self.delta_model, self.model)
         else:
             self.alpha = 1.0
 
-        self.model += self.processed_delta_model * self.alpha
+        self.model += self.delta_model * self.alpha
 
         self._ensure_model_constraints()
 

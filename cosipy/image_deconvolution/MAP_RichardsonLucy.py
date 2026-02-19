@@ -147,7 +147,7 @@ class MAP_RichardsonLucy(RichardsonLucy):
         """
 
         if self.iteration_count == 1:
-            super().Estep()
+            self.Estep()
             logger.info("The expected count histograms were calculated with the initial model map.")
 
     def processing_core(self):
@@ -192,6 +192,10 @@ class MAP_RichardsonLucy(RichardsonLucy):
 
                 self.dict_delta_bkg_norm[key] = bkg_norm - self.dict_bkg_norm[key]
 
+        # apply response_weighting_filter
+        if self.do_response_weighting:
+            self.delta_model = self.response_weighting_filter.apply(self.delta_model)
+
     def post_processing(self):
         """
         Here three processes will be performed.
@@ -199,14 +203,7 @@ class MAP_RichardsonLucy(RichardsonLucy):
         """
 
         # update model
-        self.processed_delta_model = self.delta_model.copy()
-
-        # applying response_weighting_filter
-        if self.do_response_weighting:
-            self.processed_delta_model = self.response_weighting_filter.apply(self.processed_delta_model)
-
-        self.model += self.processed_delta_model
-
+        self.model += self.delta_model
         self._ensure_model_constraints()
 
         # update background normalization
