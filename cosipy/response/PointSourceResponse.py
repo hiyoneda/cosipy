@@ -123,7 +123,7 @@ class PointSourceResponse(Histogram):
                          copy_contents = False)
 
         if not hist.unit == u.dimensionless_unscaled:
-            raise RuntimeError("Expectation should be dimensionless, but has units of " + str(hist.unit) + ".")
+            raise RuntimeError(f"Expectation should be dimensionless, but has units of {(hist.unit)}.")
 
         return hist
 
