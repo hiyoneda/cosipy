@@ -4,8 +4,8 @@ import astropy.units as u
 import numpy as np
 import healpy as hp
 
-from cosipy.image_deconvolution.prior_tsv import PriorTSV
-from cosipy.image_deconvolution.prior_entropy import PriorEntropy
+from cosipy.image_deconvolution.algorithms.prior_tsv import PriorTSV
+from cosipy.image_deconvolution.algorithms.prior_entropy import PriorEntropy
 from cosipy.image_deconvolution import AllSkyImageModel
 
 def test_PriorTSV():

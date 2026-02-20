@@ -1,7 +1,7 @@
 import pytest
 import numpy as np
 
-from cosipy.image_deconvolution.prior_base import PriorBase
+from cosipy.image_deconvolution.algorithms.prior_base import PriorBase
 
 def test_PriorBase():
     PriorBase.__abstractmethods__ = set()
