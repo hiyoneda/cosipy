@@ -302,9 +302,6 @@ class DataIF_COSI_DC2(ImageDeconvolutionDataInterfaceBase):
 
         return Histogram(self.model_axes, contents = tprod, copy_contents = False)
 
-
-        return hist
-
     def calc_bkg_model_product(self, key, dataspace_histogram):
         """
         Calculate the product of the input histogram with the background model.
