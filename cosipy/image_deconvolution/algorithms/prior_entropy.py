@@ -4,7 +4,7 @@ import numpy as np
 
 from .prior_base import PriorBase
 
-from .allskyimage import AllSkyImageModel
+from ..models.allskyimage import AllSkyImageModel
 
 class PriorEntropy(PriorBase):
     """

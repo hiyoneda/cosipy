@@ -7,14 +7,14 @@ from yayc import Configurator
 from pathlib import Path
 from typing import Union, Optional
 
-from .data_interface_collection import DataInterfaceCollection
+from .data_interfaces.data_interface_collection import DataInterfaceCollection
 
-from .allskyimage import AllSkyImageModel
+from .models.allskyimage import AllSkyImageModel
 
-from .RichardsonLucyBasic import RichardsonLucyBasic
-from .RichardsonLucy import RichardsonLucy
-from .RichardsonLucyAdvanced import RichardsonLucyAdvanced 
-from .MAP_RichardsonLucy import MAP_RichardsonLucy
+from .algorithms.RichardsonLucyBasic import RichardsonLucyBasic
+from .algorithms.RichardsonLucy import RichardsonLucy
+from .algorithms.RichardsonLucyAdvanced import RichardsonLucyAdvanced 
+from .algorithms.MAP_RichardsonLucy import MAP_RichardsonLucy
 
 class ImageDeconvolution:
     """

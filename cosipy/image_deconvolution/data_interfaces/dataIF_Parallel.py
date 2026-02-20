@@ -18,8 +18,8 @@ import h5py
 from histpy import Histogram, Axes, Axis, HealpixAxis
 
 from cosipy.response import FullDetectorResponse
-from cosipy.image_deconvolution import ImageDeconvolutionDataInterfaceBase
-from .constants import NUMERICAL_ZERO
+from .image_deconvolution_data_interface_base import ImageDeconvolutionDataInterfaceBase
+from ..constants import NUMERICAL_ZERO
 
 def load_response_matrix(comm, start_col, end_col, filename):
     '''

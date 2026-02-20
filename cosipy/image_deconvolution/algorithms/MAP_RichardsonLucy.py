@@ -13,7 +13,7 @@ from .prior_entropy import PriorEntropy
 
 from .response_weighting_filter import ResponseWeightingFilter 
 
-from .constants import DEFAULT_STOPPING_THRESHOLD, DEFAULT_RESPONSE_WEIGHTING_INDEX
+from ..constants import DEFAULT_STOPPING_THRESHOLD, DEFAULT_RESPONSE_WEIGHTING_INDEX
 
 class MAP_RichardsonLucy(RichardsonLucy):
     """

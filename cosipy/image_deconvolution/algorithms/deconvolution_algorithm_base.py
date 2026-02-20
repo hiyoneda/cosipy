@@ -5,7 +5,7 @@ from abc import ABC, abstractmethod
 import logging
 logger = logging.getLogger(__name__)
 
-from .constants import CHUNK_SIZE_FITS, DEFAULT_ITERATION_MAX
+from ..constants import CHUNK_SIZE_FITS, DEFAULT_ITERATION_MAX
 
 def _to_float(x) -> float:
     """

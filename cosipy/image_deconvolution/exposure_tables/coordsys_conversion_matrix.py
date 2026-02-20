@@ -9,8 +9,8 @@ from astropy.coordinates import SkyCoord, cartesian_to_spherical, Galactic
 from scoords import Attitude, SpacecraftFrame
 from histpy import Histogram, Axes, Axis, HealpixAxis
 
-from .dataIF_COSI_DC2 import tensordot_sparse
-from .constants import EARTH_RADIUS_KM
+from ..data_interfaces.utils import tensordot_sparse
+from ..constants import EARTH_RADIUS_KM
 
 class CoordsysConversionMatrix(Histogram):
     """

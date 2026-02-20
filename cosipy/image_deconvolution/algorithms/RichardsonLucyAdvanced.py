@@ -7,12 +7,12 @@ from histpy import Histogram
 from copy import deepcopy
 
 from .RichardsonLucy import RichardsonLucy
-from .build_accelerator import build_accelerator
-from .accelerator_base import EMStepResult
+from .accelerators.build_accelerator import build_accelerator
+from .accelerators.accelerator_base import EMStepResult
 
 from .response_weighting_filter import ResponseWeightingFilter 
 
-from .constants import DEFAULT_STOPPING_THRESHOLD, DEFAULT_RESPONSE_WEIGHTING_INDEX
+from ..constants import DEFAULT_STOPPING_THRESHOLD, DEFAULT_RESPONSE_WEIGHTING_INDEX
 
 class RichardsonLucyAdvanced(RichardsonLucy):
     """

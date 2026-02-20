@@ -12,17 +12,8 @@ from histpy import Histogram, Axes
 from cosipy.response import FullDetectorResponse
 
 from .image_deconvolution_data_interface_base import ImageDeconvolutionDataInterfaceBase
-from .constants import NUMERICAL_ZERO
-
-def tensordot_sparse(A, A_unit, B, axes):
-    """
-    perform a tensordot operation on A and B.  A is sparse
-    and so does not carry a unit; rather it must be passed
-    as a separate argument.  B is a normal Quantity. Return
-    a proper Quantity as the result.
-    """
-    dotprod = np.tensordot(A, B.value, axes=axes)
-    return u.Quantity(dotprod, unit= A_unit * B.unit, copy=False)
+from .utils import tensordot_sparse
+from ..constants import NUMERICAL_ZERO
 
 
 class DataIF_COSI_DC2(ImageDeconvolutionDataInterfaceBase):

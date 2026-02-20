@@ -7,7 +7,7 @@ from histpy import Histogram
 from .deconvolution_algorithm_base import _to_float
 from .RichardsonLucyBasic import RichardsonLucyBasic
 
-from .constants import DEFAULT_BKG_NORM_RANGE
+from ..constants import DEFAULT_BKG_NORM_RANGE
 
 class RichardsonLucy(RichardsonLucyBasic):
     """

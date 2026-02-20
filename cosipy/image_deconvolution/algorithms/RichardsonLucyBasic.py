@@ -7,8 +7,7 @@ logger = logging.getLogger(__name__)
 from histpy import Histogram
 
 from .deconvolution_algorithm_base import DeconvolutionAlgorithmBase
-
-from .constants import DEFAULT_MINIMUM_FLUX
+from ..constants import DEFAULT_MINIMUM_FLUX
 
 class RichardsonLucyBasic(DeconvolutionAlgorithmBase):
     """
