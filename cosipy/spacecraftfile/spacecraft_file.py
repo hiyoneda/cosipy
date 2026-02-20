@@ -1,13 +1,15 @@
 from pathlib import Path
 
+from astropy.io import fits
+from astropy.table import QTable
+
 import numpy as np
 
 import astropy.units as u
-import astropy.constants as c
+
 
 from astropy.time import Time
-from astropy.coordinates import SkyCoord, EarthLocation, GCRS, SphericalRepresentation, CartesianRepresentation, \
-    UnitSphericalRepresentation
+from astropy.coordinates import SkyCoord, EarthLocation, GCRS, SphericalRepresentation, Angle
 from astropy.units import Quantity
 from mhealpy import HealpixBase
 from histpy import Histogram, TimeAxis, HealpixAxis, Axis
@@ -28,6 +30,9 @@ logger = logging.getLogger(__name__)
 __all__ = ["SpacecraftHistory"]
 
 class SpacecraftHistory:
+
+
+    supported_file_versions = ["20260130"] # change if FITS on-disk format changes
 
     def __init__(self,
                  obstime: Time,
@@ -116,6 +121,15 @@ class SpacecraftHistory:
         return self._gcrs
 
     @property
+    def altitude(self) -> Quantity:
+        """
+        Altitude with recpect to Earth's surface
+        """
+
+        # TODO: change to exact act
+        return Quantity(self.location.spherical.distance.km - self._r_earth, u.km, copy = False)
+
+    @property
     def earth_zenith(self) -> SkyCoord:
         """
         Pointing of the Earth's zenith at the location of the SC
@@ -123,22 +137,108 @@ class SpacecraftHistory:
         gcrs_sph = self._gcrs.represent_as(SphericalRepresentation)
         return SkyCoord(ra=gcrs_sph.lon, dec=gcrs_sph.lat, frame='icrs', copy=False)
 
-    @classmethod
-    def open(cls, file, tstart:Time = None, tstop:Time = None) -> "SpacecraftHistory":
+    @staticmethod
+    def _default_file_version(file_version = None):
+        if file_version is None:
+            file_version = SpacecraftHistory.supported_file_versions[-1]
+        else:
+            if file_version not in SpacecraftHistory.supported_file_versions:
+                raise RuntimeError(f"File version not {file_version} not in {SpacecraftHistory.supported_file_versions}")
 
+        return file_version
+
+    def write_fits(self, filename, overwrite=False, compress=False, file_version = None):
         """
-        Parses timestamps, axis positions from file and returns to __init__.
+        Write the contents of this object as a FITS file for later
+        retrieval. We use Astropy QTable functionality to create
+        the FITS file.
+
+        If compression is requested, the resulting file will have the
+        name {filename}.gz; the ".gz" should not be specfied as part
+        of the input.  (If it is, the file will be compressed
+        regardless of the setting of the compress flag.)
 
         Parameters
         ----------
-        file : str
-            The file path of the pointings.
+        filename : str or pathlib Path
+            The file path to the FITS file
+        overwrite : bool, optional
+            Overwrite the named file if it exists (default False)
+        compress : bool, optional
+            GZip-compress the FITS file (default False)
+        file_version: str
+            Defaults to latest file version. See supported_file_versions for options.
+        """
+
+        t = QTable()
+
+        t['TimeStamp'] = self.obstime.unix
+
+        # make sure the pointings are written in galactic coordinates,
+        # however they are stored internally.  The units of the
+        # lat/long angles are preserved in the file.
+
+        xc, yc, zc = self.attitude.transform_to('galactic').as_axes()
+
+        xp = np.column_stack((Angle(xc.l), Angle(xc.b)))
+        t['XPointings'] = xp
+
+        zp = np.column_stack((Angle(zc.l), Angle(zc.b)))
+        t['ZPointings'] = zp
+
+        ec = self.earth_zenith.transform_to('galactic')
+        ez = np.column_stack((Angle(ec.l), Angle(ec.b)))
+        t['EarthZenith'] = ez
+
+        if hasattr(self, '_altitude'):
+            t['Altitude'] = self._altitude
+
+        if hasattr(self, 'livetime'):
+            # add dummy to make sure livetime array length matches
+            # other array lengths for writing
+            t['LiveTime'] = np.concatenate((self.livetime, [0]))
+
+        # ensure the VERSION card ends up in the table's hdu header
+        file_version = self._default_file_version(file_version)
+
+        t.meta["VERSION"] = file_version
+
+        filename = Path(filename)
+
+        if compress and filename.suffix != ".gz":
+            # FITS table writer will automatically compress if
+            # file name ends with .gz
+            filename = filename.parent / (filename.name + ".gz")
+
+        if filename.exists() and not overwrite:
+            raise RuntimeError(f"Not overwriting existing file '{filename}'")
+        else:
+            t.write(filename, format='fits', overwrite=True)
+
+            # reopen the FITS file to add the VERSION card
+            # to the PRIMARY header in hdu 0 as well. HEASARC
+            # requires the version in all hdus in the file.
+            with fits.open(filename, mode="update") as hdul:
+                hdul[0].header["VERSION"] = file_version
+
+    @classmethod
+    def open(cls, filename, tstart:Time = None, tstop:Time = None) -> "SpacecraftHistory":
+
+        """
+        Read orientation data from file and construct a
+        SpacecraftHistory object.  Dispatch to the appropriate
+        reader based on file extension.
+
+        Parameters
+        ----------
+        filename : str
+            The file path to the .ori or FITS file
         tstart:
-            Start reading the file from an interval *including* this time. Use select_interval() to
-            cut the SC file at exactly this tiem.
+            If possible, start reading the file from an interval *including* this time.
+            Use select_interval() to guarantee this cut.
         tstop:
-            Stop reading the file at an interval *including* this time. Use select_interval() to
-            cut the SC file at exactly this tiem.
+            If possible, stop reading the file at an interval *including* this time.
+            Use select_interval() to guarantee this cut.
 
         Returns
         -------
@@ -146,15 +246,80 @@ class SpacecraftHistory:
             The SpacecraftHistory object.
         """
 
-        file = Path(file)
+        filename = Path(filename)
 
-        if file.suffix == ".ori":
-            return cls._parse_from_file(file, tstart, tstop)
+        if filename.suffix == ".fits" or filename.suffixes[-2:] == [".fits", ".gz"]:
+            return cls._open_fits(filename)
+        elif filename.suffix == ".ori":
+            return cls._open_ori(filename, tstart, tstop)
         else:
-            raise ValueError(f"File format for {file} not supported")
+            raise ValueError(
+                "Unsupported file format. Only .ori and .fits/.fits.gz extensions are supported.")
 
     @classmethod
-    def _parse_from_file(cls, file, tstart:Time = None, tstop:Time = None) -> "SpacecraftHistory":
+    def _open_fits(cls, filename):
+        """
+        Read orientation data from a FITS file and construct a
+        SpacecraftFile object.  The FITS file is assumed to contain
+        an Astropy QTable produced by the write_fits() method.
+        Astropy supports .fits.gz natively, so this function
+        can read either compressed or uncompressed FITS.
+
+        Parameters
+        ----------
+        filename : str
+            The file path to the FITS file
+
+        Returns
+        -------
+        cosipy.spacecraftfile.SpacecraftFile
+            The SpacecraftFile object
+
+        """
+
+        t = QTable.read(filename)
+
+        # make sure we have version info, and that we support this version
+        if "VERSION" not in t.meta:
+            raise ValueError("FITS orientation file has no version info")
+        elif t.meta["VERSION"] not in cls.supported_file_versions:
+            raise ValueError(f"FITS orientation file has version {t.meta['VERSION']} "
+                             f"that is not supported {cls.supported_file_versions}")
+
+        time_stamps = Time(t['TimeStamp'], format = "unix")
+
+        # pointings are assumed to be stored in the file in
+        # galactic # coordinates.
+        xp = t['XPointings']
+        xpointings = SkyCoord(l = xp[:,0], b = xp[:,1],
+                              frame = "galactic")
+        zp = t['ZPointings']
+        zpointings = SkyCoord(l = zp[:,0], b = zp[:,1],
+                              frame = "galactic")
+
+        attitude = Attitude.from_axes(x = xpointings, z = zpointings)
+
+        ez = t['EarthZenith']
+        earth_lon = ez[:,0]
+        earth_lat = ez[:,1]
+        if 'Altitude' in t.colnames:
+            altitude = t['Altitude']
+        else:
+            logger.warning("Spacecraft file has not altitude. Defaulting to 0")
+            altitude = 0
+
+        if 'LiveTime' in t.colnames:
+            # left end points, so remove last bin.
+            livetime = t['LiveTime'][:-1]
+        else:
+            livetime = None
+
+        gcrs = cls._standardize_location(earth_lon.to_value(u.deg), earth_lat.to_value(u.deg), altitude)
+
+        return cls(time_stamps, attitude, gcrs, livetime)
+
+    @classmethod
+    def _open_ori(cls, file, tstart:Time = None, tstop:Time = None) -> "SpacecraftHistory":
         """
         Parses an .ori txt file with MEGAlib formatting.
 
@@ -223,6 +388,24 @@ class SpacecraftHistory:
 
         livetime = livetime[:-1]*u.s # The last element is 0.
 
+        gcrs = cls._standardize_location(earth_lon, earth_lat, altitude)
+
+        return cls(time, attitude, gcrs, livetime)
+
+    @staticmethod
+    def _standardize_location(earth_lon, earth_lat, altitude):
+        """
+
+        Parameters
+        ----------
+        earth_lon: galactic longitude of the direction the Earth's zenith is pointing to at the SC location (deg)
+        earth_lat: galactic latitude of the direction the Earth's zenith is pointing to at the SC location (deg)
+        altitude: altitude above from Earth's ellipsoid (km)
+
+        Returns
+        -------
+        GCRS location
+        """
         # Currently, the orbit information is in a weird format.
         # The altitude is specified with respect to the Earth's surface, like
         # you would specify it in a geodetic format, while
@@ -236,12 +419,11 @@ class SpacecraftHistory:
         #    Should take care of the non-spherical Earth
         # 4. Go back GCRS, now with the correct distance
         #    (from the Earth's center)
-        zenith_gal = SkyCoord(l=earth_lon * u.deg, b=earth_lat * u.deg, frame="galactic", copy = False)
+        zenith_gal = SkyCoord(l=earth_lon * u.deg, b=earth_lat * u.deg, frame="galactic", copy=False)
         gcrs = zenith_gal.transform_to('gcrs')
-        earth_loc = EarthLocation.from_geodetic(lon=gcrs.ra, lat=gcrs.dec, height=altitude*u.km)
+        earth_loc = EarthLocation.from_geodetic(lon=gcrs.ra, lat=gcrs.dec, height=altitude * u.km)
         gcrs2 = GCRS(ra=gcrs.ra, dec=gcrs.dec, distance=earth_loc.itrs.cartesian.norm(), copy=False)
-
-        return cls(time, attitude, gcrs2, livetime)
+        return gcrs2
 
     @staticmethod
     def _interp_location(t, d1, d2):
@@ -756,7 +938,7 @@ class SpacecraftHistory:
             src_angle = source.separation(self.earth_zenith)
 
             # get max angle based on altitude
-            max_angle = np.pi - np.arcsin(r_earth/(r_earth + self.location.spherical.distance.km))
+            max_angle = np.pi - np.arcsin(r_earth/(self.location.spherical.distance.km))
 
             # get pointings that are occluded by Earth
             is_occluded = src_angle.rad >= max_angle
