@@ -5,7 +5,7 @@ logger = logging.getLogger(__name__)
 
 from yayc import Configurator
 from pathlib import Path
-from typing import Union, Optional
+from typing import Union
 
 from .data_interfaces.data_interface_collection import DataInterfaceCollection
 

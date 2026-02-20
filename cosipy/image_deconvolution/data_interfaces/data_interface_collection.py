@@ -15,14 +15,7 @@ from typing import Union
 logger = logging.getLogger(__name__)
 
 
-def _to_float(x) -> float:
-    """
-    Convert to float, handling astropy Quantity.
-    """
-
-    if hasattr(x, 'unit'):
-        return float(x.to(''))
-    return float(x)
+from ..utils import _to_float
 
 
 class DataInterfaceCollection(Sequence):

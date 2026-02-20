@@ -53,18 +53,18 @@ class RichardsonLucyAdvanced(RichardsonLucy):
         super().__init__(initial_model, dataset, mask, parameter)
 
         # acceleration
-        self.do_acceleration = parameter.get('acceleration:activate', False)
-        if self.do_acceleration == True:
+        self.acceleration_enabled = parameter.get('acceleration:activate', False)
+        if self.acceleration_enabled:
             self.accelerator_parameter = parameter['acceleration']
 
         # response_weighting
-        self.do_response_weighting = parameter.get('response_weighting:activate', False)
-        if self.do_response_weighting:
+        self.response_weighting_enabled = parameter.get('response_weighting:activate', False)
+        if self.response_weighting_enabled:
             self.response_weighting_index = parameter.get('response_weighting:index', DEFAULT_RESPONSE_WEIGHTING_INDEX)
 
         # smoothing
-        self.do_smoothing = parameter.get('smoothing:activate', False)
-        if self.do_smoothing:
+        self.smoothing_enabled = parameter.get('smoothing:activate', False)
+        if self.smoothing_enabled:
             self.smoothing_fwhm = parameter.get('smoothing:FWHM:value') * u.Unit(parameter.get('smoothing:FWHM:unit'))
             logger.info(f"Gaussian filter with FWHM of {self.smoothing_fwhm} will be applied to delta images ...")
 
@@ -85,11 +85,11 @@ class RichardsonLucyAdvanced(RichardsonLucy):
         super().initialization()
 
         # response-weighting filter
-        if self.do_response_weighting:
+        if self.response_weighting_enabled:
             self.response_weighting_filter = ResponseWeightingFilter(self.summed_exposure_map, self.response_weighting_index)
 
         # build accelerator
-        if self.do_acceleration:
+        if self.acceleration_enabled:
             self.accelerator = build_accelerator(self.accelerator_parameter)
 
     def pre_processing(self):
@@ -116,11 +116,11 @@ class RichardsonLucyAdvanced(RichardsonLucy):
         super().Mstep()
 
         # apply response_weighting_filter
-        if self.do_response_weighting:
+        if self.response_weighting_enabled:
             self.delta_model = self.response_weighting_filter.apply(self.delta_model)
 
         # apply smoothing 
-        if self.do_smoothing:
+        if self.smoothing_enabled:
             self.delta_model = self.delta_model.smoothing(fwhm = self.smoothing_fwhm)
 
     def post_processing(self):
@@ -128,7 +128,7 @@ class RichardsonLucyAdvanced(RichardsonLucy):
         perform the acceleration of RL algirithm
         """
 
-        if self.do_acceleration:
+        if self.acceleration_enabled:
 
             # em_results[0]: "before" state (before any update)
             em_results = [
@@ -144,7 +144,7 @@ class RichardsonLucyAdvanced(RichardsonLucy):
             # Run n_em_steps_required EM steps, appending each result
             for _ in range(self.accelerator.n_em_steps_required):
                 self.model += self.delta_model
-                if self.do_bkg_norm_optimization:
+                if self.bkg_norm_optimization_enabled:
                     self.dict_bkg_norm = {
                         key: self.dict_bkg_norm[key] + self.dict_delta_bkg_norm[key]
                         for key in self.dict_bkg_norm
@@ -171,7 +171,7 @@ class RichardsonLucyAdvanced(RichardsonLucy):
 
         else:
             self.model += self.delta_model
-            if self.do_bkg_norm_optimization:
+            if self.bkg_norm_optimization_enabled:
                 self.dict_bkg_norm = {
                     key: self.dict_bkg_norm[key] + self.dict_delta_bkg_norm[key]
                     for key in self.dict_bkg_norm
@@ -179,7 +179,7 @@ class RichardsonLucyAdvanced(RichardsonLucy):
             self._accel_result = None
 
         self._ensure_model_constraints()
-        if self.do_bkg_norm_optimization:
+        if self.bkg_norm_optimization_enabled:
             self._ensure_bkg_norm_range()
 
         # always recompute expectation and LH after _ensure_model_constraints

@@ -4,7 +4,7 @@ logger = logging.getLogger(__name__)
 
 from histpy import Histogram
 
-from .deconvolution_algorithm_base import _to_float
+from ..utils import _to_float
 from .RichardsonLucyBasic import RichardsonLucyBasic
 
 from ..constants import DEFAULT_BKG_NORM_RANGE
@@ -45,8 +45,8 @@ class RichardsonLucy(RichardsonLucyBasic):
         super().__init__(initial_model, dataset, mask, parameter)
 
         # background normalization optimization
-        self.do_bkg_norm_optimization = parameter.get('background_normalization_optimization:activate', False)
-        if self.do_bkg_norm_optimization:
+        self.bkg_norm_optimization_enabled = parameter.get('background_normalization_optimization:activate', False)
+        if self.bkg_norm_optimization_enabled:
             self.dict_delta_bkg_norm = {}
             self.dict_bkg_norm_range = parameter.get('background_normalization_optimization:range', {key: DEFAULT_BKG_NORM_RANGE for key in self.dict_bkg_norm.keys()})
 
@@ -58,7 +58,7 @@ class RichardsonLucy(RichardsonLucyBasic):
         super().initialization()
 
         # calculate summed background models for M-step
-        if self.do_bkg_norm_optimization:
+        if self.bkg_norm_optimization_enabled:
             self.dict_summed_bkg_model = {}
             for key in self.dict_bkg_norm.keys():
                 self.dict_summed_bkg_model[key] = self.dataset.calc_summed_bkg_model(key)
@@ -82,7 +82,7 @@ class RichardsonLucy(RichardsonLucyBasic):
         logger.debug("The delta model was updated.")
         
         # background normalization optimization
-        if self.do_bkg_norm_optimization:
+        if self.bkg_norm_optimization_enabled:
             for key in self.dict_bkg_norm.keys():
 
                 sum_bkg_T_product = self.dataset.calc_summed_bkg_model_product(key, ratio_list)
@@ -120,7 +120,7 @@ class RichardsonLucy(RichardsonLucyBasic):
         self._ensure_model_constraints()
 
         # update background normalization
-        if self.do_bkg_norm_optimization:
+        if self.bkg_norm_optimization_enabled:
             for key in self.dict_bkg_norm.keys():
                 self.dict_bkg_norm[key] += self.dict_delta_bkg_norm[key]
             self._ensure_bkg_norm_range()

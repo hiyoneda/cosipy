@@ -6,15 +6,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 from ..constants import CHUNK_SIZE_FITS, DEFAULT_ITERATION_MAX
-
-def _to_float(x) -> float:
-    """
-    Convert to float, handling astropy Quantity.
-    """
-
-    if hasattr(x, 'unit'):
-        return float(x.to(''))
-    return float(x)
+from ..utils import _to_float
 
 class DeconvolutionAlgorithmBase(ABC):
     """

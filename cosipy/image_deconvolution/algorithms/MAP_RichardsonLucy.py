@@ -5,7 +5,7 @@ logger = logging.getLogger(__name__)
 
 from histpy import Histogram
 
-from .deconvolution_algorithm_base import _to_float
+from ..utils import _to_float
 from .RichardsonLucy import RichardsonLucy
 
 from .prior_tsv import PriorTSV
@@ -81,8 +81,8 @@ class MAP_RichardsonLucy(RichardsonLucy):
             self.priors[prior_name] = self.prior_classes[prior_name](this_prior_parameter, initial_model)
 
         # response_weighting
-        self.do_response_weighting = parameter.get('response_weighting:activate', False)
-        if self.do_response_weighting:
+        self.response_weighting_enabled = parameter.get('response_weighting:activate', False)
+        if self.response_weighting_enabled:
             self.response_weighting_index = parameter.get('response_weighting:index', DEFAULT_RESPONSE_WEIGHTING_INDEX)
 
         # stopping criteria
@@ -117,7 +117,7 @@ class MAP_RichardsonLucy(RichardsonLucy):
         # background
         pl_part_bkg, log_part_bkg = 0, 0
 
-        if self.do_bkg_norm_optimization:
+        if self.bkg_norm_optimization_enabled:
             for key in dict_bkg_norm.keys():
                 
                 bkg_norm = dict_bkg_norm[key]
@@ -138,7 +138,7 @@ class MAP_RichardsonLucy(RichardsonLucy):
         super().initialization()
 
         # response-weighting filter
-        if self.do_response_weighting:
+        if self.response_weighting_enabled:
             self.response_weighting_filter = ResponseWeightingFilter(self.summed_exposure_map, self.response_weighting_index)
 
     def pre_processing(self):
@@ -182,7 +182,7 @@ class MAP_RichardsonLucy(RichardsonLucy):
         self.delta_model = self.prior_filter * model_EM.contents - self.model
 
         # background normalization optimization
-        if self.do_bkg_norm_optimization:
+        if self.bkg_norm_optimization_enabled:
             for key in self.dict_bkg_norm.keys():
 
                 sum_bkg_T_product = self.dataset.calc_summed_bkg_model_product(key, ratio_list)
@@ -193,7 +193,7 @@ class MAP_RichardsonLucy(RichardsonLucy):
                 self.dict_delta_bkg_norm[key] = bkg_norm - self.dict_bkg_norm[key]
 
         # apply response_weighting_filter
-        if self.do_response_weighting:
+        if self.response_weighting_enabled:
             self.delta_model = self.response_weighting_filter.apply(self.delta_model)
 
     def post_processing(self):
@@ -207,7 +207,7 @@ class MAP_RichardsonLucy(RichardsonLucy):
         self._ensure_model_constraints()
 
         # update background normalization
-        if self.do_bkg_norm_optimization:
+        if self.bkg_norm_optimization_enabled:
             for key in self.dict_bkg_norm.keys():
                 self.dict_bkg_norm[key] += self.dict_delta_bkg_norm[key]
             self._ensure_bkg_norm_range()

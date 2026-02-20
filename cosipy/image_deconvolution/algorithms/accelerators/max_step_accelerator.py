@@ -7,6 +7,8 @@ import logging
 
 from .accelerator_base import AcceleratorBase, AcceleratorResult
 
+from ...utils import _to_float
+
 logger = logging.getLogger(__name__)
 
 DEFAULT_ACCEL_FACTOR_MAX = 10.0
@@ -104,4 +106,4 @@ class MaxStepAccelerator(AcceleratorBase):
         if accel_factor < 1.0:
             accel_factor = 1.0
 
-        return accel_factor
+        return _to_float(accel_factor)
