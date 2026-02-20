@@ -12,8 +12,6 @@ import numpy as np
 import logging
 from typing import Union
 
-from .constants import NUMERICAL_ZERO
-
 logger = logging.getLogger(__name__)
 
 
@@ -71,7 +69,7 @@ class DataInterfaceCollection(Sequence):
     
 
     # Expectation
-    def calc_expectation_list(self, model, dict_bkg_norm = Union[dict,None], almost_zero = NUMERICAL_ZERO) -> list:
+    def calc_expectation_list(self, model, dict_bkg_norm = Union[dict,None]) -> list:
         """
         Calculate a list of expected count histograms corresponding to each data in the registered dataset.
 
@@ -81,9 +79,6 @@ class DataInterfaceCollection(Sequence):
             Model
         dict_bkg_norm : dict, default None
             background normalization for each background model, e.g, {'albedo': 0.95, 'activation': 1.05}
-        almost_zero : float, default NUMERICAL_ZERO 
-            In order to avoid zero components in extended count histogram, a tiny offset is introduced.
-            It should be small enough not to effect statistics.
 
         Returns
         -------
@@ -91,7 +86,49 @@ class DataInterfaceCollection(Sequence):
             List of expected count histograms
         """
         
-        return [data.calc_expectation(model, dict_bkg_norm = dict_bkg_norm, almost_zero = almost_zero) for data in self._dataset]
+        return [
+            data.calc_expectation(model, dict_bkg_norm) 
+            for data in self._dataset
+        ]
+
+    def calc_source_expectation_list(self, model) -> list:
+        """
+        Compute source-only expected counts for every dataset entry.
+
+        Returns
+        -------
+        list of histpy.Histogram
+        """
+        return [
+            data.calc_source_expectation(model)
+            for data in self._dataset
+        ]
+
+    def calc_bkg_expectation_list(self, dict_bkg_norm) -> list:
+        """
+        Compute background-only expected counts for every dataset entry.
+
+        Returns
+        -------
+        list of histpy.Histogram
+        """
+        return [
+            data.calc_bkg_expectation(dict_bkg_norm)
+            for data in self._dataset
+        ]
+
+    def combine_expectation_list(self, expectation_list_src, expectation_list_bkg) -> list:
+        """
+        Sum source and background expectation lists element-wise.
+
+        Returns
+        -------
+        list of histpy.Histogram
+        """
+        return [
+            src + bkg
+            for src, bkg in zip(expectation_list_src, expectation_list_bkg)
+        ]
 
     # Log-likelihood
     def calc_log_likelihood_list(self, expectation_list: list) -> list:

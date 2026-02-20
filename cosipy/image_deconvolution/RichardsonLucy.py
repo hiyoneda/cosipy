@@ -154,7 +154,7 @@ class RichardsonLucy(RichardsonLucyBasic):
             counter_name           = "iteration",
             histogram_keys         = [("model", f"{self.save_results_directory}/model.hdf5", self.save_only_final_result)],
             fits_filename          = f"{self.save_results_directory}/results.fits",
-            values_key_name_format = values_key_name_format,
+            values_key_name_format = [], 
             dicts_key_name_format  = [("background_normalization", "BKG_NORM", "D")],
             lists_key_name_format  = [],
         )

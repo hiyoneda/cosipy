@@ -215,7 +215,7 @@ class DataIF_COSI_DC2(ImageDeconvolutionDataInterfaceBase):
 
         logger.info("Finished...")
 
-    def calc_expectation(self, model, dict_bkg_norm = None, almost_zero = NUMERICAL_ZERO):
+    def calc_source_expectation(self, model):
         """
         Calculate expected counts from a given model.
 
@@ -223,11 +223,6 @@ class DataIF_COSI_DC2(ImageDeconvolutionDataInterfaceBase):
         ----------
         model : :py:class:`cosipy.image_deconvolution.AllSkyImageModel`
             Model map
-        dict_bkg_norm : dict, default None
-            background normalization for each background model, e.g, {'albedo': 0.95, 'activation': 1.05}
-        almost_zero : float, default NUMERICAL_ZERO
-            In order to avoid zero components in extended count histogram, a tiny offset is introduced.
-            It should be small enough not to effect statistics.
 
         Returns
         -------
@@ -258,11 +253,30 @@ class DataIF_COSI_DC2(ImageDeconvolutionDataInterfaceBase):
             # [Time/ScAtt, NuLambda, Ei] x [NuLambda, Ei, Em, Phi, PsiChi] -> [Time/ScAtt, Em, Phi, PsiChi]
 
         expectation *= model.axes['lb'].pixarea()
-        expectation += almost_zero
+        expectation += NUMERICAL_ZERO
 
-        if dict_bkg_norm is not None:
-            for key in self.keys_bkg_models():
-                expectation += self.bkg_model(key).contents * dict_bkg_norm[key]
+        return Histogram(self.data_axes, contents = expectation, copy_contents = False)
+
+    def calc_bkg_expectation(self, dict_bkg_norm):
+        """
+        Calculate expected counts from a given background normalizations.
+
+        Parameters
+        ----------
+        dict_bkg_norm : dict, default None
+            background normalization for each background model, e.g, {'albedo': 0.95, 'activation': 1.05}
+
+        Returns
+        -------
+        :py:class:`histpy.Histogram`
+            Expected count histogram
+
+        Notes
+        -----
+        This method should be implemented in a more general class, for example, extended source response class in the future.
+        """
+
+        expectation = sum(self.bkg_model(key).contents * dict_bkg_norm[key] for key in self.keys_bkg_models())
 
         return Histogram(self.data_axes, contents = expectation, copy_contents = False)
 
