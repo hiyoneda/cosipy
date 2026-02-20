@@ -4,9 +4,11 @@ import logging
 logger = logging.getLogger(__name__)
 
 from histpy import Histogram
+from copy import deepcopy
 
 from .RichardsonLucy import RichardsonLucy
 from .build_accelerator import build_accelerator
+from .accelerator_base import EMStepResult
 
 from .response_weighting_filter import ResponseWeightingFilter 
 
@@ -128,37 +130,41 @@ class RichardsonLucyAdvanced(RichardsonLucy):
 
         if self.do_acceleration:
 
-            # save state before extra EM steps
-            model_before    = self.model.copy()
-            bkg_norm_before = self.dict_bkg_norm.copy()
+            # em_results[0]: "before" state (before any update)
+            em_results = [
+                EMStepResult(
+                    model                   = self.model.copy(),
+                    dict_bkg_norm           = self.dict_bkg_norm.copy(),
+                    expectation_list        = deepcopy(self.expectation_list),
+                    source_expectation_list = deepcopy(self.source_expectation_list),
+                    bkg_expectation_list    = deepcopy(self.bkg_expectation_list),
+                ),
+            ]
 
-            # run extra EM steps required by the accelerator
-            em_results = []
+            # Run n_em_steps_required EM steps, appending each result
             for _ in range(self.accelerator.n_em_steps_required):
-                self.Estep()
-                self.Mstep()
                 self.model += self.delta_model
-                self._ensure_model_constraints()
                 if self.do_bkg_norm_optimization:
-                    for key in self.dict_bkg_norm:
-                        self.dict_bkg_norm[key] += self.dict_delta_bkg_norm[key]
-                    self._ensure_bkg_norm_range()
-                em_results.append((
-                    self.model.copy(),
-                    self.dict_bkg_norm.copy(),
-                    self.expectation_list.copy(),
+                    self.dict_bkg_norm = {
+                        key: self.dict_bkg_norm[key] + self.dict_delta_bkg_norm[key]
+                        for key in self.dict_bkg_norm
+                    }
+                self.Estep()  # updates self.source_expectation_list / bkg_expectation_list
+                if _ < self.accelerator.n_em_steps_required - 1:
+                    self.Mstep()  # need delta_model for next iteration (not needed on last step)
+                em_results.append(EMStepResult(
+                    model                   = self.model.copy(),
+                    dict_bkg_norm           = self.dict_bkg_norm.copy(),
+                    expectation_list        = deepcopy(self.expectation_list),
+                    source_expectation_list = deepcopy(self.source_expectation_list),
+                    bkg_expectation_list    = deepcopy(self.bkg_expectation_list),
                 ))
 
             result = self.accelerator.compute(
-                delta_model          = self.delta_model,
-                dict_delta_bkg_norm  = self.dict_delta_bkg_norm,
-                model_before         = model_before,
-                bkg_norm_before      = bkg_norm_before,
-                dataset              = self.dataset,
-                mask                 = self.mask,
-                em_results           = em_results,
+                em_results = em_results,
+                dataset    = self.dataset,
+                mask       = self.mask,
             )
-
             self.model         = result.model
             self.dict_bkg_norm = result.dict_bkg_norm
             self._accel_result = result
@@ -166,28 +172,21 @@ class RichardsonLucyAdvanced(RichardsonLucy):
         else:
             self.model += self.delta_model
             if self.do_bkg_norm_optimization:
-                for key in self.dict_bkg_norm:
-                    self.dict_bkg_norm[key] += self.dict_delta_bkg_norm[key]
+                self.dict_bkg_norm = {
+                    key: self.dict_bkg_norm[key] + self.dict_delta_bkg_norm[key]
+                    for key in self.dict_bkg_norm
+                }
             self._accel_result = None
 
         self._ensure_model_constraints()
-
         if self.do_bkg_norm_optimization:
             self._ensure_bkg_norm_range()
 
-        # reuse expectation/likelihood if accelerator already computed them
-        if self._accel_result is not None and self._accel_result.expectation_list is not None:
-            self.expectation_list = self._accel_result.expectation_list
-        else:
-            self.Estep()
+        # always recompute expectation and LH after _ensure_model_constraints
+        self.Estep()
         logger.debug("Expected count histograms updated.")
-
-        if self._accel_result is not None and self._accel_result.log_likelihood_list is not None:
-            self.log_likelihood_list = self._accel_result.log_likelihood_list
-        else:
-            self.log_likelihood_list = self.dataset.calc_log_likelihood_list(self.expectation_list)
+        self.log_likelihood_list = self.dataset.calc_log_likelihood_list(self.expectation_list)
         logger.debug("Log-likelihood list updated.")
-
 
     def register_result(self):
         """

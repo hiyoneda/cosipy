@@ -102,7 +102,9 @@ class RichardsonLucyBasic(DeconvolutionAlgorithmBase):
         In this step, self.expectation_list will be updated.
         """
 
-        self.expectation_list = self.dataset.calc_expectation_list(self.model, dict_bkg_norm = self.dict_bkg_norm)
+        self.source_expectation_list = self.dataset.calc_source_expectation_list(self.model)
+        self.bkg_expectation_list = self.dataset.calc_bkg_expectation_list(self.dict_bkg_norm)
+        self.expectation_list = self.dataset.combine_expectation_list(self.source_expectation_list, self.bkg_expectation_list)
 
         logger.debug("The expected count histograms were updated.")
 

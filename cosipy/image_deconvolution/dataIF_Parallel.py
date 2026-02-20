@@ -285,7 +285,7 @@ class DataIF_Parallel(ImageDeconvolutionDataInterfaceBase):
 
         return Histogram(self.event.axes, contents=epsilon, unit=self.event.unit)
 
-    def calc_source_expectation(self, model, almost_zero=NUMERICAL_ZERO):
+    def calc_source_expectation(self, model):
         """
         Calculate expected counts from the source model only.
 
@@ -317,7 +317,7 @@ class DataIF_Parallel(ImageDeconvolutionDataInterfaceBase):
 
         return self._allgatherv_slice(expectation_slice)
 
-    def calc_bkg_expectation(self, dict_bkg_norm)
+    def calc_bkg_expectation(self, dict_bkg_norm):
         """
         Calculate expected counts from background models only.
 

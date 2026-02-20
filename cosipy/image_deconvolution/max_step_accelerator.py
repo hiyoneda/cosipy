@@ -1,7 +1,5 @@
 """
 max_step_accelerator.py
-
-Monotonicity-safe acceleration strategy (Knoedlseder+99, Knoedlseder+05, Siegert+20).
 """
 
 import numpy as np
@@ -20,42 +18,67 @@ class MaxStepAccelerator(AcceleratorBase):
 
         model_before + accel_factor * delta_model >= 0   (element-wise)
 
-    n_em_steps_required = 0: em_results is always empty.
+    If accel_factor does not improve LH, falls back to accel_factor=1.
     accel_factor is stored in extras={"accel_factor": accel_factor}.
-
-    An example of parameter is as follows.
 
     algorithm: MaxStep
     accel_factor_max: 10.0
     """
 
-    n_em_steps_required = 0
+    n_em_steps_required = 1
 
     def __init__(self, parameter):
         super().__init__(parameter)
         self.accel_factor_max = float(parameter.get("accel_factor_max", DEFAULT_ACCEL_FACTOR_MAX))
-        logger.info(f"[MonotonicitySafeAccelerator] accel_factor_max={self.accel_factor_max}")
+        logger.info(f"[MaxStepAccelerator] accel_factor_max={self.accel_factor_max}")
 
     def compute(
         self,
-        delta_model,
-        dict_delta_bkg_norm : dict,
-        model_before,
-        bkg_norm_before     : dict,
-        em_results          : list,
+        em_results : list,
         dataset,
         mask,
     ) -> AcceleratorResult:
 
-        accel_factor = self._compute_accel_factor(delta_model, model_before, mask)
+        before = em_results[0]
+        after  = em_results[1]
 
-        new_model = model_before + delta_model * accel_factor
-        new_dict_bkg_norm = {
-            key: bkg_norm_before[key] + dict_delta_bkg_norm[key] #* accel_factor
-            for key in bkg_norm_before
-        }
+        delta_model = after.model - before.model
 
-        logger.debug(f"[MonotonicitySafeAccelerator] accel_factor={accel_factor}")
+        accel_factor = self._compute_accel_factor(delta_model, before.model, mask)
+
+        if accel_factor > 1.0:
+            new_model = before.model + delta_model * accel_factor
+            new_dict_bkg_norm = after.dict_bkg_norm
+#            new_dict_bkg_norm = {
+#                key: before.dict_bkg_norm[key] + (after.dict_bkg_norm[key] - before.dict_bkg_norm[key]) * accel_factor
+#                for key in before.dict_bkg_norm
+#            }
+
+            # LH check: reuse source expectation, recompute bkg only
+            source_expectation_list = [
+                src_before + (src_after - src_before) * accel_factor
+                for src_before, src_after in zip(before.source_expectation_list, after.source_expectation_list)
+            ]
+            bkg_expectation_list = after.bkg_expectation_list
+            expectation_list     = dataset.combine_expectation_list(source_expectation_list, bkg_expectation_list)
+
+            ll_accel = np.sum(dataset.calc_log_likelihood_list(expectation_list))
+            ll_after = np.sum(dataset.calc_log_likelihood_list(after.expectation_list))
+
+            if ll_accel < ll_after:
+                logger.debug(
+                    f"[MaxStepAccelerator] accel_factor={accel_factor:.3f} did not improve LH "
+                    f"({ll_accel:.6f} < {ll_after:.6f}). Falling back to accel_factor=1."
+                )
+                accel_factor      = 1.0
+                new_model         = after.model
+                new_dict_bkg_norm = after.dict_bkg_norm
+
+        else:
+            new_model         = after.model
+            new_dict_bkg_norm = after.dict_bkg_norm
+
+        logger.debug(f"[MaxStepAccelerator] accel_factor={accel_factor}")
 
         return AcceleratorResult(
             model         = new_model,
