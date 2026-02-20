@@ -9,7 +9,7 @@ from astropy.coordinates import SkyCoord
 
 data_path = test_data.path
 
-sc_orientation = SpacecraftFile.parse_from_file(data_path / "20280301_2s.ori")
+sc_orientation = SpacecraftFile.open(data_path / "20280301_2s.fits")
 dr = str(data_path / "test_full_detector_response.h5") # path to detector response
 
 bkg_par_value = 1
