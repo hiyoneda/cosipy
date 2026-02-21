@@ -145,7 +145,7 @@ class SpacecraftHistory:
         # ellipsoid used to compute height in EarthLocation.
 
         # TODO: change to exact act
-        return Quantity(self.location.spherical.distance.km - self._r_earth,
+        return Quantity(self._gcrs.spherical.distance.km - self._r_earth,
                         u.km, copy=False)
 
     @property
@@ -849,13 +849,13 @@ class SpacecraftHistory:
 
         We can cache some source-independent parts of the computation
         to speed up repeated calls to this function.  Use the class
-        property cache_earth_occ() to control whether caching is
+        property cache_earth_occ to control whether caching is
         enabled.
 
         Parameters
         ----------
         src_vec : 3D Cartesian vector
-          source direction, assumed to be earth-centered internal frame
+          source direction, assumed to be in GCRS frame
 
         Returns
         -------
@@ -871,7 +871,7 @@ class SpacecraftHistory:
         else:
             # sine of angle between lines through satellite (1) normal
             # to earth and (2) tangent to earth
-            sin_earth_angle = self._r_earth / self.location.spherical.distance.km
+            sin_earth_angle = self._r_earth / self._gcrs.spherical.distance.km
 
             # cosine of maximum unoccluded angle for source w/r to
             # satellite's earth zenith; that is,
@@ -912,7 +912,10 @@ class SpacecraftHistory:
 
         self._cache_earth_occ = value
 
-    def get_source_visibility(self, source, earth_occ = True):
+    def get_source_visibility(self,
+                              source:Optional[Union[SkyCoord,
+                                                    np.ndarray]] = None,
+                              earth_occ:Optional[bool] = True) -> Quantity:
         """
         Get the source's visibility to the detector in all time bins.
         Visibility is determined by the spacecraft's livetime (for,
@@ -921,10 +924,12 @@ class SpacecraftHistory:
 
         Parameters
         ----------
-        source : SkyCoord or Cartesian 3-vector (ndarray)
-           Location of the source
+        source : SkyCoord or Cartesian 3-vector (ndarray), optional
+            Location of the source. If 3-vector, assumed to be in
+            GCRS. If None, the full livetime is returned.
         earth_occ : bool, optional
-           If true, visibility is limited by earth occultation
+           If True, visibility is limited by earth occultation
+           (default True)
 
         Returns
         -------
@@ -935,6 +940,9 @@ class SpacecraftHistory:
         livetime = self.livetime
 
         if earth_occ:
+            if source is None:
+                raise ValueError("source must be specified if earth occultation is requested")
+
             if isinstance(source, SkyCoord):
                 source.transform_to(self._gcrs)
                 source = source.cartesian.xyz.value
@@ -982,7 +990,8 @@ class SpacecraftHistory:
                      interp:Optional[bool] = True,
                      earth_occ:Optional[bool] = True,
                      dtype = np.float64) -> (np.ndarray, np.ndarray):
-        """Compute the set of exposed HEALPix pixels relative to a
+        """
+        Compute the set of exposed HEALPix pixels relative to a
         HealpixBase for an fixed inertial-frame source that is
         present while the spacecraft orientation changes over time.
         Compute exposure weights based on the time that the
@@ -1048,36 +1057,40 @@ class SpacecraftHistory:
         return unique_pixels, unique_weights
 
     def get_dwell_map(self, target_coord:SkyCoord,
-                      nside:int = None, scheme:str = 'ring',
+                      base:HealpixBase = None,
                       interp:Optional[bool] = True,
                       earth_occ:Optional[bool] = False,
-                      base:HealpixBase = None) -> HealpixMap:
+                      nside:Optional[int] = None,
+                      scheme:Optional[str] = 'ring') -> HealpixMap:
 
         """
-        Generates the dwell obstime map for the source.
+        Generates the dwell obstime map for a target coordinte. The map
+        properties must be specified by setting one of base or
+        nside/scheme.  If both are specified, base takes precedence.
 
         Parameters
         ----------
         target_coord:
-            Source coordinate
-        nside:
-            Healpix NSIDE
-        scheme:
-            Healpix pixel ordering scheme
+            Target coordinate
+        base: HealpixBase, optional
+            HealpixBase defining the grid. If not specified,
+            use nside and scheme instead.
         interp : bool, optional
             If true, interpolate weights onto HEALPix grid;
             else, just map to nearest bin. (Default: interpolate)
         earth_occ : bool, optional
            If True, exposure includes only times that the source
            was not occluded by earth. (Default: False)
-        base: HealpixBase, optional
-            HealpixBase defining the grid. If not specified,
-            use nside and scheme instead.
+        nside: int, optional
+            Healpix NSIDE for map
+        scheme: int, optional
+            Healpix scheme for map
 
         Returns
         -------
         mhealpy.containers.healpix_map.HealpixMap
             The dwell obstime map.
+
         """
 
         if base is None:
@@ -1098,10 +1111,10 @@ class SpacecraftHistory:
         return dwell_map
 
     def get_scatt_map(self,
-                      nside,
-                      target_coord=None,
-                      earth_occ=True,
-                      angle_nbins=None) -> SpacecraftAttitudeMap:
+                      nside:int,
+                      target_coord:Optional[SkyCoord] = None,
+                      earth_occ:Optional[bool] = True,
+                      angle_nbins:Optional[int] = None) -> SpacecraftAttitudeMap:
 
         """
         Bin the spacecraft attitude history into a list of discretized
@@ -1124,7 +1137,7 @@ class SpacecraftHistory:
         earth_occ : bool, optional
             Option to include Earth occultation in scatt map calculation.
             Default is True.
-        angle_nbins : int (optional)
+        angle_nbins : int, ptional
             Number of bins used for the rotvec's angle. If none
             specified, default is 8*nside
 
@@ -1199,7 +1212,9 @@ class SpacecraftHistory:
                                      source = source if earth_occ else None)
 
     @staticmethod
-    def _sparse_sum_duplicates(indices, weights=None, dtype=None):
+    def _sparse_sum_duplicates(indices:np.ndarray,
+                               weights:Optional[np.ndarray] = None,
+                               dtype:Optional[np.dtype] = None) -> (np.ndarray, np.ndarray):
         """
         Given an array of indices, possibly with duplicates, and an
         optional array of weights per index (defaults to all ones if
