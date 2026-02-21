@@ -1,7 +1,7 @@
 import logging
 logger = logging.getLogger(__name__)
 
-from cosipy.spacecraftfile.spacecraft_file import  SpacecraftHistory
+from pathlib import Path
 
 import numpy as np
 import astropy.units as u
@@ -12,30 +12,26 @@ import matplotlib.pyplot as plt
 from matplotlib.colors import LogNorm
 
 from cosipy.response import FullDetectorResponse
+from cosipy.spacecraftfile.spacecraft_file import SpacecraftHistory
 
 class RspArfRmfConverter:
 
-    def __init__(self, response:FullDetectorResponse, ori:SpacecraftHistory, target_coord:SkyCoord):
+    def __init__(self, response:FullDetectorResponse,
+                 ori:SpacecraftHistory,
+                 target_coord:SkyCoord):
 
         self.response = response
         self.ori = ori
 
-        self.dwell_map = self.ori.get_dwell_map(target_coord, nside = response.nside, scheme = response.scheme)
+        self.dwell_map = self.ori.get_dwell_map(target_coord,
+                                                nside = response.nside,
+                                                scheme = response.scheme)
 
     def get_psr_rsp(self):
 
-        """
-        Generates the point source response based on the response file and dwell obstime map.
-        livetime is used to find the exposure obstime for this observation.
-
-        Parameters
-        ----------
-        :response : str or pathlib.Path, optional
-            The response for the observation (the defaul is `None`, which implies that the `response` will be read from the instance).
-        dwell_map : str, optional
-            The obstime dwell map for the source, you can load saved dwell obstime map using this parameter if you've saved it before (the defaul is `None`, which implies that the `dwell_map` will be read from the instance).
-        dts : numpy.ndarray or str, optional
-            The elapsed obstime for each pointing. It must has the same size as the pointings. If you have saved this array, you can load it using this parameter (the defaul is `None`, which implies that the `livetime` will be read from the instance).
+        """Generates the point source response based on the response file
+        and dwell obstime map.  livetime is used to find the exposure
+        obstime for this observation.
 
         Returns
         -------
@@ -55,69 +51,66 @@ class RspArfRmfConverter:
             The effective area of each energy bin.
         matrix : numpy.ndarray
             The energy dispersion matrix.
-        pa_convention : str, optional
-             Polarization convention of response ('RelativeX', 'RelativeY', or 'RelativeZ')
+
         """
 
         with self.response as response:
 
             # get point source response
-            self.psr = response.get_point_source_response(self.dwell_map)
+            psr = response.get_point_source_response(self.dwell_map)
 
-            self.Ei_edges = np.array(response.axes['Ei'].edges)
-            self.Ei_lo = np.float32(self.Ei_edges[:-1])  # use float32 to match the requirement of the data type
-            self.Ei_hi = np.float32(self.Ei_edges[1:])
+            Ei_edges = response.axes['Ei'].edges.value
+            # use float32 to match the requirement of the data type
+            self.Ei_lo = np.float32(Ei_edges[:-1])
+            self.Ei_hi = np.float32(Ei_edges[1:])
 
-            self.Em_edges = np.array(response.axes['Em'].edges)
-            self.Em_lo = np.float32(self.Em_edges[:-1])
-            self.Em_hi = np.float32(self.Em_edges[1:])
+            Em_edges = response.axes['Em'].edges.value
+            self.Em_lo = np.float32(Em_edges[:-1])
+            self.Em_hi = np.float32(Em_edges[1:])
 
         # get the effective area and matrix
         logger.info("Getting the effective area ...")
-        self.areas = np.float32(np.array(self.psr.project('Ei').to_dense().contents)) / self.ori.livetime.to_value(
-            u.second).sum()
-        spectral_response = np.float32(np.array(self.psr.project(['Ei', 'Em']).to_dense().contents))
-        self.matrix = np.float32(np.zeros((self.Ei_lo.size, self.Em_lo.size)))  # initate the matrix
+        self.areas = np.float32(psr.project('Ei').to_dense().contents.value) / self.ori.livetime.to_value(u.s).sum()
+        spectral_response = np.float32(psr.project(('Ei', 'Em')).to_dense().contents.value)
+        self.matrix = np.float32(np.zeros((self.Ei_lo.size, self.Em_lo.size)))  # initialize the matrix
 
         logger.info("Getting the energy redistribution matrix ...")
-        for i in np.arange(self.Ei_lo.size):
+        for i in range(self.Ei_lo.size):
             new_raw = spectral_response[i, :] / spectral_response[i, :].sum()
             self.matrix[i, :] = new_raw
         self.matrix = self.matrix.T
 
-        return self.Ei_edges, self.Ei_lo, self.Ei_hi, self.Em_edges, self.Em_lo, self.Em_hi, self.areas, self.matrix
+        return Ei_edges, self.Ei_lo, self.Ei_hi, \
+            Em_edges, self.Em_lo, self.Em_hi, \
+            self.areas, self.matrix
 
-    def get_arf(self, out_name=None):
+    def get_arf(self, out_name):
 
         """
-        Converts the point source response to an arf file that can be read by XSPEC.
+        Converts the point source response to an arf file that can be
+        read by XSPEC.
 
         Parameters
         ----------
-        out_name: str, optional
-            The name of the arf file to save. (the default is `None`, which implies that the saving name will be the target name of the instance).
+        out_name: str
+            The name of the arf file to save.
+
         """
 
-        if out_name is None:
-            self.out_name = self.target_name
-        else:
-            self.out_name = out_name
+        self.out_path = Path(out_name)
 
-        # blow write the arf file
         copyright_string = "  FITS (Flexible Image Transport System) format is defined in 'Astronomy and Astrophysics', volume 376, page 359; bibcode: 2001A&A...376..359H "
 
         ## Create PrimaryHDU
         primaryhdu = fits.PrimaryHDU()  # create an empty primary HDU
-        primaryhdu.header[
-            "BITPIX"] = -32  # since it's an empty HDU, I can just change the data type by resetting the BIPTIX value
+        primaryhdu.header["BITPIX"] = -32  # since it's an empty HDU, I can just change the data type by resetting the BIPTIX value
         primaryhdu.header["COMMENT"] = copyright_string  # add comments
         primaryhdu.header  # print headers and their values
 
         col1_energ_lo = fits.Column(name="ENERG_LO", format="E", unit="keV", array=self.Em_lo)
         col2_energ_hi = fits.Column(name="ENERG_HI", format="E", unit="keV", array=self.Em_hi)
         col3_specresp = fits.Column(name="SPECRESP", format="E", unit="cm**2", array=self.areas)
-        cols = fits.ColDefs([col1_energ_lo, col2_energ_hi,
-                             col3_specresp])  # create a ColDefs (column-definitions) object for all columns
+        cols = fits.ColDefs([col1_energ_lo, col2_energ_hi, col3_specresp])  # create a ColDefs (column-definitions) object for all columns
         specresp_bintablehdu = fits.BinTableHDU.from_columns(cols)  # create a binary table HDU object
 
         specresp_bintablehdu.header.comments["TTYPE1"] = "label for field   1"
@@ -139,33 +132,26 @@ class RspArfRmfConverter:
         specresp_bintablehdu.header["HDUVERS"] = ("1.1.0", "version of format")
 
         new_arfhdus = fits.HDUList([primaryhdu, specresp_bintablehdu])
-        new_arfhdus.writeto(f'{self.out_name}.arf', overwrite=True)
+        new_arfhdus.writeto(self.out_path.with_suffix('.arf'), overwrite=True)
 
-        return
-
-    def get_rmf(self, out_name=None):
+    def get_rmf(self, out_name):
 
         """
         Converts the point source response to an rmf file that can be read by XSPEC.
 
         Parameters
         ----------
-        out_name: str, optional
-            The name of the arf file to save. (the default is None, which implies that the saving name will be the target name of the instance).
+        out_name: str
+            The name of the arf file to save.
         """
 
-        if out_name is None:
-            self.out_name = self.target_name
-        else:
-            self.out_name = out_name
+        self.out_path = Path(out_name)
 
-        # blow write the arf file
         copyright_string = "  FITS (Flexible Image Transport System) format is defined in 'Astronomy and Astrophysics', volume 376, page 359; bibcode: 2001A&A...376..359H "
 
         ## Create PrimaryHDU
         primaryhdu = fits.PrimaryHDU()  # create an empty primary HDU
-        primaryhdu.header[
-            "BITPIX"] = -32  # since it's an empty HDU, I can just change the data type by resetting the BIPTIX value
+        primaryhdu.header["BITPIX"] = -32  # since it's an empty HDU, I can just change the data type by resetting the BIPTIX value
         primaryhdu.header["COMMENT"] = copyright_string  # add comments
         primaryhdu.header  # print headers and their values
 
@@ -177,7 +163,7 @@ class RspArfRmfConverter:
         f_chan = []
         n_chan = []
         matrix = []
-        for i in np.arange(len(self.Ei_lo)):
+        for i in range(len(self.Ei_lo)):
             energ_lo_temp = np.float32(self.Em_lo[i])
             energ_hi_temp = np.float32(self.Ei_hi[i])
 
@@ -193,14 +179,14 @@ class RspArfRmfConverter:
                     n_chan_temp += [len(subsets[m])]
                 for m in nz_matrix_idx:
                     matrix_temp += [self.matrix[:, i][m]]
-                f_chan_temp = np.int16(np.array(f_chan_temp))
-                n_chan_temp = np.int16(np.array(n_chan_temp))
-                matrix_temp = np.float32(np.array(matrix_temp))
+                f_chan_temp = np.array(f_chan_temp, dtype=np.int16)
+                n_chan_temp = np.array(n_chan_temp, dtype=np.int16)
+                matrix_temp = np.array(matrix_temp, dtype=np.float32)
             else:
                 n_grp_temp = np.int16(0)
-                f_chan_temp = np.int16(np.array([0]))
-                n_chan_temp = np.int16(np.array([0]))
-                matrix_temp = np.float32(np.array([0]))
+                f_chan_temp = np.zeros(1, dtype=np.int16)
+                n_chan_temp = np.zeros(1, dtype=np.int16)
+                matrix_temp = np.zeros(1, dtype=np.float32)
 
             energ_lo.append(energ_lo_temp)
             energ_hi.append(energ_hi_temp)
@@ -247,7 +233,7 @@ class RspArfRmfConverter:
         matrix_bintablehdu.header["TLMIN4"] = (0, "minimum value legally allowed in column 4")
 
         ## Create binary table HDU for EBOUNDS
-        channels = np.int16(np.arange(len(self.Em_lo)))
+        channels = np.arange(len(self.Em_lo), dtype=np.int16)
         e_min = np.float32(self.Em_lo)
         e_max = np.float32(self.Em_hi)
 
@@ -278,36 +264,50 @@ class RspArfRmfConverter:
         ebounds_bintablehdu.header["HDUVERS"] = ("1.2.0", "version of format")
 
         new_rmfhdus = fits.HDUList([primaryhdu, matrix_bintablehdu, ebounds_bintablehdu])
-        new_rmfhdus.writeto(f'{self.out_name}.rmf', overwrite=True)
+        new_rmfhdus.writeto(self.out_path.with_suffix('.rmf'), overwrite=True)
 
-        return
+    def get_pha(self, src_counts, errors, rmf_file=None, arf_file=None, bkg_file=None,
+                exposure_time=None, dts=None, telescope="COSI", instrument="COSI"):
 
-    def get_pha(self, src_counts, errors, rmf_file=None, arf_file=None, bkg_file=None, exposure_time=None, dts=None,
-                telescope="COSI", instrument="COSI"):
-
-        """
-        Generate the pha file that can be read by XSPEC. This file stores the counts info of the source.
+        """Generate the pha file that can be read by XSPEC. This file stores
+        the counts info of the source.
 
         Parameters
         ----------
         src_counts : numpy.ndarray
-            The counts in each energy band. If you have src_counts with unit counts/kev/s, you must convert it to counts by multiplying it with exposure obstime and the energy band width.
+            The counts in each energy band. If you have src_counts
+            with unit counts/kev/s, you must convert it to counts by
+            multiplying it with exposure obstime and the energy band
+            width.
         errors : numpy.ndarray
-            The error for counts. It has the same unit requirement as src_counts.
+            The error for counts. It has the same unit requirement as
+            src_counts.
         rmf_file : str, optional
-            The rmf file name to be written into the pha file (the default is `None`, which implies that it uses the rmf file generate by function `get_rmf`)
+            The rmf file name to be written into the pha file (the
+            default is `None`, which implies that it uses the rmf file
+            generated by function `get_rmf`)
         arf_file : str, optional
-            The arf file name to be written into the pha file (the default is `None`, which implies that it uses the arf file generate by function `get_arf`)
+            The arf file name to be written into the pha file (the
+            default is `None`, which implies that it uses the arf file
+            generated by function `get_arf`)
         bkg_file : str, optional
-            The background file name (the default is `None`, which implied the `src_counts` is source counts only).
+            The background file name (the default is `None`, which
+            implied the `src_counts` is source counts only).
         exposure_time : float, optional
-            The exposure obstime for this source observation (the default is `None`, which implied that the exposure obstime will be calculated by `livetime`).
+           The exposure obstime for this source observation (the
+           default is `None`, which implied that the exposure obstime
+           will be calculated by `livetime`).
         dts : numpy.ndarray, optional
-            It's used to calculate the exposure obstime. It has the same effect as `exposure_time`. If both `exposure_time` and `livetime` are given, `livetime` will write over the exposure_time (the default is `None`, which implies that the `livetime` will be read from the instance).
+            Used to calculate the exposure obstime. It has the same
+            effect as `exposure_time`. If both `exposure_time` and
+            `livetime` are given, `livetime` will write over the
+            exposure_time (the default is `None`, which implies that
+            the `livetime` will be read from the instance).
         telescope : str, optional
             The name of the telecope (the default is "COSI").
         instrument : str, optional
             The instrument name (the default is "COSI").
+
         """
 
         self.src_counts = src_counts
@@ -323,12 +323,12 @@ class RspArfRmfConverter:
         if rmf_file is None:
             self.rmf_file = rmf_file
         else:
-            self.rmf_file = f'{self.out_name}.rmf'
+            self.rmf_file = f'{self.out_path.name}.rmf'
 
         if arf_file is None:
             self.arf_file = arf_file
         else:
-            self.arf_file = f'{self.out_name}.arf'
+            self.arf_file = f'{self.out_path.name}.arf'
 
         if exposure_time is not None:
             self.exposure_time = exposure_time
@@ -394,41 +394,41 @@ class RspArfRmfConverter:
         bintablehdu.header["DETCHANS"] = (self.channel_number, "total number of detector channels")
 
         new_phahdus = fits.HDUList([primaryhdu, bintablehdu])
-        new_phahdus.writeto(f'{self.out_name}.pha', overwrite=True)
+        new_phahdus.writeto(self.out_path.with_suffix('.pha'), overwrite=True)
 
         return
 
     def plot_arf(self, file_name=None, save_name=None, dpi=300):
 
-        """
-        Read the arf fits file, plot and save it.
+        """Read the arf fits file, plot and save it.
 
         Parameters
         ----------
         file_name: str, optional
-            The directory if the arf fits file (the default is `None`, which implies the file name will be read from the instance).
+            The directory if the arf fits file (the default is `None`,
+            which implies the file name will be read from the
+            instance).
         save_name: str, optional
-            The name of the saved image of effective area (the default is `None`, which implies the file name will be read from the instance).
+            The name of the saved image of effective area (the default
+            is `None`, which implies the file name will be read from
+            the instance).
         dpi: int, optional
             The dpi of the saved image (the default is 300).
+
         """
 
-        if file_name != None:
-            self.file_name = file_name
+        if file_name is None:
+            file_name = self.out_path.with_suffix('.arf')
+
+        if save_name is None:
+            save_path = self.out_path
         else:
-            self.file_name = f'{self.out_name}.arf'
+            save_path = Path(save_name)
 
-        if save_name != None:
-            self.save_name = save_name
-        else:
-            self.save_name = self.out_name
-
-        self.dpi = dpi
-
-        self.arf = fits.open(self.file_name)  # read file
+        arf = fits.open(file_name)  # read file
 
         # SPECRESP HDU
-        self.specresp_hdu = self.arf["SPECRESP"]
+        self.specresp_hdu = arf["SPECRESP"]
 
         self.areas = np.array(self.specresp_hdu.data["SPECRESP"])
         self.Em_lo = np.array(self.specresp_hdu.data["ENERG_LO"])
@@ -444,50 +444,48 @@ class RspArfRmfConverter:
         ax.set_xlabel("Energy[$keV$]")
         ax.set_ylabel(r"Effective area [$cm^2$]")
         ax.set_xscale("log")
-        fig.savefig(f"Effective_area_for_{self.save_name}.png", bbox_inches="tight", pad_inches=0.1, dpi=self.dpi)
-        # fig.show()
+        fig.savefig(save_path.parent / f"Effective_area_for_{save_path.name}.png", bbox_inches="tight", pad_inches=0.1, dpi=dpi)
 
-        return
+        plt.show()
+        plt.close(fig)
 
     def plot_rmf(self, file_name=None, save_name=None, dpi=300):
 
-        """
-        Read the rmf fits file, plot and save it.
+        """Read the rmf fits file, plot and save it.
 
         Parameters
         ----------
         file_name: str, optional
-            The directory if the arf fits file (the default is `None`, which implies the file name will be read from the instance).
+            The directory if the arf fits file (the default is `None`,
+            which implies the file name will be read from the
+            instance).
         save_name: str, optional
-            The name of the saved image of effective area (the default is `None`, which implies the file name will be read from the instance).
+            The name of the saved image of effective area (the default
+            is `None`, which implies the file name will be read from
+            the instance).
         dpi: int, optional
             The dpi of the saved image (the default is 300).
+
         """
 
-        if file_name != None:
-            self.file_name = file_name
-        else:
-            self.file_name = f'{self.out_name}.rmf'
+        if file_name is None:
+            file_name = self.out_path.with_suffix('.rmf')
 
-        if save_name != None:
-            self.save_name = save_name
+        if save_name is None:
+            save_path = self.out_path
         else:
-            self.save_name = self.out_name
-
-        self.dpi = dpi
+            save_path = Path(save_name)
 
         # Read rmf file
-        self.rmf = fits.open(self.file_name)  # read file
+        rmf = fits.open(file_name)  # read file
 
         # Read the ENOUNDS information
-        ebounds_ext = self.rmf["EBOUNDS"]
-        channel_low = ebounds_ext.data[
-            "E_MIN"]  # energy bin lower edges for channels (channels are just incident energy bins)
-        channel_high = ebounds_ext.data[
-            "E_MAX"]  # energy bin higher edges for channels (channels are just incident energy bins)
+        ebounds_ext = rmf["EBOUNDS"]
+        channel_low = ebounds_ext.data["E_MIN"]  # energy bin lower edges for channels (channels are just incident energy bins)
+        channel_high = ebounds_ext.data["E_MAX"]  # energy bin higher edges for channels (channels are just incident energy bins)
 
         # Read the MATRIX extension
-        matrix_ext = self.rmf['MATRIX']
+        matrix_ext = rmf['MATRIX']
         # logger.info(repr(matrix_hdu.header[:60]))
         energy_low = matrix_ext.data["ENERG_LO"]  # energy bin lower edges for measured energies
         energy_high = matrix_ext.data["ENERG_HI"]  # energy bin higher edges for measured energies
@@ -495,7 +493,7 @@ class RspArfRmfConverter:
 
         # Create a 2-d numpy array and store probability data into the redistribution matrix
         rmf_matrix = np.zeros((len(energy_low), len(channel_low)))  # create an empty matrix
-        for i in np.arange(data.shape[0]):  # i is the measured energy index, examine the matrix_ext.data rows by rows
+        for i in range(data.shape[0]):  # i is the measured energy index, examine the matrix_ext.data rows by rows
             if data[i][5].sum() == 0:  # if the sum of probabilities is zero, then skip since there is no data at all
                 pass
             else:
@@ -506,15 +504,14 @@ class RspArfRmfConverter:
                 indices = []
                 for k in f_chan:
                     channels = 0
-                    channels = np.arange(k, k + n_chann[np.argwhere(f_chan == k)]).tolist()  # generate the cha
+                    channels = np.arange(k, k + n_chann[np.argwhere(f_chan == k)][0][0]).tolist()  # generate the cha
                     indices += channels  # fappend the channels togeter
                 indices = np.array(indices)
                 for m in indices:
-                    rmf_matrix[i][m] = matrix[
-                        np.argwhere(indices == m)[0][0]]  # write the probabilities into the empty matrix
+                    rmf_matrix[i][m] = matrix[np.argwhere(indices == m)[0][0]]  # write the probabilities into the empty matrix
 
         # plot the redistribution matrix
-        xcenter = np.divide(energy_low + energy_high, 2)
+        xcenter = (energy_low + energy_high)/2
         x_center_coords = np.repeat(xcenter, 10)
         y_center_coords = np.tile(xcenter, 10)
         energy_all_edges = np.append(energy_low, energy_high[-1])
@@ -523,8 +520,8 @@ class RspArfRmfConverter:
         # logger.info(bin_edges)
 
         self.probability = []
-        for i in np.arange(10):
-            for j in np.arange(10):
+        for i in range(10):
+            for j in range(10):
                 self.probability.append(rmf_matrix[i][j])
         # logger.info(type(probability))
 
@@ -537,7 +534,4 @@ class RspArfRmfConverter:
         # plt.xlim([70,10000])
         # plt.ylim([70,10000])
         plt.colorbar(norm=LogNorm())
-        plt.savefig(f"Redistribution_matrix_for_{self.save_name}.png", bbox_inches="tight", pad_inches=0.1, dpi=300)
-        # plt.show()
-
-        return
+        plt.savefig(save_path.parent / f"Redistribution_matrix_for_{save_path.name}.png", bbox_inches="tight", pad_inches=0.1, dpi=300)

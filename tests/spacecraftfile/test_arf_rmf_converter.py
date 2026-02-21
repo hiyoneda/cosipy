@@ -2,8 +2,11 @@ import os
 from pathlib import Path
 
 import numpy as np
+
+import astropy.units as u
 from astropy.coordinates import SkyCoord
 from astropy.io import fits
+
 from cosipy import test_data, SpacecraftHistory
 from cosipy.response import FullDetectorResponse
 from cosipy.response import RspArfRmfConverter
@@ -17,7 +20,7 @@ def test_get_psr_rsp():
     response = FullDetectorResponse.open(response_path)
     ori_path = test_data.path / "20280301_first_10sec.ori"
     ori = SpacecraftHistory.open(ori_path)
-    target_coord = SkyCoord(l=184.5551, b=-05.7877, unit=(u.deg, u.deg), frame="galactic")
+    target_coord = SkyCoord(l=184.5551, b=-05.7877, unit=u.deg, frame="galactic")
     converter = RspArfRmfConverter(response, ori, target_coord)
 
     Ei_edges, Ei_lo, Ei_hi, Em_edges, Em_lo, Em_hi, areas, matrix = converter.get_psr_rsp()
@@ -71,20 +74,20 @@ def test_get_psr_rsp():
                                   7.36859079e-07, 3.57253887e-02]]))
 
 
-def test_get_arf():
+def test_get_arf(tmp_path):
 
     response_path = test_data.path / "test_full_detector_response.h5"
     response = FullDetectorResponse.open(response_path)
     ori_path = test_data.path / "20280301_first_10sec.ori"
     ori = SpacecraftHistory.open(ori_path)
-    target_coord = SkyCoord(l=184.5551, b=-05.7877, unit=(u.deg, u.deg), frame="galactic")
+    target_coord = SkyCoord(l=184.5551, b=-05.7877, unit=u.deg, frame="galactic")
     converter = RspArfRmfConverter(response, ori, target_coord)
 
     _ = converter.get_psr_rsp()
 
-    converter.get_arf(out_name="test")
+    converter.get_arf(out_name = tmp_path / "test")
 
-    fits_file = fits.open("test.arf")
+    fits_file = fits.open(tmp_path / "test.arf")
 
     assert np.allclose(fits_file[1].data.field("ENERG_LO"),energy_edges[:-1])
 
@@ -93,22 +96,20 @@ def test_get_arf():
     assert np.allclose(fits_file[1].data.field("SPECRESP"),np.array([ 9.07843857, 35.97189941, 56.56903076, 58.62650146, 53.77538452,
                                   46.66890564, 37.5471283, 25.56105347, 18.39017029, 10.23398438]))
 
-    os.remove("test.arf")
 
-
-def test_get_rmf():
+def test_get_rmf(tmp_path):
     response_path = test_data.path / "test_full_detector_response.h5"
     response = FullDetectorResponse.open(response_path)
     ori_path = test_data.path / "20280301_first_10sec.ori"
     ori = SpacecraftHistory.open(ori_path)
-    target_coord = SkyCoord(l=184.5551, b=-05.7877, unit=(u.deg, u.deg), frame="galactic")
+    target_coord = SkyCoord(l=184.5551, b=-05.7877, unit=u.deg, frame="galactic")
     converter = RspArfRmfConverter(response, ori, target_coord)
 
     _ = converter.get_psr_rsp()
 
-    converter.get_rmf(out_name="test")
+    converter.get_rmf(out_name= tmp_path / "test")
 
-    fits_file = fits.open("test.rmf")
+    fits_file = fits.open(tmp_path / "test.rmf")
 
     assert np.allclose(fits_file[1].data.field("ENERG_LO"),energy_edges[:-1])
 
@@ -148,20 +149,18 @@ def test_get_rmf():
                                  0.09142732620239258, 0.22900591790676117, 0.30159470438957214, 0.035725388675928116])
                        )
 
-    os.remove("test.rmf")
 
-
-def test_get_pha():
+def test_get_pha(tmp_path):
     response_path = test_data.path / "test_full_detector_response.h5"
     response = FullDetectorResponse.open(response_path)
     ori_path = test_data.path / "20280301_first_10sec.ori"
     ori = SpacecraftHistory.open(ori_path)
-    target_coord = SkyCoord(l=184.5551, b=-05.7877, unit=(u.deg, u.deg), frame="galactic")
+    target_coord = SkyCoord(l=184.5551, b=-05.7877, unit=u.deg, frame="galactic")
     converter = RspArfRmfConverter(response, ori, target_coord)
 
     _ = converter.get_psr_rsp()
-    converter.get_arf(out_name="test")
-    converter.get_rmf(out_name="test")
+    converter.get_arf(out_name=tmp_path / "test")
+    converter.get_rmf(out_name=tmp_path / "test")
 
     counts = np.array([0.01094232, 0.04728866, 0.06744612, 0.01393708, 0.05420688,
                        0.03141498, 0.01818584, 0.00717219, 0.00189568, 0.00010503]) * 1000
@@ -170,11 +169,7 @@ def test_get_pha():
 
     converter.get_pha(src_counts=counts, errors=errors, exposure_time=10)
 
-    os.remove("test.arf")
-    os.remove("test.rmf")
-
-    fits_file = fits.open("test.pha")
-    os.remove("test.pha")
+    fits_file = fits.open(tmp_path / "test.pha")
 
     assert np.allclose(fits_file[1].data.field("CHANNEL"),
                        np.array([0, 1, 2, 3, 4, 5, 6, 7, 8, 9]))
@@ -186,39 +181,33 @@ def test_get_pha():
                        np.array([3, 6, 8, 3, 7, 5, 4, 2, 1, 0]))
 
 
-def test_plot_arf():
+def test_plot_arf(tmp_path):
     response_path = test_data.path / "test_full_detector_response.h5"
     response = FullDetectorResponse.open(response_path)
     ori_path = test_data.path / "20280301_first_10sec.ori"
     ori = SpacecraftHistory.open(ori_path)
-    target_coord = SkyCoord(l=184.5551, b=-05.7877, unit=(u.deg, u.deg), frame="galactic")
+    target_coord = SkyCoord(l=184.5551, b=-05.7877, unit=u.deg, frame="galactic")
     converter = RspArfRmfConverter(response, ori, target_coord)
 
     _ = converter.get_psr_rsp()
-    converter.get_arf(out_name="test")
+    converter.get_arf(out_name=tmp_path / "test")
 
     converter.plot_arf()
 
-    assert Path("Effective_area_for_test.png").exists()
-
-    os.remove("test.arf")
-    os.remove("Effective_area_for_test.png")
+    assert Path(tmp_path / "Effective_area_for_test.png").exists()
 
 
-def test_plot_rmf():
+def test_plot_rmf(tmp_path):
     response_path = test_data.path / "test_full_detector_response.h5"
     response = FullDetectorResponse.open(response_path)
     ori_path = test_data.path / "20280301_first_10sec.ori"
     ori = SpacecraftHistory.open(ori_path)
-    target_coord = SkyCoord(l=184.5551, b=-05.7877, unit=(u.deg, u.deg), frame="galactic")
+    target_coord = SkyCoord(l=184.5551, b=-05.7877, unit=u.deg, frame="galactic")
     converter = RspArfRmfConverter(response, ori, target_coord)
 
     _ = converter.get_psr_rsp()
-    converter.get_rmf(out_name="test")
+    converter.get_rmf(out_name=tmp_path / "test")
 
     converter.plot_rmf()
 
-    assert Path("Redistribution_matrix_for_test.png").exists()
-
-    os.remove("test.rmf")
-    os.remove("Redistribution_matrix_for_test.png")
+    assert Path(tmp_path / "Redistribution_matrix_for_test.png").exists()
