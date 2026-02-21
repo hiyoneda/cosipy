@@ -914,8 +914,7 @@ class SpacecraftHistory:
 
     def get_source_visibility(self,
                               source:Optional[Union[SkyCoord,
-                                                    np.ndarray]] = None,
-                              earth_occ:Optional[bool] = True) -> Quantity:
+                                                    np.ndarray]] = None) -> Quantity:
         """
         Get the source's visibility to the detector in all time bins.
         Visibility is determined by the spacecraft's livetime (for,
@@ -926,10 +925,9 @@ class SpacecraftHistory:
         ----------
         source : SkyCoord or Cartesian 3-vector (ndarray), optional
             Location of the source. If 3-vector, assumed to be in
-            GCRS. If None, the full livetime is returned.
-        earth_occ : bool, optional
-           If True, visibility is limited by earth occultation
-           (default True)
+            GCRS. If not None, returned visibility will account
+            for occultation of the source. Otherwise, the full
+        livetime is returned.
 
         Returns
         -------
@@ -939,10 +937,7 @@ class SpacecraftHistory:
 
         livetime = self.livetime
 
-        if earth_occ:
-            if source is None:
-                raise ValueError("source must be specified if earth occultation is requested")
-
+        if source is not None:
             if isinstance(source, SkyCoord):
                 source.transform_to(self._gcrs)
                 source = source.cartesian.xyz.value
@@ -1027,7 +1022,7 @@ class SpacecraftHistory:
             source = source.transform_to(self._attitude.frame)
             source = source.cartesian.xyz.value
 
-        duration = self.get_source_visibility(source, earth_occ)
+        duration = self.get_source_visibility(source if earth_occ else None)
 
         # Get source path
         phi, theta = self._get_target_in_sc_frame(source)
@@ -1151,7 +1146,7 @@ class SpacecraftHistory:
         source = target_coord
 
         # compute time that the source is visible per time bin
-        duration = self.get_source_visibility(source, earth_occ)
+        duration = self.get_source_visibility(source if earth_occ else None)
 
         # Convert attitudes from points to time bins.  We use the
         # attitude at the start of the bin as the representative value
