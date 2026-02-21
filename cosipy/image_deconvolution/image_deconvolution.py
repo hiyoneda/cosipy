@@ -101,7 +101,7 @@ class ImageDeconvolution:
 
         Examples
         --------
-        >>> image_deconvolution.override_parameter("deconvolution:parameter_RL:iteration = 30")
+        >>> image_deconvolution.override_parameter("deconvolution:parameter:iteration_max = 30")
         """
 
         self._parameter.override(args)

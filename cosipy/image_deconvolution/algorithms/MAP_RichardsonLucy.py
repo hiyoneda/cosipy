@@ -212,8 +212,6 @@ class MAP_RichardsonLucy(RichardsonLucy):
                 self.dict_bkg_norm[key] += self.dict_delta_bkg_norm[key]
             self._ensure_bkg_norm_range()
 
-        #TODO: add acceleration SQUAREM
-
         # update expectation_list
         self.Estep()
         logger.debug("The expected count histograms were updated with the new model map.")
