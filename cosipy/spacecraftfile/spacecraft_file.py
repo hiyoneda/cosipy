@@ -13,7 +13,8 @@ from astropy.coordinates import (
     UnitSphericalRepresentation,
     Angle,
     EarthLocation,
-    GCRS
+    GCRS,
+    ITRS
 )
 from astropy.units import Quantity
 from astropy.table import QTable
@@ -202,12 +203,23 @@ class SpacecraftHistory:
         zp = np.column_stack((Angle(zc.l), Angle(zc.b)))
         t['ZPointings'] = zp
 
-        ec = SkyCoord(ra=self._gcrs.ra, dec=self._gcrs.dec,
-                      unit=u.deg, frame="gcrs").transform_to("galactic")
-        ez = np.column_stack((Angle(ec.l), Angle(ec.b)))
-        t['EarthZenith'] = ez
+        # recover earth zenith in galactic coords
+        earth_zenith = SkyCoord(ra=self._gcrs.ra, dec=self._gcrs.dec,
+                                frame="gcrs")
+        ez_gal = earth_zenith.transform_to("galactic")
+        ez_gal = np.column_stack((Angle(ez_gal.l), Angle(ez_gal.b)))
 
-        t['Altitude'] = self.altitude
+        # recover altitude
+        # FIXME: the earth location obtained below does not accurately
+        # reproduce the original earth zenith pointings and altitude
+        itrs = self._gcrs.transform_to(ITRS(obstime=self._gcrs.obstime))
+        el = EarthLocation.from_geocentric(x = itrs.x,
+                                           y = itrs.y,
+                                           z = itrs.z, unit=u.km)
+        altitude = el.height
+
+        t['EarthZenith'] = ez_gal
+        t['Altitude'] = altitude
 
         # add dummy to make sure livetime array length matches
         # other array lengths for writing
@@ -483,6 +495,7 @@ class SpacecraftHistory:
                                                 height=alt_km)
         gcrs2 = GCRS(ra=gcrs.ra, dec=gcrs.dec,
                      distance=earth_loc.itrs.cartesian.norm(), copy=False)
+
         return gcrs2
 
     @staticmethod
