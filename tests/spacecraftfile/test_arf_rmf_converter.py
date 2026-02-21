@@ -1,4 +1,3 @@
-import os
 from pathlib import Path
 
 import numpy as np
@@ -10,8 +9,6 @@ from astropy.io import fits
 from cosipy import test_data, SpacecraftHistory
 from cosipy.response import FullDetectorResponse
 from cosipy.response import RspArfRmfConverter
-
-from astropy import units as u
 
 energy_edges = 10**np.linspace(2, 4, 10 + 1) # ten bins from 100 to 10000 KeV
 
