@@ -8,6 +8,8 @@ from astropy.time import Time
 from cosipy import test_data
 from cosipy import SpacecraftHistory
 
+from pytest import raises
+
 def test_get_time():
 
     ori_path = test_data.path / "20280301_first_10sec.ori"
@@ -295,26 +297,21 @@ def test_ori_to_fits(tmp_path):
     assert np.allclose(ori.obstime.unix,
                        ori2.obstime.unix)
 
-    assert np.allclose(ori.altitude,
-                       ori2.altitude)
-
     assert np.allclose(ori.livetime,
                        ori2.livetime)
 
-    assert np.allclose(ori.x_pointings.l.rad,
-                       ori2.x_pointings.l.rad)
-    assert np.allclose(ori.x_pointings.b.rad,
-                       ori2.x_pointings.b.rad)
+    assert np.allclose(ori.attitude.as_quat(),
+                       ori2.attitude.as_quat())
 
-    assert np.allclose(ori.z_pointings.l.rad,
-                       ori2.z_pointings.l.rad)
-    assert np.allclose(ori.z_pointings.b.rad,
-                       ori2.z_pointings.b.rad)
+    ez  = ori.earth_zenith.transform_to("galactic")
+    ez2 = ori2.earth_zenith.transform_to("galactic")
+    assert np.allclose(ez.l.rad,
+                       ez2.l.rad)
+    assert np.allclose(ez.b.rad,
+                       ez2.b.rad)
 
-    assert np.allclose(ori.earth_zenith.l.rad,
-                       ori2.earth_zenith.l.rad)
-    assert np.allclose(ori.earth_zenith.b.rad,
-                       ori2.earth_zenith.b.rad)
+    assert np.allclose(ori.altitude,
+                       ori2.altitude)
 
     # test overwriting behavior
     with raises(RuntimeError):

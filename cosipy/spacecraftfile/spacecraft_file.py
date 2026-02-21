@@ -248,7 +248,9 @@ class SpacecraftHistory:
         if filename.exists() and not overwrite:
             raise RuntimeError(f"Not overwriting existing file '{filename}'")
         else:
-            t.write(filename, format='fits', overwrite=True)
+            # must convert filanme Path to string, or astropy FITS I/O
+            # does not honor overwrite flag!
+            t.write(str(filename), format='fits', overwrite=True)
 
             # reopen the FITS file to add the VERSION card
             # to the PRIMARY header in hdu 0 as well. HEASARC
@@ -347,7 +349,9 @@ class SpacecraftHistory:
         zpointings = SkyCoord(l = zp[:,0], b = zp[:,1],
                               frame = "galactic")
 
-        attitude = Attitude.from_axes(x = xpointings, z = zpointings)
+
+        attitude = Attitude.from_axes(x = xpointings, z = zpointings,
+                                      frame="galactic")
 
         ez = t['EarthZenith']
         earth_lon = ez[:,0]
