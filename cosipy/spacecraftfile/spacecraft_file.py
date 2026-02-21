@@ -140,6 +140,10 @@ class SpacecraftHistory:
         Altitude with respect to Earth's surface
         """
 
+        # FIXME: this is not accurate enough to recover the values in
+        # the input file -- for one thing, it does not account for the
+        # ellipsoid used to compute height in EarthLocation.
+
         # TODO: change to exact act
         return Quantity(self.location.spherical.distance.km - self._r_earth,
                         u.km, copy=False)
@@ -149,6 +153,10 @@ class SpacecraftHistory:
         """
         Galactic pointing of the Earth's zenith at the location of the SC
         """
+
+        # FIXME: why return ICRS rather than galactic?  The file version
+        # is stored in galactic.
+
         gcrs_sph = self._gcrs.represent_as(SphericalRepresentation)
         return SkyCoord(ra=gcrs_sph.lon, dec=gcrs_sph.lat,
                         frame='icrs', copy=False)
@@ -205,7 +213,7 @@ class SpacecraftHistory:
 
         # recover earth zenith in galactic coords
         earth_zenith = SkyCoord(ra=self._gcrs.ra, dec=self._gcrs.dec,
-                                frame="gcrs")
+                                frame="gcrs", copy=False)
         ez_gal = earth_zenith.transform_to("galactic")
         ez_gal = np.column_stack((Angle(ez_gal.l), Angle(ez_gal.b)))
 
