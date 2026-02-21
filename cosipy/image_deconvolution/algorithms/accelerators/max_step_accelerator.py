@@ -29,6 +29,7 @@ class MaxStepAccelerator(AcceleratorBase):
     """
 
     n_em_steps_required = 1
+    logged_result_fields = [("accel_factor", "D")]
 
     def __init__(self, parameter):
         super().__init__(parameter)

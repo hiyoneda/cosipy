@@ -207,10 +207,11 @@ class RichardsonLucyAdvanced(RichardsonLucy):
 
         if self._accel_result is not None and self._accel_result.extras is not None:
             this_result.update(self._accel_result.extras)
-
-        for key in ["accel_factor"]:
-            if key in this_result:
-                logger.info(f"  {key}: {this_result[key]}")
+        
+        if self.acceleration_enabled:
+            for key, _ in self.accelerator.logged_result_fields:
+                if key in this_result:
+                    logger.info(f"  {key}: {this_result[key]}")
 
         # register this_result in self.results
         self.results.append(this_result)
@@ -257,8 +258,10 @@ class RichardsonLucyAdvanced(RichardsonLucy):
         logger.info(f"Saving results in {self.save_results_directory}")
 
         values_key_name_format = []
-        if "accel_factor" in self.results[0]:
-            values_key_name_format.append(("accel_factor", "ACCEL_FACTOR", "D"))
+        if self.acceleration_enabled:
+            for key, fits_fmt in self.accelerator.logged_result_fields:
+                if key in self.results[0]:
+                    values_key_name_format.append((key, key.upper(), fits_fmt))
 
         self._save_standard_results(
             counter_name           = "iteration",
