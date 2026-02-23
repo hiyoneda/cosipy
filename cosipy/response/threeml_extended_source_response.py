@@ -79,7 +79,8 @@ class BinnedThreeMLExtendedSourceResponse(BinnedThreeMLSourceResponseInterface):
         # for a given direction is expensive
         #self._last_convolved_source_skycoord = None
         self._esr = None
-        
+	
+    @property    
     def axes(self) -> histpy.Axes:
         return self._data.axes
 
@@ -110,7 +111,11 @@ class BinnedThreeMLExtendedSourceResponse(BinnedThreeMLSourceResponseInterface):
         if not isinstance(source, ExtendedSource):
             raise TypeError("I only know how to handle extended sources!")
 
-        if (to_linear_polarization(source.spectrum.main.polarization) is not None and
+
+        polarization = to_linear_polarization(source.spectrum.main.polarization)
+
+
+        if (polarization.degree.value != 0 and
                 self._polarization_axis is None):
             raise RuntimeError("This response can't handle a polarized source.")
 
