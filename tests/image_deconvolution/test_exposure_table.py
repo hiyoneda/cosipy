@@ -19,7 +19,7 @@ def test_scatt_exposure_table(tmp_path):
 
     assert SpacecraftAttitudeExposureTable.analyze_orientation(ori, nside=nside, start=ori.obstime[0], stop=None, min_livetime=0, min_num_pointings=1) == None
 
-    exposure_table = SpacecraftAttitudeExposureTable.from_orientation(ori, nside=nside, 
+    exposure_table = SpacecraftAttitudeExposureTable.from_orientation(ori, nside=nside,
                                                                       start=ori.obstime[0], stop=ori.obstime[-1],
                                                                       min_livetime=0, min_num_pointings=1)
 

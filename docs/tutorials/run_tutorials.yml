@@ -132,12 +132,12 @@ tutorials:
         - spectral_fits/extended_source_fit/Gal_511.yaml
         - spectral_fits/extended_source_fit/OPsSpectrum.dat
       wasabi_files:
-        COSI-SMEX/develop/Data/Orientation/20280301_3_month_with_orbital_info.fits:
-          checksum: bf59c4b79bc95ab68bcd376357f7bd40
-        COSI-SMEX/DC2/Data/Backgrounds/cosmic_photons_3months_unbinned_data.fits.gz:
-          checksum: faa82255b43d42a2b9c90621fabcb7d6
-        COSI-SMEX/DC2/Data/Sources/511_Testing_3months_unbinned_data.fits.gz:
-          checksum: 34ac3ae76359969e21058d712c8b6684
+        COSI-SMEX/DC2/Data/Orientation/20280301_3_month_with_orbital_info.ori:
+          checksum: 416fcc296fc37a056a069378a2d30cb2
+        #COSI-SMEX/DC2/Data/Backgrounds/cosmic_photons_3months_unbinned_data.fits.gz:
+        #  checksum: faa82255b43d42a2b9c90621fabcb7d6
+        #COSI-SMEX/DC2/Data/Sources/511_Testing_3months_unbinned_data.fits.gz:
+        #  checksum: 34ac3ae76359969e21058d712c8b6684
         COSI-SMEX/develop/Data/Responses/SMEXv12.511keV.HEALPixO4.binnedimaging.imagingresponse.h5:
           checksum: 1fddb86ff5818e16e8c7900c61f17db9
         COSI-SMEX/cosipy_tutorials/extended_source_spectral_fit_galactic_frame/cosmic_photons_binned_data.hdf5:
