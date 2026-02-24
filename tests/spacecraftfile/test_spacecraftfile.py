@@ -12,7 +12,7 @@ from pytest import raises
 
 def test_get_time():
 
-    ori_path = test_data.path / "20280301_first_10sec.ori"
+    ori_path = test_data.path / "20280301_first_10sec.fits"
 
     ori = SpacecraftHistory.open(ori_path)
 
@@ -49,7 +49,7 @@ def test_read_only_selected_range():
                         1835478006.0, 1835478007.0, 1835478008.0])
 
     # now test it all again for FITS, since code is not shared
-    ori_path = test_data.path / "20280301_first_10sec.ori"
+    ori_path = test_data.path / "20280301_first_10sec.fits"
 
     ori = SpacecraftHistory.open(ori_path,
                                  tstart = Time(1835478002.0, format = 'unix'),
@@ -74,7 +74,7 @@ def test_read_only_selected_range():
 
 def test_get_time_delta():
 
-    ori_path = test_data.path / "20280301_first_10sec.ori"
+    ori_path = test_data.path / "20280301_first_10sec.fits"
     ori = SpacecraftHistory.open(ori_path)
     time_delta = ori.intervals_duration.to_value(u.s)
 
@@ -86,7 +86,7 @@ def test_get_time_delta():
 
 def test_get_attitude():
 
-    ori_path = test_data.path / "20280301_first_10sec.ori"
+    ori_path = test_data.path / "20280301_first_10sec.fits"
     ori = SpacecraftHistory.open(ori_path)
 
     attitude = ori.attitude
@@ -139,7 +139,7 @@ def test_get_attitude():
 
 
 def test_interp_attitude():
-    ori_path = test_data.path / "20280301_first_10sec.ori"
+    ori_path = test_data.path / "20280301_first_10sec.fits"
     ori = SpacecraftHistory.open(ori_path)
 
     att = ori.interp_attitude(Time(1835478000.5, format = 'unix')).as_quat()
@@ -161,7 +161,7 @@ def test_interp_attitude():
     assert np.allclose(att, ori.attitude[1].as_quat())
 
 def test_interp_location():
-    ori_path = test_data.path / "20280301_first_10sec.ori"
+    ori_path = test_data.path / "20280301_first_10sec.fits"
     ori = SpacecraftHistory.open(ori_path)
 
     loc = ori.interp_location(Time(1835478000.5, format = 'unix')).cartesian.xyz.to_value(u.km)
@@ -187,7 +187,7 @@ def test_interp_location():
 
 def test_get_dwell_map():
 
-    ori_path = test_data.path / "20280301_first_10sec.ori"
+    ori_path = test_data.path / "20280301_first_10sec.fits"
     ori = SpacecraftHistory.open(ori_path)
 
     target_coord = SkyCoord(l=184.5551, b = -05.7877,
@@ -201,7 +201,7 @@ def test_get_dwell_map():
 
 def test_get_scatt_map():
 
-    ori_path = test_data.path / "20280301_first_10sec.ori"
+    ori_path = test_data.path / "20280301_first_10sec.fits"
     ori = SpacecraftHistory.open(ori_path)
 
     # Crab
@@ -215,7 +215,7 @@ def test_get_scatt_map():
     ax_map = scatt_map.get_axes_map(nside=16)
 
     # This orientation file does not occlude the Crab.
-    ori_path = test_data.path / "DC3-3mo-arbitrary-10s.ori"
+    ori_path = test_data.path / "DC3-3mo-arbitrary-10s.fits"
     ori = SpacecraftHistory.open(ori_path)
     scatt_map = ori.get_scatt_map(target_coord=target_coord,
                                   nside=16, earth_occ=True)
@@ -242,7 +242,7 @@ def test_get_scatt_map():
 
 def test_select_interval():
 
-    ori_path = test_data.path / "20280301_first_10sec.ori"
+    ori_path = test_data.path / "20280301_first_10sec.fits"
     ori = SpacecraftHistory.open(ori_path)
 
     new_ori = ori.select_interval(ori.tstart+0.1*u.s, ori.tstart+2.1*u.s)
@@ -287,7 +287,7 @@ def test_select_interval():
 
 def test_ori_to_fits(tmp_path):
 
-    ori_path = test_data.path / "20280301_first_10sec.ori"
+    ori_path = test_data.path / "20280301_first_10sec.fits"
 
     ori = SpacecraftHistory.open(ori_path)
 

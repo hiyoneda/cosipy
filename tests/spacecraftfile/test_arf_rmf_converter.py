@@ -15,7 +15,7 @@ energy_edges = 10**np.linspace(2, 4, 10 + 1) # ten bins from 100 to 10000 KeV
 def test_get_psr_rsp():
     response_path = test_data.path / "test_full_detector_response.h5"
     response = FullDetectorResponse.open(response_path)
-    ori_path = test_data.path / "20280301_first_10sec.ori"
+    ori_path = test_data.path / "20280301_first_10sec.fits"
     ori = SpacecraftHistory.open(ori_path)
     target_coord = SkyCoord(l=184.5551, b=-05.7877,
                             unit=u.deg, frame="galactic")
@@ -78,7 +78,7 @@ def test_get_arf(tmp_path):
 
     response_path = test_data.path / "test_full_detector_response.h5"
     response = FullDetectorResponse.open(response_path)
-    ori_path = test_data.path / "20280301_first_10sec.ori"
+    ori_path = test_data.path / "20280301_first_10sec.fits"
     ori = SpacecraftHistory.open(ori_path)
     target_coord = SkyCoord(l=184.5551, b=-05.7877,
                             unit=u.deg, frame="galactic")
@@ -102,7 +102,7 @@ def test_get_arf(tmp_path):
 def test_get_rmf(tmp_path):
     response_path = test_data.path / "test_full_detector_response.h5"
     response = FullDetectorResponse.open(response_path)
-    ori_path = test_data.path / "20280301_first_10sec.ori"
+    ori_path = test_data.path / "20280301_first_10sec.fits"
     ori = SpacecraftHistory.open(ori_path)
     target_coord = SkyCoord(l=184.5551, b=-05.7877,
                             unit=u.deg, frame="galactic")
@@ -144,7 +144,7 @@ def test_get_rmf(tmp_path):
 def test_get_pha(tmp_path):
     response_path = test_data.path / "test_full_detector_response.h5"
     response = FullDetectorResponse.open(response_path)
-    ori_path = test_data.path / "20280301_first_10sec.ori"
+    ori_path = test_data.path / "20280301_first_10sec.fits"
     ori = SpacecraftHistory.open(ori_path)
     target_coord = SkyCoord(l=184.5551, b=-05.7877,
                             unit=u.deg, frame="galactic")
@@ -176,7 +176,7 @@ def test_get_pha(tmp_path):
 def test_plot_arf(tmp_path):
     response_path = test_data.path / "test_full_detector_response.h5"
     response = FullDetectorResponse.open(response_path)
-    ori_path = test_data.path / "20280301_first_10sec.ori"
+    ori_path = test_data.path / "20280301_first_10sec.fits"
     ori = SpacecraftHistory.open(ori_path)
     target_coord = SkyCoord(l=184.5551, b=-05.7877,
                             unit=u.deg, frame="galactic")
@@ -193,7 +193,7 @@ def test_plot_arf(tmp_path):
 def test_plot_rmf(tmp_path):
     response_path = test_data.path / "test_full_detector_response.h5"
     response = FullDetectorResponse.open(response_path)
-    ori_path = test_data.path / "20280301_first_10sec.ori"
+    ori_path = test_data.path / "20280301_first_10sec.fits"
     ori = SpacecraftHistory.open(ori_path)
     target_coord = SkyCoord(l=184.5551, b=-05.7877,
                             unit=u.deg, frame="galactic")
