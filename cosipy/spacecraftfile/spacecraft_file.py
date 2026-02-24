@@ -15,7 +15,6 @@ from astropy.coordinates import (
     Galactic,
     cartesian_to_spherical
 )
-from astropy.coordinates import concatenate as concatenate_coord
 from astropy.units import Quantity
 from astropy.table import QTable
 from astropy.io import fits
@@ -783,8 +782,8 @@ class SpacecraftHistory:
             start_location = self._interp_location(start_weights[1],
                                                    self._gcrs[start_points[0]],
                                                    self._gcrs[start_points[1]])[None]
-            new_location = concatenate_coord((start_location, new_location))
 
+            new_location = np.concatenate((start_location, new_location))
             first_livetime = self.livetime[start_points[0]] * start_weights[0]
             new_livetime = np.append(first_livetime, new_livetime)
 
@@ -808,7 +807,8 @@ class SpacecraftHistory:
         stop_location = self._interp_location(stop_weights[1],
                                               self._gcrs[stop_points[0]],
                                               self._gcrs[stop_points[1]])[None]
-        new_location = concatenate_coord((new_location, stop_location))
+
+        new_location = np.concatenate((new_location, stop_location))
 
         if np.all(start_points == stop_points):
             # This can only happen if the requested interval fell
@@ -865,7 +865,7 @@ class SpacecraftHistory:
                                    np.append(new_obstime.jd2, _obstime.jd2),
                                    format='jd')
                 new_attitude = np.append(new_attitude, _attitude, axis = 0)
-                new_location = concatenate_coord((new_location, _location))
+                new_location = np.concatenate((new_location, _location))
                 new_livetime = np.append(new_livetime, 0 * new_livetime.unit) # assign livetime of zero between GTIs
                 new_livetime = np.append(new_livetime, _livetime)
 

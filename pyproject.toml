@@ -9,18 +9,18 @@ authors = [
           { name = "COSI Team", email = "imc@umd.edu" }
           ]
 description = "High-level analysis for the COSI telescope data"
-requires-python = ">=3.11"
+requires-python = ">=3.12"
 dependencies = [
                   "histpy>=2.0.5",
                   "h5py",
                   "hdf5plugin",
-                  "mhealpy",
+                  "mhealpy>=0.3.7",
                   "scoords",
                   "astromodels>=2.5.1",
                   "threeml @ git+https://github.com/threeML/threeML.git@dev",
                   "matplotlib",
                   "numba",
-                  "astropy>5.0",
+                  "astropy>=7.2",
                   "yayc",
                   "awscli",
                   "boto3",
