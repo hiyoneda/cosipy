@@ -186,15 +186,13 @@ class FastTSMap():
 
         if self._cds_frame == Frame.LOCAL:
 
-            # convert source direction to path in local frame
-            lons, colats = self._orientation.get_target_in_sc_frame(source)
-
-            # get list of HEALPix pixels with nonzero exposure on path
+            # get list of HEALPix pixels with nonzero exposure of source
             pixels, exposures = \
-                self._orientation.get_exposure(base = self._response,
-                                               theta = colats,
-                                               phi = lons,
-                                               lonlat = False)
+                self._orientation.get_exposure(source = source,
+                                               base = self._response,
+                                               earth_occ = False)
+            exposures = exposures.value
+
         else: # galactic frame
 
             # convert source vector to polar coords
