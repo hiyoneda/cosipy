@@ -38,7 +38,7 @@ def test_PriorTSV():
 
 def test_PriorEntropy():
 
-    parameter = {'coefficient': 1.0, 'prior_map': {'value': 1.0, 'unit': 'cm-2 s-1 sr-1'}}
+    parameter = {'coefficient': 1.0, 'reference_map': {'value': 1.0, 'unit': 'cm-2 s-1 sr-1'}}
     
     nside = 1
     allskyimage_model = AllSkyImageModel(nside = nside, 
