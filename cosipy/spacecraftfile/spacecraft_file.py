@@ -8,14 +8,14 @@ import astropy.constants as c
 from astropy.time import Time
 from astropy.coordinates import (
     SkyCoord,
-    SphericalRepresentation,
-    CartesianRepresentation,
-    UnitSphericalRepresentation,
     Angle,
     EarthLocation,
     GCRS,
-    ITRS
+    ITRS,
+    Galactic,
+    cartesian_to_spherical
 )
+from astropy.coordinates import concatenate as concatenate_coord
 from astropy.units import Quantity
 from astropy.table import QTable
 from astropy.io import fits
@@ -43,6 +43,7 @@ class SpacecraftHistory:
 
     # radius of earth
     _r_earth = 6378.0
+    _far_dist = 1*u.Mpc
 
     def __init__(self,
                  obstime: Time,
@@ -139,27 +140,16 @@ class SpacecraftHistory:
         """
         Altitude with respect to Earth's surface
         """
-
-        # FIXME: this is not accurate enough to recover the values in
-        # the input file -- for one thing, it does not account for the
-        # ellipsoid used to compute height in EarthLocation.
-
-        # TODO: change to exact act
-        return Quantity(self._gcrs.spherical.distance.km - self._r_earth,
-                        u.km, copy=False)
+        _, _, altitude = self._gcrs_to_earth_zenith_altitude(self._gcrs)
+        return Quantity(altitude, unit=u.km, copy=False)
 
     @property
     def earth_zenith(self) -> SkyCoord:
         """
         Galactic pointing of the Earth's zenith at the location of the SC
         """
-
-        # FIXME: why return ICRS rather than galactic?  The file version
-        # is stored in galactic.
-
-        gcrs_sph = self._gcrs.represent_as(SphericalRepresentation)
-        return SkyCoord(ra=gcrs_sph.lon, dec=gcrs_sph.lat,
-                        frame='icrs', copy=False)
+        lon,  lat, _ = self._gcrs_to_earth_zenith_altitude(self._gcrs)
+        return SkyCoord(lon, lat, unit=u.deg, frame=Galactic(), copy=False)
 
     @staticmethod
     def _default_file_version(file_version = None):
@@ -211,20 +201,10 @@ class SpacecraftHistory:
         zp = np.column_stack((Angle(zc.l), Angle(zc.b)))
         t['ZPointings'] = zp
 
-        # recover earth zenith in galactic coords
-        earth_zenith = SkyCoord(ra=self._gcrs.ra, dec=self._gcrs.dec,
-                                frame="gcrs", copy=False)
-        ez_gal = earth_zenith.transform_to("galactic")
-        ez_gal = np.column_stack((Angle(ez_gal.l), Angle(ez_gal.b)))
+        lon, lat, altitude = self._gcrs_to_earth_zenith_altitude(self._gcrs)
 
-        # recover altitude
-        # FIXME: the earth location obtained below does not accurately
-        # reproduce the original earth zenith pointings and altitude
-        itrs = self._gcrs.transform_to(ITRS(obstime=self._gcrs.obstime))
-        el = EarthLocation.from_geocentric(x = itrs.x,
-                                           y = itrs.y,
-                                           z = itrs.z, unit=u.km)
-        altitude = el.height
+        ez_gal = np.column_stack((Angle(lon, unit=u.deg),
+                                  Angle(lat, unit=u.deg)))
 
         t['EarthZenith'] = ez_gal
         t['Altitude'] = altitude
@@ -360,9 +340,10 @@ class SpacecraftHistory:
 
         # left end points, so remove last bin.
         livetime = t['LiveTime'][:-1]
-        gcrs = cls._standardize_location(earth_lon.to_value(u.deg),
-                                         earth_lat.to_value(u.deg),
-                                         altitude)
+
+        gcrs = cls._earth_zenith_altitude_to_gcrs(earth_lon.to_value(u.deg),
+                                                  earth_lat.to_value(u.deg),
+                                                  altitude)
 
         return cls(time_stamps, attitude, gcrs, livetime)
 
@@ -455,26 +436,30 @@ class SpacecraftHistory:
 
         # The last element is 0.
         livetime = u.Quantity(livetime[:-1], unit=u.s, copy=False)
-        gcrs = cls._standardize_location(earth_lon, earth_lat, altitude)
+        gcrs = cls._earth_zenith_altitude_to_gcrs(earth_lon,
+                                                  earth_lat,
+                                                  altitude)
 
         return cls(time_stamps, attitude, gcrs, livetime)
 
     @staticmethod
-    def _standardize_location(earth_lon, earth_lat, altitude):
+    def _earth_zenith_altitude_to_gcrs(earth_lon: float,
+                                       earth_lat: float,
+                                       altitude: float) -> GCRS:
         """
         Convert galactic latitude and longitude plus altitude w/r to
-        earth to a standard GVCRS coordinate.
+        earth to a standard GCRS coordinate.
 
         Parameters
         ----------
-        earth_lon: array of float
+        earth_lon: float
            galactic longitude of the direction the Earth's zenith is
            pointing to at the SC location (deg)
-        earth_lat: array of float
+        earth_lat: float
            galactic latitude of the direction the Earth's zenith is
            pointing to at the SC location (deg)
-        altitude: array of float
-           altitude above from Earth's ellipsoid (km)
+        altitude: float
+            altitude above from Earth's ellipsoid (km)
 
         Returns
         -------
@@ -491,24 +476,75 @@ class SpacecraftHistory:
         # conversion.
         #
         # 1. Get the direction in galactic
-        # 2. Transform to GCRS, which uses RA/Dec (ICRS-like).
-        #    This is represented on the unit sphere
+        # 2. Transform to GCRS, which uses RA/Dec (ICRS-like).  This
+        #    is represented in the unit sphere
         # 3. Add the altitude by transforming to EarthLocation.
         #    Should take care of the non-spherical Earth
-        # 4. Go back to GCRS, now with the correct distance
-        #    (from the Earth's center)
+        # 4. Go back GCRS, now with the correct distance (from the
+        #    Earth's center)
 
+        # Make the distance very far away such that the parallax
+        # between earth-centered and barycenter doesn't matter
         zenith_gal = SkyCoord(l=earth_lon, b=earth_lat,
-                              unit=u.deg, frame="galactic", copy=False)
+                              unit=(u.deg, u.deg, u.Mpc),
+                              distance=SpacecraftHistory._far_dist,
+                              frame="galactic",
+                              copy=False)
         gcrs = zenith_gal.transform_to('gcrs')
 
+        # Use EarthLocation to transform from altitude to the distance
+        # from the earth-center given the correct Earth ellipsoid
+        itrs = gcrs.transform_to(ITRS(obstime='J2000'))
+        earth_loc = itrs.earth_location.geodetic
         alt_km = Quantity(altitude, unit=u.km, copy=False)
-        earth_loc = EarthLocation.from_geodetic(lon=gcrs.ra, lat=gcrs.dec,
-                                                height=alt_km)
-        gcrs2 = GCRS(ra=gcrs.ra, dec=gcrs.dec,
-                     distance=earth_loc.itrs.cartesian.norm(), copy=False)
+        earth_loc = EarthLocation.from_geodetic(earth_loc.lon, earth_loc.lat,
+                                                height = alt_km)
 
+        # Combine RA/Dec from far field, with distance from geodetic
+        gcrs2 = GCRS(ra=gcrs.ra, dec=gcrs.dec,
+                     distance=earth_loc.itrs.cartesian.norm(),
+                     copy=False)
         return gcrs2
+
+    @staticmethod
+    def _gcrs_to_earth_zenith_altitude(gcrs : GCRS) -> (float, float, float):
+        """
+        Extract a galactic-frame earth pointing and altitude from a GCRS
+        coordinate.
+
+        Parameters
+        ----------
+        GCRS location
+
+        Returns
+        -------
+        earth_lon: float
+           galactic longitude of the direction the Earth's zenith is
+           pointing to at the SC location (deg)
+        earth_lat: float
+           galactic latitude of the direction the Earth's zenith is
+           pointing to at the SC location (deg)
+        altitude: float
+            altitude above from Earth's ellipsoid (km)
+
+        """
+
+        # Make it far field o get galactic coordinates
+        gcrs_far = GCRS(ra=gcrs.ra, dec=gcrs.dec,
+                        distance = SpacecraftHistory._far_dist,
+                        copy=False)
+        zenith_gal = gcrs_far.transform_to(Galactic())
+
+        # Get the distance from the center of the Earth to the
+        # ellipsoid at this specific direction
+        itrs = gcrs_far.transform_to(ITRS(obstime='J2000'))
+        earth_loc = itrs.earth_location.geodetic
+        earth_loc = EarthLocation.from_geodetic(earth_loc.lon, earth_loc.lat,
+                                                height = 0*u.km)
+        altitude = (gcrs.distance - \
+                    earth_loc.itrs.cartesian.norm()).to_value(u.km)
+
+        return zenith_gal.l.deg, zenith_gal.b.deg, altitude
 
     @staticmethod
     def _interp_location(t, d1, d2):
@@ -537,20 +573,20 @@ class SpacecraftHistory:
         if np.all(d1 == d2):
             return d1
 
-        v1 = d1.cartesian.xyz.value
-        v2 = d2.cartesian.xyz.value
-        unit = d1.cartesian.xyz.unit
+        v1 = d1.cartesian.xyz
+        v2 = d2.cartesian.xyz
 
         # angle between v1, v2
-        norm = d1.spherical.distance.value * d2.spherical.distance.value
+        norm = d1.spherical.distance * d2.spherical.distance
         theta = np.arccos(np.einsum('i...,i...->...', v1, v2)/norm)
 
         # SLERP interpolated vector
         den = np.sin(theta)
         vi = (np.sin((1 - t) * theta) * v1 + np.sin(t * theta) * v2) / den
 
-        dvi = GCRS(*Quantity(vi, unit = unit, copy = False),
-                   representation_type='cartesian')
+        r, lat, lon = cartesian_to_spherical(*vi)
+        dvi = GCRS(ra=lon, dec=lat, distance=r,
+                   copy=False)
 
         return dvi
 
@@ -725,7 +761,7 @@ class SpacecraftHistory:
         # Center values
         new_obstime = self.obstime[start_points[1]:stop_points[1]]
         new_attitude = self._attitude.as_matrix()[start_points[1]:stop_points[1]]
-        new_location = self._gcrs[start_points[1]:stop_points[1]].cartesian.xyz
+        new_location = self._gcrs[start_points[1]:stop_points[1]]
         new_livetime = self.livetime[start_points[1]:stop_points[0]]
 
         # Left edge
@@ -746,8 +782,8 @@ class SpacecraftHistory:
 
             start_location = self._interp_location(start_weights[1],
                                                    self._gcrs[start_points[0]],
-                                                   self._gcrs[start_points[1]])[None].cartesian.xyz
-            new_location = np.append(start_location, new_location, axis = 1)
+                                                   self._gcrs[start_points[1]])[None]
+            new_location = concatenate_coord((start_location, new_location))
 
             first_livetime = self.livetime[start_points[0]] * start_weights[0]
             new_livetime = np.append(first_livetime, new_livetime)
@@ -771,13 +807,8 @@ class SpacecraftHistory:
 
         stop_location = self._interp_location(stop_weights[1],
                                               self._gcrs[stop_points[0]],
-                                              self._gcrs[stop_points[1]])[None].cartesian.xyz
-        new_location = np.append(new_location, stop_location, axis=1)
-
-        new_location = GCRS(x = new_location[0],
-                            y = new_location[1],
-                            z = new_location[2],
-                            representation_type='cartesian')
+                                              self._gcrs[stop_points[1]])[None]
+        new_location = concatenate_coord((new_location, stop_location))
 
         if np.all(start_points == stop_points):
             # This can only happen if the requested interval fell
@@ -821,7 +852,7 @@ class SpacecraftHistory:
 
             _obstime = _sph.obstime
             _attitude = _sph._attitude.as_matrix()
-            _location = _sph._gcrs.cartesian.xyz
+            _location = _sph._gcrs
             _livetime = _sph.livetime
 
             if i == 0:
@@ -834,14 +865,12 @@ class SpacecraftHistory:
                                    np.append(new_obstime.jd2, _obstime.jd2),
                                    format='jd')
                 new_attitude = np.append(new_attitude, _attitude, axis = 0)
-                new_location = np.append(new_location, _location, axis = 1)
+                new_location = concatenate_coord((new_location, _location))
                 new_livetime = np.append(new_livetime, 0 * new_livetime.unit) # assign livetime of zero between GTIs
                 new_livetime = np.append(new_livetime, _livetime)
 
         # finalizing
         new_attitude = Attitude.from_matrix(new_attitude, frame=self._attitude.frame)
-        new_location = GCRS(x = new_location[0], y = new_location[1], z = new_location[2],
-                            representation_type='cartesian')
         new_obstime.format = self.obstime.format
 
         return self.__class__(new_obstime, new_attitude, new_location, new_livetime)

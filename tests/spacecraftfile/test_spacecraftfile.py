@@ -303,8 +303,8 @@ def test_ori_to_fits(tmp_path):
     assert np.allclose(ori.attitude.as_quat(),
                        ori2.attitude.as_quat())
 
-    ez  = ori.earth_zenith.transform_to("galactic")
-    ez2 = ori2.earth_zenith.transform_to("galactic")
+    ez  = ori.earth_zenith
+    ez2 = ori2.earth_zenith
     assert np.allclose(ez.l.rad,
                        ez2.l.rad)
     assert np.allclose(ez.b.rad,
