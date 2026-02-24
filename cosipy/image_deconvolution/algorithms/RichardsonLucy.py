@@ -144,8 +144,6 @@ class RichardsonLucy(RichardsonLucyBasic):
                        "background_normalization": self.dict_bkg_norm.copy()}
 
         # show intermediate results
-        logger.info(f'Background_normalization: {this_result["background_normalization"]}')
-
         for key in ["background_normalization"]:
             logger.info(f"{key}: {this_result[key]}")
         

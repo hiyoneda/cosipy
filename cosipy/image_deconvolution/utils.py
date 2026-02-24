@@ -1,8 +1,6 @@
 """
-utils.py
 Shared utility functions for the image_deconvolution module.
 """
-
 
 def _to_float(x) -> float:
     """

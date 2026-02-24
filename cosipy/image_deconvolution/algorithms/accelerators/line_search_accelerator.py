@@ -79,12 +79,12 @@ class LineSearchAccelerator(AcceleratorBase):
 
         logger.info(
             f"[LineSearchAccelerator]"
-            f"\n  accel_factor_max={self.accel_factor_max}"
-            f"\n  accel_bkg_norm={self.accel_bkg_norm}"
-            f"\n  accel_bkg_norm_independent={self.accel_bkg_norm_independent}"
-            f"\n  accel_factor_bkg_max={self.accel_factor_bkg_max}"
-            + (f"\n  search_method={self.bkg_search_method}"
-               f"\n  grid_n={self.bkg_grid_n}"
+            f"\n  accel_factor_max: {self.accel_factor_max}"
+            f"\n  accel_bkg_norm: {self.accel_bkg_norm}"
+            f"\n  accel_bkg_norm_independent: {self.accel_bkg_norm_independent}"
+            f"\n  accel_factor_bkg_max: {self.accel_factor_bkg_max}"
+            + (f"\n  search_method: {self.bkg_search_method}"
+               f"\n  grid_n: {self.bkg_grid_n}"
                if self.accel_bkg_norm and self.accel_bkg_norm_independent else "")
         )
 

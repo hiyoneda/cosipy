@@ -1,5 +1,3 @@
-#!/usr/bin/env python
-# coding: UTF-8
 """
 Constants for the image deconvolution module.
 This module centralizes magic numbers and default values.

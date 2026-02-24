@@ -1,6 +1,4 @@
 """
-data_interface_collection.py
-
 Provides DataInterfaceCollection: a class that encapsulates a list of
 ImageDeconvolutionDataInterfaceBase objects and exposes the collective
 operations (expectation, log-likelihood, T-product, background operations)

@@ -271,11 +271,6 @@ class MAP_RichardsonLucy(RichardsonLucy):
                        }
 
         # show intermediate results
-        logger.info(f'Background_normalization: {this_result["background_normalization"]}')
-        logger.info(f'Log-likelihood: {this_result["log-likelihood"]}')
-        logger.info(f'Log-prior: {this_result["log-prior"]}')
-        logger.info(f'Log-posterior: {this_result["log-posterior"]}')
-
         for key in ["background_normalization", "log-likelihood", "log-prior", "log-posterior"]:
             logger.info(f"{key}: {this_result[key]}")
         
