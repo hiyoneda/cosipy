@@ -7,16 +7,16 @@ from threeML import LinearPolarization, SpectralComponent, PointSource, Model, J
 from scoords import SpacecraftFrame
 import numpy as np
 
-from cosipy import BinnedData, COSILike
-from cosipy.spacecraftfile import SpacecraftFile
+from cosipy.spacecraftfile import SpacecraftHistory
 from cosipy.threeml.custom_functions import Band_Eflux
 from cosipy import test_data
+from cosipy.data_io import BinnedData
 
 analysis = BinnedData(test_data.path / 'polarization_data_mlm.yaml')
 analysis.load_binned_data_from_hdf5(test_data.path / 'polarization_data_binned.hdf5')
 response_path = test_data.path / 'test_polarization_response.h5'
-sc_orientation = SpacecraftFile.open(test_data.path / 'polarization_ori.fits')
-attitude = sc_orientation.get_attitude()[0]
+sc_orientation = SpacecraftHistory.open(test_data.path / 'polarization_ori.fits')
+attitude = sc_orientation.attitude[0]
 
 a = 10. * u.keV
 b = 10000. * u.keV
@@ -54,6 +54,7 @@ model = Model(source)
 
 def test_polarization_fit():
 
+    # FIXME
     cosi = COSILike("cosi",
                     dr = response_path,
                     data = analysis.binned_data.project('Em', 'Phi', 'PsiChi'),
