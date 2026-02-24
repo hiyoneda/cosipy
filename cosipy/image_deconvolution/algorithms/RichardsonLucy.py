@@ -50,6 +50,15 @@ class RichardsonLucy(RichardsonLucyBasic):
             self.dict_delta_bkg_norm = {}
             self.dict_bkg_norm_range = parameter.get('background_normalization_optimization:range', {key: DEFAULT_BKG_NORM_RANGE for key in self.dict_bkg_norm.keys()})
 
+        # update parameter summary
+        self._parameter_summary += [
+            ("bkg_norm_optimization_enabled", self.bkg_norm_optimization_enabled),
+        ]
+        if self.bkg_norm_optimization_enabled:
+            self._parameter_summary += [
+                ("dict_bkg_norm_range", self.dict_bkg_norm_range),
+            ]
+
     def initialization(self):
         """
         initialization before running the image deconvolution
@@ -135,7 +144,10 @@ class RichardsonLucy(RichardsonLucyBasic):
                        "background_normalization": self.dict_bkg_norm.copy()}
 
         # show intermediate results
-        logger.info(f'  background_normalization: {this_result["background_normalization"]}')
+        logger.info(f'Background_normalization: {this_result["background_normalization"]}')
+
+        for key in ["background_normalization"]:
+            logger.info(f"{key}: {this_result[key]}")
         
         # register this_result in self.results
         self.results.append(this_result)

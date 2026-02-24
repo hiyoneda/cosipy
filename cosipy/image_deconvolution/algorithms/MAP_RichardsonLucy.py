@@ -92,6 +92,24 @@ class MAP_RichardsonLucy(RichardsonLucy):
         if not self.stopping_criteria_statistics in ["log-likelihood", "log-posterior"]:
             raise ValueError
 
+        # update parameter summary
+        self._parameter_summary += [
+            ("prior", parameter['prior']),
+        ]
+
+        self._parameter_summary += [
+            ("response_weighting_enabled", self.response_weighting_enabled),
+        ]
+        if self.response_weighting_enabled:
+            self._parameter_summary += [
+                ("response_weighting_index", self.response_weighting_index),
+            ]
+
+        self._parameter_summary += [
+            ("stopping_criteria_statistics", self.stopping_criteria_statistics),
+            ("stopping_criteria_threshold", self.stopping_criteria_threshold),
+        ]
+
     def load_gamma_prior(self, parameter):
 
         if parameter is None:
@@ -253,10 +271,13 @@ class MAP_RichardsonLucy(RichardsonLucy):
                        }
 
         # show intermediate results
-        logger.info(f'  background_normalization: {this_result["background_normalization"]}')
-        logger.info(f'  log-likelihood: {this_result["log-likelihood"]}')
-        logger.info(f'  log-prior: {this_result["log-prior"]}')
-        logger.info(f'  log-posterior: {this_result["log-posterior"]}')
+        logger.info(f'Background_normalization: {this_result["background_normalization"]}')
+        logger.info(f'Log-likelihood: {this_result["log-likelihood"]}')
+        logger.info(f'Log-prior: {this_result["log-prior"]}')
+        logger.info(f'Log-posterior: {this_result["log-posterior"]}')
+
+        for key in ["background_normalization", "log-likelihood", "log-prior", "log-posterior"]:
+            logger.info(f"{key}: {this_result[key]}")
         
         # register this_result in self.results
         self.results.append(this_result)

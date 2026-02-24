@@ -1,5 +1,17 @@
 """
 max_step_accelerator.py
+
+Acceleration via the maximum safe step: finds the largest accel_factor in
+[1, accel_factor_max] such that the updated model remains non-negative
+element-wise, then accepts it only if it improves the log-likelihood.
+
+YAML configuration example
+---------------------------
+acceleration:
+    activate: true
+    algorithm: MaxStep
+    accel_factor_max: 10.0   # hard upper bound for accel_factor
+    accel_bkg_norm: false    # if true, bkg_norm is scaled by the same accel_factor
 """
 
 import numpy as np
@@ -36,8 +48,8 @@ class MaxStepAccelerator(AcceleratorBase):
         self.accel_factor_max = float(parameter.get("accel_factor_max", DEFAULT_ACCEL_FACTOR_MAX))
         self.accel_bkg_norm = bool(parameter.get("accel_bkg_norm", False))
         logger.info(
-            f"[MaxStepAccelerator]\n"
-            f"    accel_factor_max={self.accel_factor_max}"
+            f"[MaxStepAccelerator]"
+            f"\n  accel_factor_max={self.accel_factor_max}"
             )
 
     def compute(

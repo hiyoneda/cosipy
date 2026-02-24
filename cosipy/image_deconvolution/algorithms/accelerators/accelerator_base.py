@@ -123,4 +123,4 @@ class AcceleratorBase(ABC):
             if d < 0:
                 accel_factor_bkg_max = min(accel_factor_bkg_max, -bkg_norm[key] / d)
 
-        return max(1.0, accel_factor_bkg_max)
+        return max(1.0, _to_float(accel_factor_bkg_max))

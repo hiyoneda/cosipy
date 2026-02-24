@@ -28,7 +28,7 @@ class ResponseWeightingFilter:
         self.index = index
         self.filter = self._calculate_filter()
         
-        logger.info(f"Response weighting filter initialized (index={index})")
+        logger.info(f"[Response weighting filter created (index={index})]")
     
     def _calculate_filter(self):
         """

@@ -67,7 +67,6 @@ class RichardsonLucyAdvanced(RichardsonLucy):
         self.smoothing_enabled = parameter.get('smoothing:activate', False)
         if self.smoothing_enabled:
             self.smoothing_fwhm = parameter.get('smoothing:FWHM:value') * u.Unit(parameter.get('smoothing:FWHM:unit'))
-            logger.info(f"Gaussian filter with FWHM of {self.smoothing_fwhm} will be applied to delta images ...")
 
         # stopping criteria
         self.stopping_criteria_statistics = parameter.get('stopping_criteria:statistics', "log-likelihood")
@@ -75,6 +74,36 @@ class RichardsonLucyAdvanced(RichardsonLucy):
 
         if not self.stopping_criteria_statistics in ["log-likelihood"]:
             raise ValueError
+        
+        # update parameter summary
+        self._parameter_summary += [
+            ("acceleration_enabled", self.acceleration_enabled),
+        ]
+        if self.acceleration_enabled:
+            self._parameter_summary += [
+                ("accelerator_parameter", parameter['acceleration']),
+            ]
+
+        self._parameter_summary += [
+            ("response_weighting_enabled", self.response_weighting_enabled),
+        ]
+        if self.response_weighting_enabled:
+            self._parameter_summary += [
+                ("response_weighting_index", self.response_weighting_index),
+            ]
+
+        self._parameter_summary += [
+            ("smoothing_enabled", self.smoothing_enabled),
+        ]
+        if self.smoothing_enabled:
+            self._parameter_summary += [
+                ("smoothing_fwhm", self.smoothing_fwhm),
+            ]
+
+        self._parameter_summary += [
+            ("stopping_criteria_statistics", self.stopping_criteria_statistics),
+            ("stopping_criteria_threshold", self.stopping_criteria_threshold),
+        ]
 
     def initialization(self):
         """
@@ -209,10 +238,13 @@ class RichardsonLucyAdvanced(RichardsonLucy):
         if self._accel_result is not None and self._accel_result.extras is not None:
             this_result.update(self._accel_result.extras)
         
+        for key in ["background_normalization", "log-likelihood"]:
+            logger.info(f"{key}: {this_result[key]}")
+        
         if self.acceleration_enabled:
             for key, _ in self.accelerator.logged_result_fields:
                 if key in this_result:
-                    logger.info(f"  {key}: {this_result[key]}")
+                    logger.info(f"{key}: {this_result[key]}")
 
         # register this_result in self.results
         self.results.append(this_result)

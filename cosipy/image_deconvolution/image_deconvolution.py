@@ -176,7 +176,6 @@ class ImageDeconvolution:
         parameter_model_property = Configurator(self.parameter['model_definition']['property'])
         self._initial_model = self._model_class.instantiate_from_parameters(parameter_model_property)
 
-        logger.info("---- parameters ----")
         logger.info(parameter_model_property.dump())
 
         # setting initial values
@@ -193,7 +192,6 @@ class ImageDeconvolution:
             logger.error("The model axes mismatches with the reponse in the dataset!")
             raise ValueError
 
-        logger.info("---- parameters ----")
         logger.info(parameter_model_initialization.dump())
 
     def register_deconvolution_algorithm(self):
@@ -227,7 +225,6 @@ class ImageDeconvolution:
                                                         mask = self.mask, 
                                                         parameter = algorithm_parameter)
 
-        logger.info("---- parameters ----")
         logger.info(parameter_deconvolution.dump()) 
 
     def run_deconvolution(self):

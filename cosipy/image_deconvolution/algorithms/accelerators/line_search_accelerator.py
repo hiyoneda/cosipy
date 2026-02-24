@@ -79,12 +79,12 @@ class LineSearchAccelerator(AcceleratorBase):
 
         logger.info(
             f"[LineSearchAccelerator]"
-            f"\n    accel_factor_max={self.accel_factor_max}"
-            f"\n    accel_bkg_norm={self.accel_bkg_norm}"
-            f"\n    accel_bkg_norm_independent={self.accel_bkg_norm_independent}"
-            f"\n    accel_factor_bkg_max={self.accel_factor_bkg_max}"
-            + (f"\n    search_method={self.bkg_search_method}"
-               f"\n    grid_n={self.bkg_grid_n}"
+            f"\n  accel_factor_max={self.accel_factor_max}"
+            f"\n  accel_bkg_norm={self.accel_bkg_norm}"
+            f"\n  accel_bkg_norm_independent={self.accel_bkg_norm_independent}"
+            f"\n  accel_factor_bkg_max={self.accel_factor_bkg_max}"
+            + (f"\n  search_method={self.bkg_search_method}"
+               f"\n  grid_n={self.bkg_grid_n}"
                if self.accel_bkg_norm and self.accel_bkg_norm_independent else "")
         )
 
@@ -98,10 +98,12 @@ class LineSearchAccelerator(AcceleratorBase):
                           for key in before.dict_bkg_norm}
 
         # Upper bound from non-negativity constraint on model
-        alpha_max = min(self._compute_accel_factor_max(delta_model, before.model, mask), self.accel_factor_max)
+        alpha_max = min(self._compute_accel_factor_max(delta_model, before.model, mask), 
+                        self.accel_factor_max)
 
         # Upper bound from non-negativity constraint on bkg_norm
-        alpha_bkg_max = min(self._compute_accel_factor_bkg_max(delta_bkg_norm, before.dict_bkg_norm), self.accel_factor_bkg_max)
+        alpha_bkg_max = min(self._compute_accel_factor_bkg_max(delta_bkg_norm, before.dict_bkg_norm), 
+                            self.accel_factor_bkg_max)
 
         if alpha_max <= 1.0:
             # No room to accelerate
@@ -222,7 +224,7 @@ class LineSearchAccelerator(AcceleratorBase):
             # gradient (L-BFGS-B)
             opt = minimize(
                 lambda x: -ll_2d_func(x[0], x[1]),
-                x0=[0.5 * (1.0 + alpha_max), 0.5 * (1.0 + alpha_bkg_max)],
+                x0=[1.0, 1.0],
                 bounds=[(1.0, alpha_max), (1.0, alpha_bkg_max)],
                 method="L-BFGS-B",
             )

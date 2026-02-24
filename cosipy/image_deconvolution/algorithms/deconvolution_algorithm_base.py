@@ -50,6 +50,11 @@ class DeconvolutionAlgorithmBase(ABC):
         self.iteration_count = 0
         self.iteration_max = parameter.get('iteration_max', DEFAULT_ITERATION_MAX)
 
+        # parameter summary (subclasses can append to this list)
+        self._parameter_summary = [
+            ("iteration_max", self.iteration_max),
+        ]
+
     @abstractmethod
     def initialization(self):
         """
@@ -148,7 +153,7 @@ class DeconvolutionAlgorithmBase(ABC):
 
         logger.info("<< Checking Stopping Criteria >>")
         stop_iteration = self.check_stopping_criteria()
-        logger.info("--> {}".format("Stop" if stop_iteration else "Continue"))
+        logger.info("-> {}".format("Stop" if stop_iteration else "Continue"))
 
         return stop_iteration
 
@@ -259,3 +264,23 @@ class DeconvolutionAlgorithmBase(ABC):
             dicts_key_name_format = dicts_key_name_format if dicts_key_name_format is not None else [],
             lists_key_name_format = lists_key_name_format if lists_key_name_format is not None else []
         )
+
+    def _show_parameters(self):
+        """
+        Log all parameters registered in _parameter_summary.
+        Subclasses should append their parameters to self._parameter_summary
+        in their __init__, then call this method at the end of __init__.
+
+        Example
+        -------
+        # In a subclass __init__:
+        self._parameter_summary += [
+            ("bkg_norm_optimization_enabled", self.bkg_norm_optimization_enabled),
+            ("minimum_flux", self.minimum_flux),
+        ]
+        self._show_parameters()
+        """
+
+        logger.info(f"[{self.__class__.__name__}]")
+        for name, value in self._parameter_summary:
+            logger.info(f"  {name}: {value}")

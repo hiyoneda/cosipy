@@ -56,6 +56,6 @@ def build_accelerator(parameter) -> AcceleratorBase | None:
     cls         = ACCELERATOR_CLASSES[algorithm_name]
     accelerator = cls(parameter)
 
-    logger.info(f"Accelerator '{algorithm_name}' created.")
+    logger.info(f"[Accelerator '{algorithm_name}' created]")
     return accelerator
 

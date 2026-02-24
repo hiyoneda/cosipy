@@ -55,10 +55,24 @@ class RichardsonLucyBasic(DeconvolutionAlgorithmBase):
             else:
                 os.makedirs(self.save_results_directory)
 
+        # update parameter summary
+        self._parameter_summary += [
+            ("minimum_flux", self.minimum_flux),
+            ("save_results", self.save_results),
+        ]
+        if self.save_results:
+            self._parameter_summary += [
+                ("save_results_directory", self.save_results_directory),
+                ("save_only_final_result", self.save_only_final_result),
+            ]
+
     def initialization(self):
         """
         initialization before running the image deconvolution
         """
+        
+        # show parameters
+        self._show_parameters()
 
         # clear counter 
         self.iteration_count = 0
