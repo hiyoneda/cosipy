@@ -24,7 +24,7 @@ class PriorEntropy(PriorBase):
 
         super().__init__(parameter, model)
 
-        self.prior_map = self.parameter['prior_map']['value'] * u.Unit(self.parameter['prior_map']['unit'])
+        self.reference_map = self.parameter['reference_map']['value'] * u.Unit(self.parameter['reference_map']['unit'])
 
     def log_prior(self, model):
         """
@@ -43,7 +43,7 @@ class PriorEntropy(PriorBase):
 
         if self.model_class == AllSkyImageModel:
 
-            image_ratio = (model/self.prior_map).contents.to('').value
+            image_ratio = (model/self.reference_map).contents.to('').value
             
             return self.coefficient * np.sum(model.contents.value * (1 - np.log(image_ratio)))
     
@@ -64,6 +64,6 @@ class PriorEntropy(PriorBase):
 
         if self.model_class == AllSkyImageModel:
 
-            image_ratio = (model/self.prior_map).contents.to('').value
+            image_ratio = (model/self.reference_map).contents.to('').value
 
             return -1 * self.coefficient * np.log(image_ratio) / model.unit
