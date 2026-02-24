@@ -131,11 +131,14 @@ class BinnedThreeMLPointSourceResponse(BinnedThreeMLSourceResponseInterface):
         if not isinstance(source, PointSource):
             raise TypeError("I only know how to handle point sources!")
 
-        polarization = to_linear_polarization(source.spectrum.main.polarization)
+        if not hasattr(source.spectrum, 'main'):
 
-        if (polarization.degree.value != 0 and
-                self._polarization_axis is None):
-            raise RuntimeError("This response can't handle a polarized source.")
+            for item in source.spectrum.to_dict():
+
+                polarization = to_linear_polarization(source.components[item].polarization)
+
+                if polarization.degree.value != 0 and self._polarization_axis is None:
+                    raise RuntimeError("This response can't handle a polarized source.")
 
         self._source = source
 
