@@ -3,6 +3,7 @@ import astropy.units as u
 import logging
 logger = logging.getLogger(__name__)
 
+from yayc import Configurator
 from histpy import Histogram
 from copy import deepcopy
 
@@ -55,7 +56,7 @@ class RichardsonLucyAdvanced(RichardsonLucy):
         # acceleration
         self.acceleration_enabled = parameter.get('acceleration:activate', False)
         if self.acceleration_enabled:
-            self.accelerator_parameter = parameter['acceleration']
+            self.accelerator_parameter = Configurator(parameter['acceleration'])
 
         # response_weighting
         self.response_weighting_enabled = parameter.get('response_weighting:activate', False)

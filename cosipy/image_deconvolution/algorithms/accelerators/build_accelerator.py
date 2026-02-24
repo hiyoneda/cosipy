@@ -12,11 +12,13 @@ import logging
 
 from .accelerator_base import AcceleratorBase
 from .max_step_accelerator import MaxStepAccelerator
+from .line_search_accelerator import LineSearchAccelerator
 
 logger = logging.getLogger(__name__)
 
 ACCELERATOR_CLASSES : dict = {
-    "MaxStep": MaxStepAccelerator,
+    "MaxStep"   : MaxStepAccelerator,
+    "LineSearch": LineSearchAccelerator,
 }
 
 DEFAULT_ACCELERATOR = "MaxStep"
@@ -56,3 +58,4 @@ def build_accelerator(parameter) -> AcceleratorBase | None:
 
     logger.info(f"Accelerator '{algorithm_name}' created.")
     return accelerator
+

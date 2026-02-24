@@ -35,7 +35,10 @@ class MaxStepAccelerator(AcceleratorBase):
         super().__init__(parameter)
         self.accel_factor_max = float(parameter.get("accel_factor_max", DEFAULT_ACCEL_FACTOR_MAX))
         self.accel_bkg_norm = bool(parameter.get("accel_bkg_norm", False))
-        logger.info(f"[MaxStepAccelerator] accel_factor_max={self.accel_factor_max}")
+        logger.info(
+            f"[MaxStepAccelerator]\n"
+            f"    accel_factor_max={self.accel_factor_max}"
+            )
 
     def compute(
         self,
@@ -95,16 +98,7 @@ class MaxStepAccelerator(AcceleratorBase):
 
     def _compute_accel_factor(self, delta_model, model, mask) -> float:
 
-        diff = -1 * (model / delta_model).contents
+        accel_factor = min(self._compute_accel_factor_max(delta_model, model, mask), \
+                           self.accel_factor_max)
 
-        diff[(diff <= 0) | (delta_model.contents == 0)] = np.inf
-
-        if mask is not None:
-            diff[np.invert(mask.contents)] = np.inf
-
-        accel_factor = min(np.min(diff), self.accel_factor_max)
-
-        if accel_factor < 1.0:
-            accel_factor = 1.0
-
-        return _to_float(accel_factor)
+        return accel_factor
