@@ -71,7 +71,7 @@ class _SimpleRVSMixin:
 
             rng = SimpleRatioUniforms(self, random_state=random_state, mode=self._mode)
 
-        if size == ():
+        if isinstance(size, tuple) and not size: # == ()
             # SimpleRatioUniforms.rvs expects an integer, tuple of integers or None.
             # It crashes with an empty tuple, which corresponds to a scalar.
             size = None
@@ -777,7 +777,7 @@ class UnpolarizedIdealComptonIRF(FarFieldSpectralInstrumentResponseFunctionInter
 
             # Get the measured energy based on phi and the energy resolution and absroption probabity for the photon location
             measured_energy = MeasuredEnergyDist(energy, self._energy_resolution, phi, full_absorp_prob).rvs()
-            measured_energy_keV = Quantity(measured_energy, energy.unit, copy=False).to_value(u.keV)
+            measured_energy_keV = Quantity(measured_energy, energy.unit, copy=None).to_value(u.keV)
 
             # Get a random ARM
             angres, weights = next(self._angular_resolution([photon]))

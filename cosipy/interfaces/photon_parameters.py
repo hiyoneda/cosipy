@@ -140,7 +140,7 @@ class PhotonWithEnergyInterface(PhotonInterface, Protocol):
         """
         Add fancy energy quantity
         """
-        return u.Quantity(self.energy_keV, u.keV, copy=False)
+        return u.Quantity(self.energy_keV, u.keV, copy=None)
 
 
 @runtime_checkable
