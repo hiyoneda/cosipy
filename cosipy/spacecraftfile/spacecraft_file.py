@@ -327,10 +327,12 @@ class SpacecraftHistory:
         # galactic # coordinates.
         xp = t['XPointings']
         xpointings = SkyCoord(l = xp[:,0], b = xp[:,1],
-                              frame = Galactic())
+                              frame = Galactic(),
+                              copy=False)
         zp = t['ZPointings']
         zpointings = SkyCoord(l = zp[:,0], b = zp[:,1],
-                              frame = Galactic())
+                              frame = Galactic(),
+                              copy=False)
 
         attitude = Attitude.from_axes(x = xpointings, z = zpointings,
                                       frame = Galactic())
@@ -340,12 +342,12 @@ class SpacecraftHistory:
         earth_lat = ez[:,1]
         altitude = t['Altitude']
 
-        # left end points, so remove last bin.
-        livetime = t['LiveTime'][:-1]
-
         gcrs = cls._earth_zenith_altitude_to_gcrs(earth_lon,
                                                   earth_lat,
                                                   altitude)
+
+        # left end points, so remove last bin.
+        livetime = t['LiveTime'][:-1]
 
         return cls(time_stamps, attitude, gcrs, livetime)
 
@@ -442,11 +444,12 @@ class SpacecraftHistory:
         attitude = Attitude.from_axes(x = xpointings, z = zpointings,
                                       frame = Galactic())
 
-        # The last element is 0.
-        livetime = livetime[:-1]
         gcrs = cls._earth_zenith_altitude_to_gcrs(earth_lon,
                                                   earth_lat,
                                                   altitude)
+
+        # The last element is 0.
+        livetime = livetime[:-1]
 
         return cls(time_stamps, attitude, gcrs, livetime)
 
