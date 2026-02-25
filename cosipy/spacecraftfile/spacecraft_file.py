@@ -200,17 +200,17 @@ class SpacecraftHistory:
         xc, yc, zc = self.attitude.transform_to('galactic').as_axes()
 
         xp = np.column_stack((xc.l, xc.b))
-        t['XPointings'] = Quantity(xp)
+        t['XPointings'] = Quantity(xp, copy=False)
 
         zp = np.column_stack((zc.l, zc.b))
-        t['ZPointings'] = Quantity(zp)
+        t['ZPointings'] = Quantity(zp, copy=False)
 
         lon, lat, altitude = self._gcrs_to_earth_zenith_altitude(self._gcrs)
 
         ez_gal = np.column_stack((lon, lat))
 
-        t['EarthZenith'] = Quantity(ez_gal)
-        t['Altitude'] = Quantity(altitude)
+        t['EarthZenith'] = Quantity(ez_gal, copy=False)
+        t['Altitude'] = Quantity(altitude, copy=False)
 
         # add dummy to make sure livetime array length matches
         # other array lengths for writing
