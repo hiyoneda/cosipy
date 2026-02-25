@@ -279,7 +279,7 @@ class PolarizedPhotonWithDirectionAndEnergyInSCFrameStereographicConventionInter
 
     @property
     def polarization_angle(self) -> PolarizationAngle:
-        return PolarizationAngle(u.Quantity(self.polarization_angle_rad_stereo, u.rad, copy = False), self.direction, 'stereographic')
+        return PolarizationAngle(u.Quantity(self.polarization_angle_rad_stereo, u.rad, copy = None), self.direction, 'stereographic')
 
 @runtime_checkable
 class PolarizedPhotonWithDirectionAndEnergyInSCFrameStereographicConventionInterface(PolarizedPhotonWithDirectionAndEnergyInSCFrameStereographicConventionInterfaceGen[float], PhotonWithDirectionAndEnergyInSCFrameInterface, PolarizedPhotonStereographicConventionInSCInterface, Protocol):...
