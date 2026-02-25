@@ -210,7 +210,7 @@ class SpacecraftHistory:
         ez_gal = np.column_stack((lon, lat))
 
         t['EarthZenith'] = Quantity(ez_gal)
-        t['Altitude'] = altitude
+        t['Altitude'] = Quantity(altitude)
 
         # add dummy to make sure livetime array length matches
         # other array lengths for writing
