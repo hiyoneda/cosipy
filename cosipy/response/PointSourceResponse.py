@@ -6,7 +6,7 @@ from cosipy.polarization.polarization_axis import PolarizationAxis
 from cosipy.threeml.util import to_linear_polarization
 from mhealpy import HealpixMap
 from cosipy.interfaces import BinnedInstrumentResponseInterface, BinnedDataInterface
-from histpy import Histogram, Axis, Axes  # , Axes, Axis
+from histpy import Histogram, Axis, Axes 
 
 import numpy as np
 import astropy.units as u
@@ -98,7 +98,8 @@ class PointSourceResponse(Histogram):
             if polarization_level != 0:
                 polarization_bin_index = pol_axis.find_bin(polarization_angle * u.deg)
                 weights[polarization_bin_index] += polarization_level
-                weights *= self.axes['Pol'].nbins
+
+            weights *= self.axes['Pol'].nbins
 
             contents = np.tensordot(weights, self.contents, axes=(0, self.axes.label_to_index('Pol')))
 
@@ -198,7 +199,7 @@ class PointSourceResponse(Histogram):
 
             response.differential_effective_area(coord,
                                                  energy_axis.centers,
-                                                 None if polarization_axis is None else polarization_axis.centers,
+                                                 None if polarization_axis is None else polarization_axis,
                                                  attitude = att,
                                                  weight=exposure,
                                                  out=psr,
