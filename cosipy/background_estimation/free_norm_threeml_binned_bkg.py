@@ -137,7 +137,7 @@ class FreeNormBackground(BackgroundInterface):
 
         self._norm = sum(n for n in self._norms)
 
-    def set_parameters(self, **parameters:Dict[str, u.Quantity]) -> None:
+    def set_parameters(self, **parameters:u.Quantity) -> None:
         """
         Same keys as background components
         """
