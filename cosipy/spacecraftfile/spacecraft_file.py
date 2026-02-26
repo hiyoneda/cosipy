@@ -276,6 +276,24 @@ class SpacecraftHistory:
         else:
             raise ValueError("Unsupported file format. Only .ori and .fits/.fits.gz extensions are supported.")
 
+    @staticmethod
+    def _find_time_index(time:Time, tstart:Time, tstop:Time):
+
+        # TimeAxis optimizes searchsorted for 128bit precision
+        time_axis = TimeAxis(time, copy=False)
+
+        if tstart is not None:
+            start_idx = time_axis.find_bin(tstart)
+        else:
+            start_idx = 0
+
+        if tstop is not None:
+            stop_idx = time_axis.find_bin(tstop) + 2
+        else:
+            stop_idx = time.size
+
+        return start_idx, stop_idx
+
     @classmethod
     def _open_fits(cls, filename, tstart:Time = None, tstop:Time = None) -> "SpacecraftHistory":
         """
@@ -310,15 +328,8 @@ class SpacecraftHistory:
 
         if tstart is not None or tstop is not None:
             # Cut early to skip some conversions later on
-            if tstart is not None:
-                start_idx = np.searchsorted(time_stamps, tstart, 'left')
-            else:
-                start_idx = 0
 
-            if tstop is not None:
-                stop_idx = np.searchsorted(time_stamps, tstop, 'left') + 2
-            else:
-                stop_idx = time_stamps.size
+            start_idx, stop_idx = cls._find_time_index(time_stamps, tstart, tstop)
 
             time_stamps = time_stamps[start_idx:stop_idx]
             t = t[start_idx:stop_idx]
@@ -414,15 +425,8 @@ class SpacecraftHistory:
 
         if tstart is not None or tstop is not None:
             # Cut early to skip some conversions later on
-            if tstart is not None:
-                start_idx = np.searchsorted(time_stamps, tstart, 'left')
-            else:
-                start_idx = 0
 
-            if tstop is not None:
-                stop_idx = np.searchsorted(time_stamps, tstop, 'left') + 2
-            else:
-                stop_idx = time_stamps.size
+            start_idx, stop_idx = cls._find_time_index(time_stamps, tstart, tstop)
 
             time_stamps = time_stamps[start_idx:stop_idx]
             lat_x = lat_x[start_idx:stop_idx]
