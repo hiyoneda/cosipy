@@ -44,7 +44,7 @@ tutorials:
           checksum: 408edb7dc2e3dce44c0f275e4ba56fd8
 
     spacecraft_file:
-      notebook: response/SpacecraftHistory.ipynb
+      notebook: response/SpacecraftFile.ipynb
       wasabi_files:
         COSI-SMEX/develop/Data/Orientation/20280301_3_month_with_orbital_info.fits:
           checksum: bf59c4b79bc95ab68bcd376357f7bd40
@@ -198,7 +198,7 @@ tutorials:
         COSI-SMEX/DC3/Data/Backgrounds/Ge/AlbedoPhotons_3months_unbinned_data_filtered_with_SAAcut.fits.gz:
          checksum: 191a451ee597fd2e4b1cf237fc72e6e2
         COSI-SMEX/develop/Data/Orientation/DC3_final_530km_3_month_with_slew_1sbins_GalacticEarth_SAA.fits:
-        checksum: a9163ab4852c427d09bcfe02df71173a
+         checksum: a9163ab4852c427d09bcfe02df71173a
 
     source_injector:
       notebook: source_injector/Point_source_injector.ipynb
@@ -299,7 +299,7 @@ tutorials:
       wasabi_files:
         COSI-SMEX/develop/Data/Orientation/DC3_final_530km_3_month_with_slew_15sbins_GalacticEarth_SAA.fits:
           checksum: 603854cd315ad6e6ff999fa1f55942b6
-          COSI-SMEX/DC3/Data/Backgrounds/Ge/AlbedoPhotons_3months_unbinned_data_filtered_with_SAAcut.fits.gz:
+        COSI-SMEX/DC3/Data/Backgrounds/Ge/AlbedoPhotons_3months_unbinned_data_filtered_with_SAAcut.fits.gz:
           checksum: 191a451ee597fd2e4b1cf237fc72e6e2
         COSI-SMEX/DC3/Data/Sources/GalTotal_SA100_F98_3months_unbinned_data_filtered_with_SAAcut.fits.gz:
           checksum: 9fda5a7b15a90358abc2b886979f9fef
