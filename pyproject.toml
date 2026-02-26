@@ -17,7 +17,7 @@ dependencies = [
                   "mhealpy>=0.3.7",
                   "scoords",
                   "astromodels>=2.5.1",
-                  "threeml @ git+https://github.com/threeML/threeML.git@dev",
+                  "threeml >= 2.5.0",
                   "matplotlib",
                   "numba",
                   "astropy>=7.2",
