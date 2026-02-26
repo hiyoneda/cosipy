@@ -679,7 +679,7 @@ class UnpolarizedIdealComptonIRF(FarFieldSpectralInstrumentResponseFunctionInter
 
         # Get some needed values from this query
         photon_energy_keV = photon.energy_keV
-        photon_energy = Quantity(photon_energy_keV, u.keV, copy = False)
+        photon_energy = Quantity(photon_energy_keV, u.keV, copy = None)
         measured_energy_keV = np.asarray([event.energy_keV for event in events])
         full_absorp_prob = next(self._full_prob([photon]))
         angres, weights = next(self._angular_resolution([photon]))

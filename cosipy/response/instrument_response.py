@@ -287,7 +287,7 @@ class BinnedInstrumentResponse(BinnedInstrumentResponseInterface):
                                   (loc_src_pixels,))
 
         if weight_unit is not None:
-            out = u.Quantity(out.value, weight_unit*out.unit, copy = False)
+            out = u.Quantity(out.value, weight_unit*out.unit, copy = None)
 
         return out
 
