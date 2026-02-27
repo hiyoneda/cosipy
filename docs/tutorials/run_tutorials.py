@@ -18,7 +18,7 @@ from pathlib import Path
 
 import nbformat
 from nbconvert.preprocessors import ExecutePreprocessor, RegexRemovePreprocessor
-from nbconvert import HTMLExporter
+from nbconvert import HTMLExporter, PythonExporter
 from nbconvert.writers import FilesWriter
 
 import numpy as np
@@ -223,22 +223,36 @@ def main():
 
         # Run
         failed = False
-        if not args.dry:
-            for notebook in notebooks:
-                source_nb_path = config.absolute_path(notebook)
-                nb_path = wdir/source_nb_path.name
+        for notebook in notebooks:
+            source_nb_path = config.absolute_path(notebook)
+            nb_path = wdir/source_nb_path.name
 
-                with (open(nb_path) as nb_file):
-                    nb = nbformat.read(nb_file, as_version=nbformat.NO_CONVERT)
+            with (open(nb_path) as nb_file):
+                nb = nbformat.read(nb_file, as_version=nbformat.NO_CONVERT)
 
-                    # Remove magic, which can make a failing notebook look
-                    # like it succeeded.
-                    for cell in nb.cells:
-                        if cell.cell_type == 'code':
-                            source = cell.source.strip("\n").lstrip()
-                            if len(source) >= 2 and source[:2] == "%%":
-                                cell.source = cell.source.replace("%%", "#[magic commented out by run_tutorials.py]%%")
+                # Remove magic, which can make a failing notebook look
+                # like it succeeded.
+                for cell in nb.cells:
+                    if cell.cell_type == 'code':
+                        source = cell.source.strip("\n").lstrip()
+                        if len(source) >= 2 and source[:2] == "%%":
+                            cell.source = cell.source.replace("%%", "#[magic commented out by run_tutorials.py]%%")
 
+                # As script
+                script_path = nb_path.with_suffix('.py')
+                script_exporter = PythonExporter()
+                (body, resources) = script_exporter.from_notebook_node(nb)
+                script_writer = FilesWriter()
+                script_writer.write(body, resources, notebook_name=str(script_path.with_suffix('')))
+
+                # As HTML
+                html_path = nb_path.with_suffix('.html')
+                html_exporter = HTMLExporter(template_name="classic")
+                (body, resources) = html_exporter.from_notebook_node(nb)
+                html_writer = FilesWriter()
+                html_writer.write(body, resources, notebook_name=str(html_path.with_suffix('')))
+
+                if not args.dry:
                     logger.info(f"Executing notebook {source_nb_path}...")
                     start_time = timeit.default_timer()
                     ep = ExecutePreprocessor(timeout=config['globals:timeout'], kernel_name=config['globals:kernel'])

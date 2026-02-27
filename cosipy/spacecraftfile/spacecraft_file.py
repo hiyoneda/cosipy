@@ -8,7 +8,6 @@ import astropy.constants as c
 from astropy.time import Time
 from astropy.coordinates import (
     SkyCoord,
-    Angle,
     EarthLocation,
     GCRS,
     ITRS,
@@ -56,7 +55,7 @@ class SpacecraftHistory:
         Parameters
         ----------
         obstime:
-            The obstime stamps for each pointings. Note this is NOT
+            The obstime stamps for each pointing. Note this is NOT
             the obstime duration, see "livetime".
         attitude:
             Spacecraft orientation with respect to an inertial system.
@@ -76,7 +75,8 @@ class SpacecraftHistory:
         if livetime is None:
             livetime = time_axis.widths.to(u.s)
 
-        self._livetime_hist = Histogram(time_axis, livetime, copy_contents = False)
+        self._livetime_hist = Histogram(time_axis, livetime,
+                                        copy_contents = False)
 
         if not (location.shape == () or location.shape == obstime.shape):
             raise ValueError(f"'location' must be a scalar or have the same length as the timestamps ({obstime.shape}), but it has shape ({location.shape})")
@@ -140,7 +140,7 @@ class SpacecraftHistory:
         Altitude with respect to Earth's surface
         """
         _, _, altitude = self._gcrs_to_earth_zenith_altitude(self._gcrs)
-        return Quantity(altitude, unit=u.km, copy=False)
+        return altitude
 
     @property
     def earth_zenith(self) -> SkyCoord:
@@ -148,7 +148,7 @@ class SpacecraftHistory:
         Galactic pointing of the Earth's zenith at the location of the SC
         """
         lon,  lat, _ = self._gcrs_to_earth_zenith_altitude(self._gcrs)
-        return SkyCoord(lon, lat, unit=u.deg, frame=Galactic(), copy=False)
+        return SkyCoord(lon, lat, frame=Galactic(), copy=False)
 
     @staticmethod
     def _default_file_version(file_version = None):
@@ -161,9 +161,10 @@ class SpacecraftHistory:
 
     def write_fits(self, filename, overwrite=False, compress=False,
                    file_version=None):
-        """Write the contents of this object as a FITS file for later
+        """
+        Write the contents of this object as a FITS file for later
         retrieval. We use Astropy QTable functionality to create the
-        FITS file.
+        FITS file, so that every column is stored with its unit.
 
         If compression is requested, the resulting file will have the
         name {filename}.gz; the ".gz" should not be specfied as part
@@ -186,27 +187,30 @@ class SpacecraftHistory:
 
         t = QTable()
 
-        t['TimeStamp'] = self.obstime.unix
+        # Time objects do not carry units.  We store the time as
+        # seconds in case someone reads it without converting to Time().
+        t['TimeStamp'] = Quantity(self.obstime.unix, unit=u.s, copy=False)
 
-        # make sure the pointings are written in galactic coordinates,
+        # Make sure the pointings are written in galactic coordinates,
         # however they are stored internally.  The units of the
-        # lon/lat angles are preserved in the file.
+        # lon/lat angles are preserved in the file, but they are saved
+        # as simple Quantities rather than more complex
+        # Angle/Latitude/Longitude objects.
 
         xc, yc, zc = self.attitude.transform_to('galactic').as_axes()
 
-        xp = np.column_stack((Angle(xc.l), Angle(xc.b)))
-        t['XPointings'] = xp
+        xp = np.column_stack((xc.l, xc.b))
+        t['XPointings'] = Quantity(xp, copy=False)
 
-        zp = np.column_stack((Angle(zc.l), Angle(zc.b)))
-        t['ZPointings'] = zp
+        zp = np.column_stack((zc.l, zc.b))
+        t['ZPointings'] = Quantity(zp, copy=False)
 
         lon, lat, altitude = self._gcrs_to_earth_zenith_altitude(self._gcrs)
 
-        ez_gal = np.column_stack((Angle(lon, unit=u.deg),
-                                  Angle(lat, unit=u.deg)))
+        ez_gal = np.column_stack((lon, lat))
 
-        t['EarthZenith'] = ez_gal
-        t['Altitude'] = altitude
+        t['EarthZenith'] = Quantity(ez_gal, copy=False)
+        t['Altitude'] = Quantity(altitude, copy=False)
 
         # add dummy to make sure livetime array length matches
         # other array lengths for writing
@@ -272,6 +276,24 @@ class SpacecraftHistory:
         else:
             raise ValueError("Unsupported file format. Only .ori and .fits/.fits.gz extensions are supported.")
 
+    @staticmethod
+    def _find_time_index(time:Time, tstart:Time, tstop:Time):
+
+        # TimeAxis optimizes searchsorted for 128bit precision
+        time_axis = TimeAxis(time, copy=False)
+
+        if tstart is not None:
+            start_idx = time_axis.find_bin(tstart)
+        else:
+            start_idx = 0
+
+        if tstop is not None:
+            stop_idx = time_axis.find_bin(tstop) + 2
+        else:
+            stop_idx = time.size
+
+        return start_idx, stop_idx
+
     @classmethod
     def _open_fits(cls, filename, tstart:Time = None, tstop:Time = None) -> "SpacecraftHistory":
         """
@@ -306,15 +328,8 @@ class SpacecraftHistory:
 
         if tstart is not None or tstop is not None:
             # Cut early to skip some conversions later on
-            if tstart is not None:
-                start_idx = np.searchsorted(time_stamps, tstart, 'left')
-            else:
-                start_idx = 0
 
-            if tstop is not None:
-                stop_idx = np.searchsorted(time_stamps, tstop, 'left') + 2
-            else:
-                stop_idx = time_stamps.size
+            start_idx, stop_idx = cls._find_time_index(time_stamps, tstart, tstop)
 
             time_stamps = time_stamps[start_idx:stop_idx]
             t = t[start_idx:stop_idx]
@@ -323,26 +338,27 @@ class SpacecraftHistory:
         # galactic # coordinates.
         xp = t['XPointings']
         xpointings = SkyCoord(l = xp[:,0], b = xp[:,1],
-                              frame = "galactic")
+                              frame = Galactic(),
+                              copy=False)
         zp = t['ZPointings']
         zpointings = SkyCoord(l = zp[:,0], b = zp[:,1],
-                              frame = "galactic")
-
+                              frame = Galactic(),
+                              copy=False)
 
         attitude = Attitude.from_axes(x = xpointings, z = zpointings,
-                                      frame="galactic")
+                                      frame = Galactic())
 
         ez = t['EarthZenith']
         earth_lon = ez[:,0]
         earth_lat = ez[:,1]
         altitude = t['Altitude']
 
+        gcrs = cls._earth_zenith_altitude_to_gcrs(earth_lon,
+                                                  earth_lat,
+                                                  altitude)
+
         # left end points, so remove last bin.
         livetime = t['LiveTime'][:-1]
-
-        gcrs = cls._earth_zenith_altitude_to_gcrs(earth_lon.to_value(u.deg),
-                                                  earth_lat.to_value(u.deg),
-                                                  altitude)
 
         return cls(time_stamps, attitude, gcrs, livetime)
 
@@ -396,22 +412,21 @@ class SpacecraftHistory:
                          header = None, comment = '#')
         vals = df.values[:-1].transpose()
 
-        time_stamps, lat_x, lon_x, lat_z, lon_z, \
-            altitude, earth_lat, earth_lon, livetime = vals
-
-        time_stamps = Time(time_stamps, format="unix")
+        # assign units to read values
+        time_stamps = Time(vals[0], format="unix", copy=False)
+        lat_x       = Quantity(vals[1], unit=u.deg, copy=False)
+        lon_x       = Quantity(vals[2], unit=u.deg, copy=False)
+        lat_z       = Quantity(vals[3], unit=u.deg, copy=False)
+        lon_z       = Quantity(vals[4], unit=u.deg, copy=False)
+        altitude    = Quantity(vals[5], unit=u.km, copy=False)
+        earth_lat   = Quantity(vals[6], unit=u.deg, copy=False)
+        earth_lon   = Quantity(vals[7], unit=u.deg, copy=False)
+        livetime    = Quantity(vals[8], unit=u.s, copy=False)
 
         if tstart is not None or tstop is not None:
             # Cut early to skip some conversions later on
-            if tstart is not None:
-                start_idx = np.searchsorted(time_stamps, tstart, 'left')
-            else:
-                start_idx = 0
 
-            if tstop is not None:
-                stop_idx = np.searchsorted(time_stamps, tstop, 'left') + 2
-            else:
-                stop_idx = time_stamps.size
+            start_idx, stop_idx = cls._find_time_index(time_stamps, tstart, tstop)
 
             time_stamps = time_stamps[start_idx:stop_idx]
             lat_x = lat_x[start_idx:stop_idx]
@@ -423,41 +438,42 @@ class SpacecraftHistory:
             earth_lon = earth_lon[start_idx:stop_idx]
             livetime = livetime[start_idx:stop_idx]
 
-        xpointings = SkyCoord(l=lon_x, b=lat_x,
-                              unit=u.deg, frame="galactic",
-                              copy=False)
-        zpointings = SkyCoord(l=lon_z, b=lat_z,
-                              unit=u.deg, frame="galactic",
-                              copy=False)
+        xpointings = SkyCoord(l = lon_x, b = lat_x,
+                              frame = Galactic(),
+                              copy = False)
+        zpointings = SkyCoord(l = lon_z, b = lat_z,
+                              frame = Galactic(),
+                              copy = False)
 
-        attitude = Attitude.from_axes(x=xpointings, z=zpointings,
-                                      frame = 'galactic')
+        attitude = Attitude.from_axes(x = xpointings, z = zpointings,
+                                      frame = Galactic())
 
-        # The last element is 0.
-        livetime = u.Quantity(livetime[:-1], unit=u.s, copy=False)
         gcrs = cls._earth_zenith_altitude_to_gcrs(earth_lon,
                                                   earth_lat,
                                                   altitude)
 
+        # The last element is 0.
+        livetime = livetime[:-1]
+
         return cls(time_stamps, attitude, gcrs, livetime)
 
     @staticmethod
-    def _earth_zenith_altitude_to_gcrs(earth_lon: float,
-                                       earth_lat: float,
-                                       altitude: float) -> GCRS:
+    def _earth_zenith_altitude_to_gcrs(earth_lon: Quantity,
+                                       earth_lat: Quantity,
+                                       altitude: Quantity) -> GCRS:
         """
         Convert galactic latitude and longitude plus altitude w/r to
         earth to a standard GCRS coordinate.
 
         Parameters
         ----------
-        earth_lon: float
+        earth_lon: Quantity
            galactic longitude of the direction the Earth's zenith is
            pointing to at the SC location (deg)
-        earth_lat: float
+        earth_lat: Quantity
            galactic latitude of the direction the Earth's zenith is
            pointing to at the SC location (deg)
-        altitude: float
+        altitude: Quantity
             altitude above from Earth's ellipsoid (km)
 
         Returns
@@ -484,20 +500,18 @@ class SpacecraftHistory:
 
         # Make the distance very far away such that the parallax
         # between earth-centered and barycenter doesn't matter
-        zenith_gal = SkyCoord(l=earth_lon, b=earth_lat,
-                              unit=(u.deg, u.deg, u.Mpc),
-                              distance=SpacecraftHistory._far_dist,
-                              frame="galactic",
-                              copy=False)
+        zenith_gal = SkyCoord(l = earth_lon, b = earth_lat,
+                              distance = SpacecraftHistory._far_dist,
+                              frame = Galactic(),
+                              copy = False)
         gcrs = zenith_gal.transform_to('gcrs')
 
         # Use EarthLocation to transform from altitude to the distance
         # from the earth-center given the correct Earth ellipsoid
         itrs = gcrs.transform_to(ITRS(obstime='J2000'))
         earth_loc = itrs.earth_location.geodetic
-        alt_km = Quantity(altitude, unit=u.km, copy=False)
         earth_loc = EarthLocation.from_geodetic(earth_loc.lon, earth_loc.lat,
-                                                height = alt_km)
+                                                height = altitude)
 
         # Combine RA/Dec from far field, with distance from geodetic
         gcrs2 = GCRS(ra=gcrs.ra, dec=gcrs.dec,
@@ -506,7 +520,7 @@ class SpacecraftHistory:
         return gcrs2
 
     @staticmethod
-    def _gcrs_to_earth_zenith_altitude(gcrs : GCRS) -> (float, float, float):
+    def _gcrs_to_earth_zenith_altitude(gcrs : GCRS) -> (Quantity, Quantity, Quantity):
         """
         Extract a galactic-frame earth pointing and altitude from a GCRS
         coordinate.
@@ -517,21 +531,21 @@ class SpacecraftHistory:
 
         Returns
         -------
-        earth_lon: float
+        earth_lon: Quantity
            galactic longitude of the direction the Earth's zenith is
            pointing to at the SC location (deg)
-        earth_lat: float
+        earth_lat: Quantity
            galactic latitude of the direction the Earth's zenith is
            pointing to at the SC location (deg)
-        altitude: float
+        altitude: Quantity
             altitude above from Earth's ellipsoid (km)
 
         """
 
         # Make it far field o get galactic coordinates
-        gcrs_far = GCRS(ra=gcrs.ra, dec=gcrs.dec,
+        gcrs_far = GCRS(ra = gcrs.ra, dec = gcrs.dec,
                         distance = SpacecraftHistory._far_dist,
-                        copy=False)
+                        copy = False)
         zenith_gal = gcrs_far.transform_to(Galactic())
 
         # Get the distance from the center of the Earth to the
@@ -541,9 +555,11 @@ class SpacecraftHistory:
         earth_loc = EarthLocation.from_geodetic(earth_loc.lon, earth_loc.lat,
                                                 height = 0*u.km)
         altitude = (gcrs.distance - \
-                    earth_loc.itrs.cartesian.norm()).to_value(u.km)
+                    earth_loc.itrs.cartesian.norm()).to(u.km, copy=False)
 
-        return zenith_gal.l.deg, zenith_gal.b.deg, altitude
+        lon = zenith_gal.l.to(u.deg, copy=False)
+        lat = zenith_gal.b.to(u.deg, copy=False)
+        return lon, lat, altitude
 
     @staticmethod
     def _interp_location(t, d1, d2):

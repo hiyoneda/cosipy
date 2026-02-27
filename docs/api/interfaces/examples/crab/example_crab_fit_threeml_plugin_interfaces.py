@@ -87,9 +87,9 @@ def main():
 
     # In[ ]:
 
-    sc_orientation_path = data_path / "DC3_final_530km_3_month_with_slew_15sbins_GalacticEarth_SAA.fits"
-    fetch_wasabi_file('COSI-SMEX/develop/Data/Orientation/DC3_final_530km_3_month_with_slew_15sbins_GalacticEarth_SAA.fits',
-                      output=sc_orientation_path, checksum = '603854cd315ad6e6ff999fa1f55942b6')
+    sc_orientation_path = data_path / "DC3_final_530km_3_month_with_slew_15sbins_GalacticEarth_SAA.ori"
+    fetch_wasabi_file('COSI-SMEX/DC3/Data/Orientation/DC3_final_530km_3_month_with_slew_15sbins_GalacticEarth_SAA.ori',
+                      output=sc_orientation_path, checksum = 'e5e71e3528e39b855b0e4f74a1a2eebe')
 
     # Download the binned Crab data
 
