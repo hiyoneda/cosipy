@@ -16,7 +16,6 @@ from cosipy.response import BinnedThreeMLModelFolding, BinnedInstrumentResponse,
 from cosipy.data_io import EmCDSBinnedData
 from cosipy.threeml.custom_functions import Band_Eflux
 from cosipy.polarization import PolarizationAxis
-from cosipy.threeml.custom_functions import Band_Eflux
 from cosipy import test_data
 
 analysis = BinnedData(test_data.path / 'polarization_data_mlm.yaml')
@@ -101,4 +100,4 @@ def test_polarization_fit():
     _ = like.fit()
 
     assert np.allclose([source.spectrum.test.polarization.degree.value, source.spectrum.test.polarization.angle.value],
-                       [83.8, 115.9.], atol=[1., 1.])
+                       [83.8, 115.9], atol=[1., 1.])
