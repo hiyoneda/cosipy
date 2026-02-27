@@ -203,8 +203,25 @@ class BinnedThreeMLPointSourceResponse(BinnedThreeMLSourceResponseInterface):
             logger.info(f"--> done (source name : {self._source.name})")
 
         # Convolve with spectrum
-        self._expectation = self._psr.get_expectation(self._source.spectrum.main.shape,
-                                                      self._source.spectrum.main.polarization)
+
+        if hasattr(self._source.spectrum, 'main'):
+
+            self._expectation = self._psr.get_expectation(self._source.spectrum.main.shape)
+
+        else:
+
+            component_counter = 0
+
+            for item in self._source.spectrum.to_dict():
+
+                if component_counter == 0:
+                    self._expectation = self._psr.get_expectation(getattr(self._source.spectrum, item).shape,
+                                                                  self._source.components[item].polarization)
+                else:
+                    self._expectation += self._psr.get_expectation(getattr(self._source.spectrum, item).shape,
+                                                                   self._source.components[item].polarization)
+                    
+                component_counter += 1
 
         # Check if axes match
         if self._data.axes != self._expectation.axes:
