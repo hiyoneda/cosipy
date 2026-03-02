@@ -585,11 +585,15 @@ class SpacecraftHistory:
 
         """
 
-        if np.all(d1 == d2):
-            return d1
+        # NB: do NOT compare GCRS objects d1 and d2 directly for
+        # Astropy performance reasons -- convert them to vectors
+        # first!
 
         v1 = d1.cartesian.xyz
         v2 = d2.cartesian.xyz
+
+        if np.all(v1 == v2):
+            return d1
 
         # angle between v1, v2
         norm = d1.spherical.distance * d2.spherical.distance
