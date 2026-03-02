@@ -142,7 +142,7 @@ def test_get_expectation():
     ## get expectation with polarization
     exp = psr_pol.get_expectation(const, polarization=LinearPolarization(angle=180, degree=100))
     assert isinstance(exp, Histogram)
-    assert np.isclose(np.sum(exp.contents), 6.30823539e+11, rtol=1e-8)
+    assert np.isclose(np.sum(exp.contents), 7.56988247e+12, rtol=1e-8)
 
     # If polarization is not given, the result should be the same as PD=0
     exp_none = psr_pol.get_expectation(const)

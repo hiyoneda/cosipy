@@ -14,7 +14,7 @@ def test_inject_point_source():
 
     # defind the response and orientation
     response_path = test_data.path / "test_full_detector_response.h5"
-    orientation_path = test_data.path / "20280301_2s.ori"
+    orientation_path = test_data.path / "20280301_2s.fits"
     ori = SpacecraftHistory.open(orientation_path)
 
     # powerlaw model
