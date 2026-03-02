@@ -6,7 +6,7 @@ from cosipy.polarization.polarization_axis import PolarizationAxis
 from cosipy.threeml.util import to_linear_polarization
 from mhealpy import HealpixMap
 from cosipy.interfaces import BinnedInstrumentResponseInterface, BinnedDataInterface
-from histpy import Histogram, Axis, Axes  # , Axes, Axis
+from histpy import Histogram, Axis, Axes 
 
 import numpy as np
 import astropy.units as u
@@ -199,7 +199,7 @@ class PointSourceResponse(Histogram):
 
             response.differential_effective_area(coord,
                                                  energy_axis.centers,
-                                                 None if polarization_axis is None else polarization_axis.centers,
+                                                 None if polarization_axis is None else polarization_axis,
                                                  attitude = att,
                                                  weight=exposure,
                                                  out=psr,
