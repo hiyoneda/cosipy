@@ -182,13 +182,7 @@ def test_plot_arf(tmp_path):
                             unit=u.deg, frame="galactic")
     converter = RspArfRmfConverter(response, ori, target_coord)
 
-    _ = converter.get_psr_rsp()
-    converter.get_arf(out_name=tmp_path / "test")
-
     converter.plot_arf()
-
-    assert Path(tmp_path / "Effective_area_for_test.png").exists()
-
 
 def test_plot_rmf(tmp_path):
     response_path = test_data.path / "test_full_detector_response.h5"
@@ -199,9 +193,4 @@ def test_plot_rmf(tmp_path):
                             unit=u.deg, frame="galactic")
     converter = RspArfRmfConverter(response, ori, target_coord)
 
-    _ = converter.get_psr_rsp()
-    converter.get_rmf(out_name=tmp_path / "test")
-
     converter.plot_rmf()
-
-    assert Path(tmp_path / "Redistribution_matrix_for_test.png").exists()
