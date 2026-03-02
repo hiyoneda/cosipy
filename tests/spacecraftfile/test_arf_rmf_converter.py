@@ -86,7 +86,7 @@ def test_get_arf(tmp_path):
 
     _ = converter.get_psr_rsp()
 
-    converter.get_arf(out_name = tmp_path / "test")
+    converter.write_arf(out_name = tmp_path / "test.arf", overwrite=True)
 
     fits_file = fits.open(tmp_path / "test.arf")
 
@@ -110,7 +110,7 @@ def test_get_rmf(tmp_path):
 
     _ = converter.get_psr_rsp()
 
-    converter.get_rmf(out_name= tmp_path / "test")
+    converter.write_rmf(out_name= tmp_path / "test.rmf", overwrite=True)
 
     fits_file = fits.open(tmp_path / "test.rmf")
 
@@ -151,15 +151,15 @@ def test_get_pha(tmp_path):
     converter = RspArfRmfConverter(response, ori, target_coord)
 
     _ = converter.get_psr_rsp()
-    converter.get_arf(out_name=tmp_path / "test")
-    converter.get_rmf(out_name=tmp_path / "test")
+    converter.write_arf(out_name=tmp_path / "test.arf", overwrite=True)
+    converter.write_rmf(out_name=tmp_path / "test.rmf", overwrite=True)
 
     counts = np.array([0.01094232, 0.04728866, 0.06744612, 0.01393708, 0.05420688,
                        0.03141498, 0.01818584, 0.00717219, 0.00189568, 0.00010503]) * 1000
 
     errors = np.sqrt(counts)
 
-    converter.get_pha(src_counts=counts, errors=errors, exposure_time=10)
+    converter.write_pha(tmp_path / "test.pha", src_counts=counts, errors=errors, exposure_time=10, rmf_file = "test.rmf", arf_file = 'test.arf', bkg_file = 'text.pha', overwrite=True)
 
     fits_file = fits.open(tmp_path / "test.pha")
 
