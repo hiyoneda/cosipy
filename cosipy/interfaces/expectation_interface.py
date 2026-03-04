@@ -113,6 +113,14 @@ class SumExpectationDensity(ExpectationDensityInterface):
     """
 
     def __init__(self, *expectations:Tuple[ExpectationDensityInterface, None], vectorize:bool = True):
+        """
+        Parameters
+        ----------
+        expectations: Other ExpectationDensityInterface implementations
+        vectorize: It True (default), it will first cache all the individual expectations on numpy arrays, and then it will sum
+        them up using numpy's method. The output will also be a numpy. If False, it will query one element from each
+        expectation object a time and sum them up. The output in this case is an Generator.
+        """
         # Allow None for convenience, we  should remove it
         self._expectations = tuple(ex for ex in expectations if ex is not None)
 
