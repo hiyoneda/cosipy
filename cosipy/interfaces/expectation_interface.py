@@ -7,6 +7,7 @@ import numpy as np
 from histpy import Axes
 
 from cosipy.interfaces import BinnedDataInterface, EventDataInterface, DataInterface, EventInterface
+from cosipy.util.iterables import asarray
 
 __all__ = [
     "ExpectationDensityInterface",
@@ -111,11 +112,13 @@ class SumExpectationDensity(ExpectationDensityInterface):
     Convenience class to sum multiple ExpectationDensityInterface implementation
     """
 
-    def __init__(self, *expectations:Tuple[ExpectationDensityInterface, None]):
+    def __init__(self, *expectations:Tuple[ExpectationDensityInterface, None], vectorize:bool = True):
         # Allow None for convenience, we  should remove it
         self._expectations = tuple(ex for ex in expectations if ex is not None)
 
         self._event_type = expectations[0].event_type
+        
+        self._vectorize = vectorize
 
         for ex in expectations:
             if ex.event_type is not self._event_type:
@@ -134,10 +137,19 @@ class SumExpectationDensity(ExpectationDensityInterface):
         """
         return sum(ex.expected_counts() for ex in self._expectations)
 
-    def expectation_density(self) -> Iterable[float]:
-
+    def _expectation_density_gen(self) -> Iterable[float]:
         for exdensity in zip(*[ex.expectation_density() for ex in self._expectations]):
             yield sum(exdensity)
+    
+    def expectation_density(self) -> Iterable[float]:
+        if self._vectorize:
+            if not self._expectations:
+                return np.array([], dtype=np.float64)
+            else:
+                densities = [asarray(ex.expectation_density(), np.float64) for ex in self._expectations]
+                return np.add.reduce(densities)
+        else:
+            return self._expectation_density_gen()
 
 
 
