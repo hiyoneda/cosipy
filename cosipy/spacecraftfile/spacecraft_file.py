@@ -934,6 +934,7 @@ class SpacecraftHistory:
             # Simplify this calculation to avoid arcsin/cos.
             min_angle_cos = -np.sqrt(1 - sin_earth_angle**2)
             ez_cart = self._gcrs.cartesian.xyz.value
+            ez_cart /= np.linalg.norm(ez_cart, axis=0)
 
             if self._cache_earth_occ:
                 # cache intermediates in case we need to use them
@@ -992,7 +993,7 @@ class SpacecraftHistory:
 
         if source is not None:
             if isinstance(source, SkyCoord):
-                source.transform_to(self._gcrs)
+                source = source.transform_to(self._gcrs)
                 source = source.cartesian.xyz.value
 
             # get pointings that are occluded by Earth
