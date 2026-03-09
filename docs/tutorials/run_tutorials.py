@@ -49,6 +49,8 @@ def main():
                          'and then exit.'))
     p.add_argument('--tutorial', nargs='*', default = None,
                    help = "Which tutorials to run. All by default.")
+    p.add_argument('--exclude', nargs='*', default=None,
+                   help="Which tutorials to exclude.")
     p.add_argument('--log-level', default='info',
                     help='Set the logging level (debug, info, warning, error, critical)')
     p.add_argument('--dry', action='store_true', default=False,
@@ -104,6 +106,9 @@ def main():
 
     if tutorials is None:
         tutorials = list(config['tutorials'].keys())
+
+    if args.exclude is not None:
+        tutorials = [t for t in tutorials if t not in args.exclude]
 
     # Common convenient functions
     def get_unzip_output(output, file_args):
