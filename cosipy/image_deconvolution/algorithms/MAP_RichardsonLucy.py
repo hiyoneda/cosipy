@@ -286,10 +286,11 @@ class MAP_RichardsonLucy(RichardsonLucy):
         bool
         """
 
-        if self.iteration_count == 1:
-            return False
-        elif self.iteration_count == self.iteration_max:
+        if self.iteration_count >= self.iteration_max:
             return True
+
+        if self.iteration_count == 1:
+            return False  # need at least 2 results to compute delta
 
         if self.stopping_criteria_statistics == "log-likelihood":
 

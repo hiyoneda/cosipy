@@ -185,9 +185,10 @@ class RichardsonLucyBasic(DeconvolutionAlgorithmBase):
         bool
         """
 
-        if self.iteration_count < self.iteration_max:
-            return False
-        return True
+        if self.iteration_count >= self.iteration_max:
+            return True
+
+        return False
 
     def finalization(self):
         """
