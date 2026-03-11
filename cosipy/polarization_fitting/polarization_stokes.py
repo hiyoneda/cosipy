@@ -458,7 +458,7 @@ class PolarizationStokes():
                 data_ecut_list.append(data_ecut)
             self._data = data_ecut_list
 
-        self._exposure = sc_orientation.get_time_delta().to_value(u.second).sum()
+        self._exposure = sc_orientation.cumulative_livetime().to_value(u.second)
 
         self._data_duration = self.get_data_duration()
 
@@ -764,8 +764,8 @@ class PolarizationStokes():
                 qs.append(stokes_q(a - np.pi/2))
                 us.append(stokes_u(a - np.pi/2))
         except:
-
-            for a in self._data_azimuthal_angles:
+            a_ = np.concatenate(self._data_azimuthal_angles)
+            for a in a_:
                 qs.append(stokes_q(a.value - np.pi/2))
                 us.append(stokes_u(a.value - np.pi/2))
 
@@ -809,8 +809,8 @@ class PolarizationStokes():
                     qs.append(stokes_q(a - np.pi/2))
                     us.append(stokes_u(a - np.pi/2))
             except:
-
-                for a in self._background_azimuthal_angles:
+                a_ = np.concatenate(self._background_azimuthal_angles)
+                for a in a_:
                     qs.append(stokes_q(a.value - np.pi/2))
                     us.append(stokes_u(a.value - np.pi/2))
 
