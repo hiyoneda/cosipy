@@ -222,12 +222,34 @@ class LineSearchAccelerator(AcceleratorBase):
             return self._grid_search_2d(ll_2d_func, alpha_max, alpha_bkg_max)
         else:
             # gradient (L-BFGS-B)
+
+            # 1. Optimize source to get a good initial point
+            opt_s = minimize_scalar(
+                lambda s: -ll_2d_func(s, 1.0),
+                bounds=(1.0, alpha_max),
+                method="bounded",
+            )
+            alpha_init = float(opt_s.x)
+            
+            # 2. Optimize bkg to get a good initial point
+            opt_b = minimize_scalar(
+                lambda b: -ll_2d_func(1.0, b),
+                bounds=(1.0, alpha_bkg_max),
+                method="bounded",
+            )
+            alpha_bkg_init = float(opt_b.x)
+            
+            # 3. Optimize both with both initial points
             opt = minimize(
                 lambda x: -ll_2d_func(x[0], x[1]),
-                x0=[1.0, 1.0],
+                x0=[alpha_init, alpha_bkg_init],
                 bounds=[(1.0, alpha_max), (1.0, alpha_bkg_max)],
                 method="L-BFGS-B",
             )
+
+            accel_factor     = float(opt.x[0])
+            accel_factor_bkg = float(opt.x[1])
+
             return float(opt.x[0]), float(opt.x[1])
 
     def _grid_search_2d(self, ll_2d_func, alpha_max, alpha_bkg_max):
